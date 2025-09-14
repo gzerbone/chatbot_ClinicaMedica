@@ -104,8 +104,7 @@ class GeminiService:
         clinic_name = "clínica médica"  # valor padrão
         if clinic_data and 'nome' in clinic_data:
             clinic_name = clinic_data['nome']
-        elif clinic_data and 'name' in clinic_data:
-            clinic_name = clinic_data['name']
+
         
         system_prompt = f"""Você é um assistente virtual especializado da {clinic_name}. 
         Seu papel é ajudar pacientes com informações sobre a clínica, agendamentos, médicos e exames.
@@ -124,9 +123,22 @@ class GeminiService:
         if clinic_data:
             system_prompt += f"\n\nInformações da clínica:\n{json.dumps(clinic_data, indent=2, ensure_ascii=False)}"
         
-        # Adicionar contexto da conversa
+        # Adicionar histórico da conversa se disponível
+        if context and 'conversation_history' in context:
+            history = context['conversation_history']
+            if history:
+                system_prompt += "\n\nHistórico recente da conversa:"
+                for i, msg in enumerate(history, 1):
+                    role = "Paciente" if msg.get('is_user', True) else "Assistente"
+                    content = msg.get('content', '')[:100]  # Limitar tamanho
+                    system_prompt += f"\n{i}. {role}: {content}"
+        
+        # Adicionar contexto adicional da conversa
         if context:
-            system_prompt += f"\n\nContexto da conversa:\n{json.dumps(context, indent=2, ensure_ascii=False)}"
+            # Remover histórico do contexto para evitar duplicação
+            context_copy = {k: v for k, v in context.items() if k != 'conversation_history'}
+            if context_copy:
+                system_prompt += f"\n\nContexto atual:\n{json.dumps(context_copy, indent=2, ensure_ascii=False)}"
         
         # Adicionar instruções específicas baseadas na intenção
         intent_instructions = self._get_intent_instructions(intent)
@@ -145,21 +157,19 @@ class GeminiService:
             'saudacao': """
             - Cumprimente calorosamente o paciente
             - Apresente-se como assistente da clínica
-            - Ofereça ajuda com informações sobre a clínica
-            - Mencione os principais serviços disponíveis
+            - Pergunte como posso ajudar
             """,
             
             'buscar_especialidade': """
-            - Liste as especialidades disponíveis de forma organizada
-            - Explique brevemente o que cada especialidade trata
+            - Explique brevemente o que a especialidade perguntada trata
             - Sugira agendamento se o paciente demonstrar interesse
             """,
             
             'buscar_medico': """
-            - Apresente os médicos disponíveis
-            - Inclua especialidades, experiência e formas de pagamento
-            - Destaque pontos fortes de cada médico
-            - Facilite o processo de escolha
+            - Apresente os médicos disponíveis que atendem a especialidade perguntada
+            - Informe a forma de pagamento e o preço da consulta particular 
+            - Informe o nome do médico, especialidade, convênios que atende e horários de atendimento
+            - Se houver mais de um médico com a especialidade perguntada, pergunte qual deseja agendar consulta
             """,
             
             'buscar_exame': """
@@ -171,29 +181,37 @@ class GeminiService:
             """,
             
             'buscar_info_clinica': """
-            - Forneça informações completas da clínica
-            - Inclua endereço, telefone, horários
-            - Mencione políticas de agendamento
-            - Destaque diferenciais da clínica
+            - Forneça informações da clínica de acordo com o que foi perguntado
+            - Se o paciente perguntar sobre planos de saúde, forneça os planos de saúde atendidos por cada médico da clínica
+            - Se o paciente perguntar sobre endereço, forneça o endereço da clínica
+            - Se o paciente perguntar sobre telefone, forneça o telefone da clínica
+            - Se o paciente perguntar sobre políticas de agendamento, forneça as políticas de agendamento da clínica
+            - Se o paciente perguntar sobre diferenciais da clínica, forneça os diferenciais da clínica
+            - Se o paciente perguntar sobre outras formas de contato, forneça as formas de contato da clínica
             """,
             
             'agendar_consulta': """
             - Guie o paciente através do processo de agendamento
             - Seja claro sobre as etapas necessárias
-            - Confirme informações importantes
+            - Seja claro sobre os horários disponíveis
+            - Seja claro sobre os médicos disponíveis
+            - Seja claro sobre os exames disponíveis
+            - Seja claro sobre os convênios disponíveis
+            - Seja claro sobre os preços das consultas
+            - Seja claro sobre os preços dos exames
             - Mantenha o processo organizado e fácil
             """,
             
             'confirmar_agendamento': """
             - Verifique agendamentos pendentes
-            - Confirme detalhes importantes
+            - Confirme informações importantes como nome completo e telefone de contato do paciente
             - Oriente sobre próximos passos
             - Tranquilize o paciente sobre o processo
             """,
             
             'cancelar_agendamento': """
             - Seja compreensivo e acolhedor
-            - Facilite o processo de cancelamento
+            - Facilite o processo de cancelamento, informando que o cancelamento deve ser feito pelo WhatsApp da clínica ou pelo número de telefone da clínica
             - Sugira reagendamento se apropriado
             - Mantenha a porta aberta para futuras consultas
             """,

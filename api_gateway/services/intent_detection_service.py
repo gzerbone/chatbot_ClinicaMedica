@@ -1,9 +1,10 @@
 """
 Serviço para detecção de intenções nas mensagens do usuário
+Com suporte a consciência contextual
 """
+import logging
 import re
 from typing import Dict, List, Tuple
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ class IntentDetectionService:
             ],
             
             'buscar_medico': [
-                r'\b(médico|medicos|doutor|doutores|dr\.|dra\.)\b',
+                r'\b(médico|medicos|doutor|doutores|dr\.|dra\.|dr|dra)\b',
                 r'\b(quem é|quem são|conhecer|conheço)\b',
                 r'\b(profissional|profissionais)\b',
                 r'\b(currículo|curriculo|experiência|experiencia)\b'
@@ -230,3 +231,35 @@ class IntentDetectionService:
         entities['specialties'] = found_specialties
         
         return entities
+    
+    def detect_intent_with_context(self, phone_number: str, message: str) -> Tuple[str, float, Dict]:
+        """
+        Detecta intenção considerando contexto da conversa
+        
+        Args:
+            phone_number: Número do telefone do usuário
+            message: Mensagem atual
+            
+        Returns:
+            Tuple com (intent, confidence, entities)
+        """
+        from .context_manager import context_manager
+
+        # Usar análise contextual
+        intent, confidence, entities = context_manager.analyze_contextual_intent(
+            phone_number, message
+        )
+        
+        # Se não foi possível determinar com contexto, usar análise tradicional
+        if intent == 'desconhecida' and confidence < 0.5:
+            intent, confidence = self.detect_intent(message)
+            entities = self.extract_entities(message)
+        
+        # Adicionar mensagem ao contexto
+        context_manager.add_message_to_context(
+            phone_number, message, intent, entities, confidence, is_user=True
+        )
+        
+        logger.info(f"Intent contextual detectado: {intent} (confiança: {confidence}) para {phone_number}")
+        
+        return intent, confidence, entities

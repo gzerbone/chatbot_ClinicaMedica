@@ -125,6 +125,54 @@ def test_rag_service():
         return False
 
 
+def test_contextual_intent():
+    """Testa detecção de intenção contextual"""
+    print("\n🧠 Testando detecção contextual de intenções...")
+    
+    try:
+        from api_gateway.services.context_manager import context_manager
+        from api_gateway.services.intent_detection_service import \
+            IntentDetectionService
+        
+        intent_service = IntentDetectionService()
+        test_phone = "test_contextual_user"
+        
+        # Limpar contexto anterior
+        context_manager.clear_context(test_phone)
+        
+        # Teste 1: Primeira mensagem
+        print("   📝 Teste 1: 'Preciso agendar uma consulta'")
+        intent1, conf1, entities1 = intent_service.detect_intent_with_context(
+            test_phone, "Preciso agendar uma consulta"
+        )
+        print(f"      → Intent: {intent1} (confiança: {conf1:.2f})")
+        
+        # Teste 2: Resposta simples baseada em contexto
+        print("   📝 Teste 2: 'Sim' (deveria usar contexto anterior)")
+        intent2, conf2, entities2 = intent_service.detect_intent_with_context(
+            test_phone, "Sim"
+        )
+        print(f"      → Intent: {intent2} (confiança: {conf2:.2f})")
+        
+        # Teste 3: Continuação
+        print("   📝 Teste 3: 'Para amanhã às 14h'")
+        intent3, conf3, entities3 = intent_service.detect_intent_with_context(
+            test_phone, "Para amanhã às 14h"
+        )
+        print(f"      → Intent: {intent3} (confiança: {conf3:.2f})")
+        
+        # Verificar histórico
+        history = context_manager.get_conversation_history(test_phone)
+        print(f"   📚 Histórico: {len(history)} mensagens registradas")
+        
+        print("✅ Teste contextual concluído")
+        return True
+        
+    except Exception as e:
+        print(f"❌ Erro no teste contextual: {e}")
+        return False
+
+
 def test_message_processing():
     """Testa o processamento de mensagem simulado"""
     print("\n💬 Testando processamento de mensagem...")
@@ -197,6 +245,7 @@ def main():
         test_whatsapp_config,
         test_webhook_verification,
         test_rag_service,
+        test_contextual_intent,
         test_message_processing,
     ]
     

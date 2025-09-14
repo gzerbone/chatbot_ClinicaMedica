@@ -117,12 +117,15 @@ def process_message(message, webhook_data):
             text_content = message.get('text', {}).get('body', '')
             
             if text_content:
-                # Detectar intenção
-                intent, confidence = intent_service.detect_intent(text_content)
-                logger.info(f"Intenção detectada: {intent} (confiança: {confidence})")
+                # Detectar intenção com contexto
+                intent, confidence, entities = intent_service.detect_intent_with_context(
+                    from_number, text_content
+                )
+                logger.info(f"Intenção contextual detectada: {intent} (confiança: {confidence})")
                 
-                # Extrair entidades
-                entities = intent_service.extract_entities(text_content)
+                # Obter histórico da conversa para contexto
+                from .services.context_manager import context_manager
+                conversation_history = context_manager.get_conversation_history(from_number, limit=3)
                 
                 # Gerar resposta com Gemini
                 response_text = gemini_service.generate_response(
@@ -132,7 +135,8 @@ def process_message(message, webhook_data):
                         'entities': entities,
                         'confidence': confidence,
                         'message_id': message_id,
-                        'timestamp': timestamp
+                        'timestamp': timestamp,
+                        'conversation_history': conversation_history
                     },
                     clinic_data=get_clinic_data()
                 )
@@ -142,6 +146,11 @@ def process_message(message, webhook_data):
                 
                 if success:
                     logger.info(f"Resposta enviada com sucesso para {from_number}")
+                    
+                    # Adicionar resposta do bot ao contexto
+                    context_manager.add_message_to_context(
+                        from_number, response_text, 'resposta_bot', {}, 1.0, is_user=False
+                    )
                 else:
                     logger.error(f"Falha ao enviar resposta para {from_number}")
         
@@ -268,6 +277,8 @@ def test_intent_detection(request):
     try:
         data = request.data
         message = data.get('message', '')
+        phone_number = data.get('phone_number', 'test_user')
+        use_context = data.get('use_context', False)
         
         if not message:
             return Response(
@@ -275,19 +286,67 @@ def test_intent_detection(request):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        intent, confidence = intent_service.detect_intent(message)
-        entities = intent_service.extract_entities(message)
-        
-        return Response({
-            'message': message,
-            'intent': intent,
-            'confidence': confidence,
-            'entities': entities,
-            'is_question': intent_service.is_question(message)
-        })
+        if use_context:
+            # Usar detecção contextual
+            intent, confidence, entities = intent_service.detect_intent_with_context(
+                phone_number, message
+            )
+            
+            # Obter histórico para mostrar contexto
+            from .services.context_manager import context_manager
+            history = context_manager.get_conversation_history(phone_number, limit=5)
+            
+            return Response({
+                'message': message,
+                'phone_number': phone_number,
+                'intent': intent,
+                'confidence': confidence,
+                'entities': entities,
+                'conversation_history': history,
+                'contextual_analysis': True
+            })
+        else:
+            # Usar detecção tradicional
+            intent, confidence = intent_service.detect_intent(message)
+            entities = intent_service.extract_entities(message)
+            
+            return Response({
+                'message': message,
+                'intent': intent,
+                'confidence': confidence,
+                'entities': entities,
+                'is_question': intent_service.is_question(message),
+                'contextual_analysis': False
+            })
         
     except Exception as e:
         logger.error(f"Erro no teste de detecção de intenção: {e}")
+        return Response(
+            {'error': 'Erro interno do servidor'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def clear_context(request):
+    """
+    Endpoint para limpar contexto de conversa (apenas para testes)
+    """
+    try:
+        data = request.data
+        phone_number = data.get('phone_number', 'test_user')
+        
+        from .services.context_manager import context_manager
+        context_manager.clear_context(phone_number)
+        
+        return Response({
+            'message': f'Contexto limpo para {phone_number}',
+            'phone_number': phone_number
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao limpar contexto: {e}")
         return Response(
             {'error': 'Erro interno do servidor'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
