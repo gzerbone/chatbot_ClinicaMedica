@@ -10,27 +10,35 @@ from .serializers import (ClinicaInfoSerializer, ConvenioSerializer,
                           HorarioTrabalhoSerializer, MedicoResumoSerializer,
                           MedicoSerializer)
 
-
+# 1 classe = 1 endpoint (list)
 class EspecialidadeListView(generics.ListAPIView):
     """Lista especialidades ativas"""
     queryset = Especialidade.objects.filter(ativa=True)
     serializer_class = EspecialidadeSerializer
+# URL específica:
+# GET /especialidades/   → Lista especialidades
 
-
+# 1 classe = 1 endpoint (detail)
 class ClinicaInfoView(generics.RetrieveAPIView):
     """Retorna informações da clínica"""
     serializer_class = ClinicaInfoSerializer
     
     def get_object(self):
         return ClinicaInfo.objects.first()
+# URL específica:
+# GET /clinica/   → Retorna informações da clínica
 
 
+# 1 classe = 1 endpoint (list)
 class ConvenioListView(generics.ListAPIView):
     """Lista convênios disponíveis"""
     queryset = Convenio.objects.all()
     serializer_class = ConvenioSerializer
+# URL específica:
+# GET /convenios/   → Lista convênios
 
 
+# 1 classe = 2 endpoints (list e detail)
 class MedicoViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet para médicos"""
     queryset = Medico.objects.prefetch_related('especialidades', 'convenios', 'horarios_trabalho')
@@ -39,8 +47,11 @@ class MedicoViewSet(viewsets.ReadOnlyModelViewSet):
         if self.action == 'list':
             return MedicoResumoSerializer
         return MedicoSerializer
+# URLs geradas automaticamente:
+# GET /medicos/          → Lista médicos
+# GET /medicos/{id}/     → Detalhes de um médico
 
-
+# 1 classe = 1 endpoint (list)
 class ExameListView(generics.ListAPIView):
     """Lista exames disponíveis"""
     queryset = Exame.objects.all()

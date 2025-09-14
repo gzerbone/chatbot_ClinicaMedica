@@ -20,7 +20,7 @@ from django.urls import include, path
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('rag/', include('rag_agent.urls')),
+    path('api/', include('api_gateway.urls')),
     # Adicionar outras URLs dos apps conforme necessário
     # path('flow/', include('flow_agent.urls')),
-    # path('api/', include('api_gateway.urls')),
 ]

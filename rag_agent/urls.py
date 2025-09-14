@@ -4,6 +4,7 @@ from rest_framework.routers import DefaultRouter
 from . import views
 
 router = DefaultRouter()
+#ViewSet é uma classe que agrupa múltiplas operações em uma única classe. É como ter várias views em uma só.
 router.register(r'medicos', views.MedicoViewSet)
 
 urlpatterns = [

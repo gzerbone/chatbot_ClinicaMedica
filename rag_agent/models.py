@@ -2,10 +2,6 @@ from decimal import Decimal
 
 from django.db import models
 
-# Create your models here.
-
-
-
 # Modelo para as especialidades médicas
 class Especialidade(models.Model):
     nome = models.CharField(max_length=100, unique=True)
