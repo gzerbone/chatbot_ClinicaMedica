@@ -173,6 +173,22 @@ WHATSAPP_VERIFY_TOKEN = config('WHATSAPP_VERIFY_TOKEN', default='meu_verify_toke
 WHATSAPP_PHONE_NUMBER_ID = config('WHATSAPP_PHONE_NUMBER_ID', default='')
 WHATSAPP_API_URL = config('WHATSAPP_API_URL', default='https://graph.facebook.com/v18.0')
 
+# Configurações do Google Calendar API
+GOOGLE_CALENDAR_ENABLED = config('GOOGLE_CALENDAR_ENABLED', default=False, cast=bool)
+GOOGLE_SERVICE_ACCOUNT_FILE = config('GOOGLE_SERVICE_ACCOUNT_FILE', default='')
+CLINIC_DOMAIN = config('CLINIC_DOMAIN', default='clinica.com')
+
+# Calendário único da clínica (controlado pela secretária)
+CLINIC_CALENDAR_ID = config('CLINIC_CALENDAR_ID', default='agenda@clinica.com')
+
+# Padrões de eventos para identificar médicos no calendário único
+# Formato esperado: "Dr. João - Consulta", "Dra. Maria - Exame", etc.
+DOCTOR_EVENT_PATTERNS = {
+    'dr. joao carvalho': ['dr. joao', 'dr joao', 'joao carvalho', 'carvalho'],
+    'dra. maria santos': ['dra. maria', 'dra maria', 'maria santos', 'santos'],
+    # Adicionar mais médicos conforme necessário
+}
+
 # Configurações de CORS para desenvolvimento
 CORS_ALLOW_ALL_ORIGINS = True  # Apenas para desenvolvimento
 CORS_ALLOWED_ORIGINS = [

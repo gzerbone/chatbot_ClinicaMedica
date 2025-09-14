@@ -184,6 +184,43 @@ class RAGService:
             return {}
     
     @staticmethod
+    def get_doctor_availability(doctor_name: str, days_ahead: int = 7) -> Dict[str, Any]:
+        """
+        Obtém disponibilidade de horários de um médico
+        
+        Args:
+            doctor_name: Nome do médico
+            days_ahead: Quantos dias à frente consultar
+            
+        Returns:
+            Dicionário com disponibilidade do médico
+        """
+        try:
+            from .google_calendar_service import google_calendar_service
+            return google_calendar_service.get_doctor_availability(doctor_name, days_ahead)
+        except Exception as e:
+            logger.error(f"Erro ao obter disponibilidade do médico {doctor_name}: {e}")
+            return {'error': f'Erro ao consultar disponibilidade de {doctor_name}'}
+    
+    @staticmethod
+    def get_all_doctors_availability(days_ahead: int = 7) -> Dict[str, Any]:
+        """
+        Obtém disponibilidade de todos os médicos
+        
+        Args:
+            days_ahead: Quantos dias à frente consultar
+            
+        Returns:
+            Dicionário com disponibilidade de todos os médicos
+        """
+        try:
+            from .google_calendar_service import google_calendar_service
+            return google_calendar_service.get_all_doctors_availability(days_ahead)
+        except Exception as e:
+            logger.error(f"Erro ao obter disponibilidade dos médicos: {e}")
+            return {'error': 'Erro ao consultar disponibilidade dos médicos'}
+    
+    @staticmethod
     def get_all_clinic_data() -> Dict[str, Any]:
         """
         Obtém todos os dados da clínica de uma vez
@@ -196,5 +233,6 @@ class RAGService:
             'especialidades': RAGService.get_especialidades(),
             'convenios': RAGService.get_convenios(),
             'medicos': RAGService.get_medicos(),
-            'exames': RAGService.get_exames()
+            'exames': RAGService.get_exames(),
+            'disponibilidade_medicos': RAGService.get_all_doctors_availability(7)
         }

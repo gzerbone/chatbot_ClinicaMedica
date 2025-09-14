@@ -259,60 +259,78 @@ Precisa agendar algo? Posso orientá-lo! 😊
 
 ---
 
-## 6️⃣ **AGENDAMENTO DE CONSULTAS**
+## 6️⃣ **AGENDAMENTO COM DISPONIBILIDADE REAL**
 
-### Exemplo 6.1 - Solicitação de Agendamento
+### Exemplo 6.1 - Consulta de Disponibilidade
 ```
-👤 PACIENTE: Quero marcar uma consulta
-🔍 SISTEMA: intent="agendar_consulta" | confidence=0.92 | entities={}
-🤖 CHATBOT: Perfeito! Vou ajudá-lo a agendar sua consulta! 📅
-
-**Para um agendamento eficiente, preciso saber:**
-
-1️⃣ **Qual especialidade?**
-• Cardiologia, Dermatologia, Ortopedia, Oftalmologia
-
-2️⃣ **Tem preferência de médico?**
-• Dr. João Carvalho (Cardiologia)
-• Dra. Maria Santos (Dermatologia)
-
-3️⃣ **Você tem convênio?**
-• SulAmérica, Unimed ou Particular
-
-**📞 Para finalizar o agendamento:**
-• Telefone: (11) 99999-9999
-• WhatsApp: (11) 98888-8888
-
-Nossa recepção terá prazer em encontrar o melhor horário para você! 😊
-
-Qual especialidade você precisa?
-```
-
-### Exemplo 6.2 - Agendamento Específico
-```
-👤 PACIENTE: Quero marcar cardiologista para amanhã
-🔍 SISTEMA: intent="agendar_consulta" | confidence=0.95 | entities={"especialidade": "cardiologista", "tempo": "amanhã"}
-🤖 CHATBOT: Ótimo! 💖 Vamos agendar com nosso cardiologista!
+👤 PACIENTE: Quero marcar uma consulta com Dr. João
+🔍 SISTEMA: intent="agendar_consulta" | confidence=0.95 | entities={"medico": "Dr. João"}
+🤖 CHATBOT: Perfeito! Vou verificar a disponibilidade do Dr. João Carvalho... 📅
 
 **👨‍⚕️ Dr. João Carvalho - Cardiologia**
-📅 **Para amanhã** - vou verificar a disponibilidade!
+💰 Consulta particular: R$ 200,00
+💼 Convênios: SulAmérica, Unimed
 
-**📋 Informações necessárias:**
-✅ Especialidade: Cardiologia  
-✅ Médico: Dr. João Carvalho
-⏰ Data: Amanhã
-❓ Horário: A definir
-❓ Convênio: Qual você tem?
+**📅 Horários disponíveis:**
 
-**📞 Para confirmar o agendamento:**
-Ligue agora: **(11) 99999-9999**
-Ou WhatsApp: **(11) 98888-8888**
+**Segunda (15/09):**
+🌅 Manhã: 08:30, 09:30, 10:30, 11:00
+🌆 Tarde: 14:30, 15:00, 17:00
 
-Nossa recepção verificará os horários disponíveis para amanhã e confirmará com você!
+**Terça (16/09):**
+🌅 Manhã: 08:00, 09:00, 10:30, 11:30
+🌆 Tarde: 14:00, 15:30, 16:30
 
-**⚡ Dica:** Tenha em mãos seus documentos e cartão do convênio! 
+**📞 Para confirmar agendamento:**
+Ligue: (11) 99999-9999
+WhatsApp: (11) 98888-8888
 
-Você tem convênio ou será particular? 😊
+Qual horário prefere? 😊
+```
+
+### Exemplo 6.2 - Conversa Contextual com Disponibilidade
+```
+👤 PACIENTE: Preciso de cardiologista
+🔍 SISTEMA: intent="buscar_medico" | confidence=0.9 | entities={"especialidade": "cardiologista"}
+🤖 CHATBOT: Para cardiologia temos o Dr. João Carvalho! Gostaria de ver os horários disponíveis?
+
+👤 PACIENTE: Sim
+🔍 SISTEMA: intent="confirmar_buscar_medico" | confidence=0.9 | entities={"especialidade": "cardiologista"}
+🤖 CHATBOT: Consultando agenda do Dr. João... 📅
+
+**👨‍⚕️ Dr. João Carvalho - Cardiologia**
+
+**📅 Disponibilidade próximos dias:**
+
+**Hoje (14/09):**
+🌆 Tarde: 17:00, 17:30
+
+**Segunda (15/09):**
+🌅 Manhã: 08:30, 09:30, 10:30
+🌆 Tarde: 14:30, 15:00, 17:00
+
+**Terça (16/09):**
+🌅 Manhã: 08:00, 09:00, 11:30
+🌆 Tarde: 14:00, 15:30, 16:30
+
+**Para qual dia gostaria de agendar?**
+
+👤 PACIENTE: Segunda às 14:30
+🔍 SISTEMA: intent="agendar_consulta" | confidence=0.8 | entities={"data": "segunda", "hora": "14:30"}
+🤖 CHATBOT: Perfeito! 📋
+
+**✅ Resumo do agendamento:**
+• Médico: Dr. João Carvalho
+• Data: Segunda (15/09)
+• Horário: 14:30
+• Especialidade: Cardiologia
+
+**📞 Para CONFIRMAR, ligue agora:**
+(11) 99999-9999
+
+**💡 Importante:** O horário será reservado apenas após confirmação com nossa secretária!
+
+Você tem convênio ou será particular? 💼
 ```
 
 ---

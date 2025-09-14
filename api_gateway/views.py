@@ -351,3 +351,53 @@ def clear_context(request):
             {'error': 'Erro interno do servidor'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def test_calendar_connection(request):
+    """
+    Endpoint para testar a conexão com Google Calendar
+    """
+    try:
+        from .services.google_calendar_service import google_calendar_service
+        
+        is_connected = google_calendar_service.test_connection()
+        
+        return Response({
+            'google_calendar_enabled': google_calendar_service.enabled,
+            'connection_status': 'connected' if is_connected else 'disconnected',
+            'message': 'Google Calendar funcionando' if is_connected else 'Google Calendar não disponível (usando dados simulados)'
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao testar Google Calendar: {e}")
+        return Response(
+            {'error': f'Erro na conexão com Google Calendar: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def get_doctor_availability(request, doctor_name):
+    """
+    Endpoint para consultar disponibilidade de um médico específico
+    """
+    try:
+        days_ahead = int(request.GET.get('days', 7))
+        
+        availability = RAGService.get_doctor_availability(doctor_name, days_ahead)
+        
+        return Response({
+            'doctor': doctor_name,
+            'availability': availability,
+            'requested_days': days_ahead
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao consultar disponibilidade: {e}")
+        return Response(
+            {'error': 'Erro interno do servidor'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

@@ -16,4 +16,6 @@ urlpatterns = [
     path('test/gemini/', views.test_gemini_connection, name='test_gemini'),
     path('test/intent/', views.test_intent_detection, name='test_intent'),
     path('test/clear-context/', views.clear_context, name='clear_context'),
+    path('test/calendar/', views.test_calendar_connection, name='test_calendar'),
+    path('test/availability/<str:doctor_name>/', views.get_doctor_availability, name='get_doctor_availability'),
 ]

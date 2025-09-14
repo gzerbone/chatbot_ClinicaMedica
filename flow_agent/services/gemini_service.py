@@ -112,8 +112,8 @@ class GeminiService:
         IMPORTANTE:
         - Seja sempre cordial, profissional e prestativo
         - Use emojis moderadamente para tornar a conversa mais amigável
-        - Mantenha respostas concisas mas informativas
-        - Se não souber algo específico, oriente o paciente a entrar em contato com o número da clínica. 
+        - Mantenha respostas concisas
+        - Apenas em casos aonde você não souber algo específico, oriente o paciente a entrar em contato com o número da clínica.
         - Sempre mantenha o foco em saúde e bem-estar
         - Use linguagem clara e acessível
         
