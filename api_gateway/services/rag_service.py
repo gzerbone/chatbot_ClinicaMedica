@@ -221,6 +221,91 @@ class RAGService:
             return {'error': 'Erro ao consultar disponibilidade dos médicos'}
     
     @staticmethod
+    def get_medico_by_name(doctor_name: str) -> Dict[str, Any]:
+        """
+        Busca médico específico por nome
+        
+        Args:
+            doctor_name: Nome do médico (pode incluir Dr./Dra.)
+            
+        Returns:
+            Dados do médico ou None se não encontrado
+        """
+        try:
+            # Normalizar nome para busca
+            normalized_name = doctor_name.lower().replace('dr. ', '').replace('dra. ', '')
+            
+            # Buscar médico no banco
+            medico = Medico.objects.prefetch_related('especialidades', 'convenios').filter(
+                nome__icontains=normalized_name
+            ).first()
+            
+            if medico:
+                from rag_agent.serializers import MedicoSerializer
+                return MedicoSerializer(medico).data
+            
+            logger.warning(f"Médico {doctor_name} não encontrado no banco de dados")
+            return None
+            
+        except Exception as e:
+            logger.error(f"Erro ao buscar médico {doctor_name}: {e}")
+            return None
+    
+    @staticmethod
+    def get_doctor_specialty(doctor_name: str) -> str:
+        """
+        Obtém especialidade principal de um médico
+        
+        Args:
+            doctor_name: Nome do médico
+            
+        Returns:
+            Nome da especialidade ou 'Consulta Geral' se não encontrado
+        """
+        try:
+            medico_data = RAGService.get_medico_by_name(doctor_name)
+            
+            if medico_data and 'especialidades' in medico_data:
+                especialidades = medico_data['especialidades']
+                if especialidades:
+                    # Retornar primeira especialidade
+                    if isinstance(especialidades[0], dict):
+                        return especialidades[0].get('nome', 'Consulta Geral')
+                    else:
+                        return str(especialidades[0])
+            
+            return 'Consulta Geral'
+            
+        except Exception as e:
+            logger.error(f"Erro ao obter especialidade do médico {doctor_name}: {e}")
+            return 'Consulta Geral'
+    
+    @staticmethod
+    def get_doctor_insurances(doctor_name: str) -> List[str]:
+        """
+        Obtém convênios aceitos por um médico
+        
+        Args:
+            doctor_name: Nome do médico
+            
+        Returns:
+            Lista de convênios aceitos
+        """
+        try:
+            medico_data = RAGService.get_medico_by_name(doctor_name)
+            
+            if medico_data and 'convenios' in medico_data:
+                convenios = medico_data['convenios']
+                if convenios:
+                    return [conv.get('nome', '') if isinstance(conv, dict) else str(conv) for conv in convenios]
+            
+            return ['Particular']
+            
+        except Exception as e:
+            logger.error(f"Erro ao obter convênios do médico {doctor_name}: {e}")
+            return ['Particular']
+    
+    @staticmethod
     def get_all_clinic_data() -> Dict[str, Any]:
         """
         Obtém todos os dados da clínica de uma vez

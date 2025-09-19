@@ -25,6 +25,7 @@ class ConversationContext:
         self.last_entities: Dict = {}
         self.pending_confirmation: Optional[Dict] = None
         self.conversation_state: str = "idle"  # idle, waiting_confirmation, collecting_info
+        self.patient_info: Dict = {}  # Informações coletadas do paciente
         self.created_at = timezone.now()
         self.updated_at = timezone.now()
     
@@ -48,8 +49,41 @@ class ConversationContext:
         if is_user:
             self.last_intent = intent
             self.last_entities = entities
+            # Atualizar informações do paciente baseado nas entidades
+            self._update_patient_info(entities)
         
         self.updated_at = timezone.now()
+    
+    def _update_patient_info(self, entities: Dict):
+        """Atualiza informações do paciente baseado nas entidades extraídas"""
+        if 'specialties' in entities and entities['specialties']:
+            self.patient_info['specialty'] = entities['specialties'][0]
+        
+        if 'times' in entities and entities['times']:
+            self.patient_info['preferred_time'] = entities['times'][0]
+        
+        if 'dates' in entities and entities['dates']:
+            self.patient_info['preferred_date'] = entities['dates'][0]
+        
+        # Detectar convênios mencionados
+        common_insurances = ['unimed', 'sulamerica', 'amil', 'bradesco', 'particular']
+        for insurance in common_insurances:
+            if insurance in str(entities).lower():
+                self.patient_info['insurance'] = insurance.title()
+                break
+        
+        # Detectar nome do paciente
+        if 'patient_name' in entities and entities['patient_name']:
+            # Usar o primeiro nome encontrado
+            self.patient_info['patient_name'] = entities['patient_name'][0]
+    
+    def set_patient_info(self, key: str, value: str):
+        """Define informação específica do paciente"""
+        self.patient_info[key] = value
+    
+    def get_patient_info(self) -> Dict[str, str]:
+        """Retorna informações coletadas do paciente"""
+        return self.patient_info.copy()
     
     def get_last_user_message(self) -> Optional[Dict]:
         """Retorna a última mensagem do usuário"""
@@ -88,6 +122,7 @@ class ConversationContext:
             'last_entities': self.last_entities,
             'pending_confirmation': self.pending_confirmation,
             'conversation_state': self.conversation_state,
+            'patient_info': self.patient_info,
             'created_at': self.created_at.isoformat(),
             'updated_at': self.updated_at.isoformat()
         }
@@ -101,6 +136,7 @@ class ConversationContext:
         context.last_entities = data.get('last_entities', {})
         context.pending_confirmation = data.get('pending_confirmation')
         context.conversation_state = data.get('conversation_state', 'idle')
+        context.patient_info = data.get('patient_info', {})
         context.created_at = datetime.fromisoformat(data['created_at'])
         context.updated_at = datetime.fromisoformat(data['updated_at'])
         return context
@@ -360,6 +396,76 @@ class ContextManager:
             self.clear_context(phone_number)
         
         logger.info(f"Removidos {len(to_remove)} contextos antigos")
+    
+    def prepare_handoff_data(self, phone_number: str, doctor_name: str, date: str, time: str) -> Dict[str, str]:
+        """
+        Prepara dados para handoff baseado no contexto da conversa
+        
+        Args:
+            phone_number: Número do telefone do usuário
+            doctor_name: Nome do médico selecionado
+            date: Data escolhida
+            time: Horário escolhido
+            
+        Returns:
+            Dicionário com dados formatados para handoff
+        """
+        context = self.get_context(phone_number)
+        
+        # Extrair informações do paciente do histórico
+        from .handoff_service import handoff_service
+        patient_info = handoff_service.extract_patient_info_from_context(
+            context.messages, context.last_entities
+        )
+        
+        # Combinar com informações já coletadas
+        combined_info = {**context.patient_info, **patient_info}
+        
+        # Determinar especialidade baseada no médico ou contexto
+        specialty = self._determine_specialty(doctor_name, combined_info)
+        
+        # Preparar dados finais
+        handoff_data = {
+            'patient_name': combined_info.get('patient_name', 'Paciente'),
+            'doctor_name': doctor_name,
+            'specialty': specialty,
+            'appointment_type': combined_info.get('appointment_type', 'Consulta'),
+            'date': date,
+            'time': time,
+            'phone_number': phone_number,
+            'insurance': combined_info.get('insurance', 'Não informado')
+        }
+        
+        return handoff_data
+    
+    def _determine_specialty(self, doctor_name: str, patient_info: Dict) -> str:
+        """Determina especialidade baseada no médico ou contexto usando dados do banco"""
+        
+        # Primeiro, tentar obter do contexto
+        if 'specialty' in patient_info:
+            return patient_info['specialty']
+        
+        # Buscar especialidade do médico no banco de dados via RAGService
+        try:
+            from .rag_service import RAGService
+
+            # Usar método específico do RAGService para obter especialidade
+            specialty = RAGService.get_doctor_specialty(doctor_name)
+            
+            if specialty and specialty != 'Consulta Geral':
+                logger.info(f"Especialidade encontrada para {doctor_name}: {specialty}")
+                return specialty
+            
+            logger.warning(f"Especialidade não encontrada para {doctor_name}, usando padrão")
+            
+        except Exception as e:
+            logger.error(f"Erro ao buscar especialidade do médico no banco: {e}")
+        
+        return 'Consulta Geral'
+    
+    def set_pending_handoff(self, phone_number: str, handoff_data: Dict):
+        """Define handoff pendente para confirmação"""
+        self.set_pending_confirmation(phone_number, 'handoff', handoff_data)
 
 
 # Instância global do gerenciador de contexto

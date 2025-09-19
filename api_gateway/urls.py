@@ -18,4 +18,5 @@ urlpatterns = [
     path('test/clear-context/', views.clear_context, name='clear_context'),
     path('test/calendar/', views.test_calendar_connection, name='test_calendar'),
     path('test/availability/<str:doctor_name>/', views.get_doctor_availability, name='get_doctor_availability'),
+    path('test/handoff/', views.test_handoff_generation, name='test_handoff'),
 ]

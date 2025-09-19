@@ -54,6 +54,7 @@ class Convenio(models.Model):
 
 class Medico(models.Model):
     nome = models.CharField(max_length=100)
+    crm = models.CharField(max_length=100, unique=True, null=True, blank=True,default="")
     especialidades = models.ManyToManyField(
         Especialidade,
         related_name='medicos',

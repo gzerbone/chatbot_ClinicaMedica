@@ -173,6 +173,9 @@ WHATSAPP_VERIFY_TOKEN = config('WHATSAPP_VERIFY_TOKEN', default='meu_verify_toke
 WHATSAPP_PHONE_NUMBER_ID = config('WHATSAPP_PHONE_NUMBER_ID', default='')
 WHATSAPP_API_URL = config('WHATSAPP_API_URL', default='https://graph.facebook.com/v18.0')
 
+# Número da clínica para handoff (formato: 5511999999999)
+CLINIC_WHATSAPP_NUMBER = config('CLINIC_WHATSAPP_NUMBER', default='5511999999999')
+
 # Configurações do Google Calendar API
 GOOGLE_CALENDAR_ENABLED = config('GOOGLE_CALENDAR_ENABLED', default=False, cast=bool)
 GOOGLE_SERVICE_ACCOUNT_FILE = config('GOOGLE_SERVICE_ACCOUNT_FILE', default='')

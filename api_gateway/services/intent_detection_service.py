@@ -6,6 +6,8 @@ import logging
 import re
 from typing import Dict, List, Tuple
 
+from .base_service import BaseService
+
 logger = logging.getLogger(__name__)
 
 
@@ -60,10 +62,13 @@ class IntentDetectionService:
             ],
             
             'confirmar_agendamento': [
-                r'\b(confirmar|confirmação|confirmacao)\b',
+                r'\b(confirmar|confirmação|confirmacao|confirma)\b',
                 r'\b(meu agendamento|minha consulta|agendado|marcado)\b',
                 r'\b(verificar|verificar se|checar)\b',
-                r'\b(data|horário|quando|que dia)\b'
+                r'\b(data|horário|quando|que dia)\b',
+                r'\b(sim.*confirma|sim.*agendamento|sim.*consulta)\b',
+                r'\b(ok.*confirma|ok.*agendamento|ok.*consulta)\b',
+                r'\b(perfeito.*confirma|perfeito.*agendamento)\b'
             ],
             
             'cancelar_agendamento': [
@@ -196,41 +201,7 @@ class IntentDetectionService:
         Returns:
             Dicionário com entidades encontradas
         """
-        entities = {
-            'numbers': [],
-            'dates': [],
-            'times': [],
-            'specialties': [],
-            'doctors': []
-        }
-        
-        # Extrair números
-        numbers = re.findall(r'\b\d+\b', message)
-        entities['numbers'] = numbers
-        
-        # Extrair datas (formato DD/MM/YYYY ou DD/MM)
-        dates = re.findall(r'\b\d{1,2}/\d{1,2}(?:/\d{2,4})?\b', message)
-        entities['dates'] = dates
-        
-        # Extrair horários (formato HH:MM)
-        times = re.findall(r'\b\d{1,2}:\d{2}\b', message)
-        entities['times'] = times
-        
-        # Extrair especialidades médicas
-        specialties = [
-            'cardiologia', 'dermatologia', 'pediatria', 'ginecologia',
-            'ortopedia', 'neurologia', 'psiquiatria', 'endocrinologia',
-            'oftalmologia', 'otorrinolaringologia', 'urologia', 'gastroenterologia'
-        ]
-        
-        found_specialties = []
-        for specialty in specialties:
-            if specialty in message.lower():
-                found_specialties.append(specialty)
-        
-        entities['specialties'] = found_specialties
-        
-        return entities
+        return BaseService.extract_entities_from_message(message)
     
     def detect_intent_with_context(self, phone_number: str, message: str) -> Tuple[str, float, Dict]:
         """

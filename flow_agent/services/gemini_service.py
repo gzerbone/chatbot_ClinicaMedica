@@ -112,8 +112,11 @@ class GeminiService:
         IMPORTANTE:
         - Seja sempre cordial, profissional e prestativo
         - Use emojis moderadamente para tornar a conversa mais amigável
-        - Mantenha respostas concisas
-        - Apenas em casos aonde você não souber algo específico, oriente o paciente a entrar em contato com o número da clínica.
+        - Mantenha respostas concisas e diretas
+        - NÃO mencione telefone ou WhatsApp da clínica a menos que o paciente peça especificamente
+        - NÃO repita informações de contato em cada resposta
+        - Foque apenas no que o paciente perguntou
+        - Se não souber algo específico, oriente o paciente a entrar em contato
         - Sempre mantenha o foco em saúde e bem-estar
         - Use linguagem clara e acessível
         
@@ -144,6 +147,10 @@ class GeminiService:
         intent_instructions = self._get_intent_instructions(intent)
         system_prompt += f"\n\nInstruções específicas para esta intenção ({intent}):\n{intent_instructions}"
         
+        # Adicionar lógica para contatos
+        contact_logic = self._get_contact_logic(intent, user_message)
+        system_prompt += f"\n\nLógica de contatos:\n{contact_logic}"
+        
         # Adicionar a mensagem do usuário
         system_prompt += f"\n\nMensagem do paciente: {user_message}\n\nResposta:"
         
@@ -167,9 +174,10 @@ class GeminiService:
             
             'buscar_medico': """
             - Apresente os médicos disponíveis que atendem a especialidade perguntada
-            - Informe a forma de pagamento e o preço da consulta particular 
-            - Informe o nome do médico, especialidade, convênios que atende e horários de atendimento
-            - Se houver mais de um médico com a especialidade perguntada, pergunte qual deseja agendar consulta
+            - Informe nome, especialidade, convênios aceitos e horários de atendimento
+            - Informe preço da consulta particular se relevante
+            - Se houver mais de um médico, pergunte qual deseja agendar
+            - NÃO mencione telefone/WhatsApp a menos que o paciente peça
             """,
             
             'buscar_exame': """
@@ -181,13 +189,13 @@ class GeminiService:
             """,
             
             'buscar_info_clinica': """
-            - Forneça informações da clínica de acordo com o que foi perguntado
-            - Se o paciente perguntar sobre planos de saúde, forneça os planos de saúde atendidos por cada médico da clínica
-            - Se o paciente perguntar sobre endereço, forneça o endereço da clínica
-            - Se o paciente perguntar sobre telefone, forneça o telefone da clínica
-            - Se o paciente perguntar sobre políticas de agendamento, forneça as políticas de agendamento da clínica
-            - Se o paciente perguntar sobre diferenciais da clínica, forneça os diferenciais da clínica
-            - Se o paciente perguntar sobre outras formas de contato, forneça as formas de contato da clínica
+            - Forneça APENAS as informações específicas que o paciente perguntou
+            - Se perguntar sobre endereço, forneça apenas o endereço
+            - Se perguntar sobre telefone, forneça apenas o telefone
+            - Se perguntar sobre horários, forneça apenas os horários
+            - Se perguntar sobre convênios, liste apenas os convênios aceitos por cada médico
+            - Se perguntar sobre políticas, explique apenas as políticas da clínica
+            - NÃO forneça informações não solicitadas
             """,
             
             'agendar_consulta': """
@@ -199,6 +207,8 @@ class GeminiService:
             - Seja claro sobre os convênios disponíveis
             - Seja claro sobre os preços das consultas
             - Seja claro sobre os preços dos exames
+            - Seja claro sobre os planos de saúde aceitos por cada médico
+            - Não faça um texto longo, faça um texto curto e direto
             - Mantenha o processo organizado e fácil
             """,
             
@@ -247,23 +257,55 @@ class GeminiService:
         
         return instructions.get(intent, instructions['desconhecida'])
     
+    def _get_contact_logic(self, intent: str, user_message: str) -> str:
+        """
+        Retorna lógica específica para quando mostrar contatos da clínica
+        """
+        message_lower = user_message.lower()
+        
+        # Palavras-chave que indicam necessidade de contato
+        contact_keywords = [
+            'telefone', 'whatsapp', 'contato', 'ligar', 'falar', 'agendar',
+            'marcar', 'confirmar', 'disponibilidade', 'horário', 'horarios'
+        ]
+        
+        # Verificar se o paciente pediu contato especificamente
+        asked_for_contact = any(keyword in message_lower for keyword in contact_keywords)
+        
+        # Intenções que geralmente precisam de contato
+        contact_intents = ['agendar_consulta', 'confirmar_agendamento', 'buscar_info_clinica']
+        
+        if asked_for_contact or intent in contact_intents:
+            return """
+            - Se o paciente pediu telefone/WhatsApp, forneça APENAS o que foi solicitado
+            - Se o paciente quer agendar, forneça contatos para agendamento
+            - Se o paciente quer confirmar, forneça contatos para confirmação
+            - Seja específico: telefone para ligar, WhatsApp para mensagem
+            """
+        else:
+            return """
+            - NÃO mencione telefone ou WhatsApp nesta resposta
+            - Foque apenas no que o paciente perguntou
+            - Se o paciente demonstrar interesse em agendar, aí sim ofereça contatos
+            """
+    
     def _get_fallback_response(self, intent: str) -> str:
         """
         Retorna uma resposta de fallback caso o Gemini falhe
         """
         fallback_responses = {
-            'saudacao': "Olá! Bem-vindo à clínica! 😊 Como posso ajudá-lo hoje?",
-            'buscar_especialidade': "Aqui estão nossas especialidades disponíveis. Gostaria de mais informações sobre alguma específica?",
-            'buscar_medico': "Aqui estão nossos médicos. Posso ajudá-lo a escolher o mais adequado para sua necessidade.",
-            'buscar_exame': "Posso fornecer informações sobre nossos exames. Qual exame você gostaria de conhecer?",
-            'buscar_info_clinica': "Aqui estão as informações da nossa clínica. Como posso ajudá-lo?",
-            'agendar_consulta': "Vou ajudá-lo a agendar sua consulta. Vamos começar?",
-            'confirmar_agendamento': "Vou verificar seus agendamentos. Um momento, por favor.",
-            'cancelar_agendamento': "Entendo que precisa cancelar. Vou ajudá-lo com isso.",
-            'horarios_disponiveis': "Vou verificar os horários disponíveis para você.",
+            'saudacao': "Olá! 😊 Como posso ajudá-lo hoje?",
+            'buscar_especialidade': "Aqui estão nossas especialidades. Qual você gostaria de conhecer?",
+            'buscar_medico': "Aqui estão nossos médicos. Qual especialidade você precisa?",
+            'buscar_exame': "Posso fornecer informações sobre nossos exames. Qual você gostaria de conhecer?",
+            'buscar_info_clinica': "Que informação você precisa sobre a clínica?",
+            'agendar_consulta': "Vou ajudá-lo a agendar. Qual especialidade você precisa?",
+            'confirmar_agendamento': "Vou verificar seus agendamentos.",
+            'cancelar_agendamento': "Entendo que precisa cancelar. Como posso ajudar?",
+            'horarios_disponiveis': "Vou verificar os horários disponíveis.",
             'despedida': "Até logo! Foi um prazer ajudá-lo! 😊",
-            'ajuda': "Posso ajudá-lo com informações sobre nossa clínica, agendamentos e médicos.",
-            'desconhecida': "Desculpe, não entendi bem. Como posso ajudá-lo hoje?"
+            'ajuda': "Posso ajudá-lo com informações sobre médicos, exames e agendamentos.",
+            'desconhecida': "Desculpe, não entendi. Como posso ajudá-lo?"
         }
         
         return fallback_responses.get(intent, fallback_responses['desconhecida'])

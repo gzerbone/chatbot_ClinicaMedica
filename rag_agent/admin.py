@@ -26,9 +26,9 @@ class ConvenioAdmin(admin.ModelAdmin):
 
 @admin.register(Medico)
 class MedicoAdmin(admin.ModelAdmin):
-    list_display = ['nome', 'get_especialidades_display', 'preco_particular']
+    list_display = ['nome', 'crm', 'get_especialidades_display', 'preco_particular']
     list_filter = ['especialidades', 'convenios']
-    search_fields = ['nome']
+    search_fields = ['nome', 'crm']
     filter_horizontal = ['especialidades', 'convenios']
 
 @admin.register(HorarioTrabalho)

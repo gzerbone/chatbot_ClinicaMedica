@@ -47,7 +47,7 @@ class MedicoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Medico
         fields = [
-            'id', 'nome', 'especialidades', 'especialidades_display',
+            'id', 'nome', 'crm', 'especialidades', 'especialidades_display',
             'bio', 'convenios', 'preco_particular', 'formas_pagamento',
             'retorno_info', 'horarios_trabalho'
         ]
@@ -59,7 +59,7 @@ class MedicoResumoSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Medico
-        fields = ['id', 'nome', 'especialidades_display', 'preco_particular']
+        fields = ['id', 'nome', 'crm', 'especialidades_display', 'preco_particular']
 
 # Converte exames para JSON com duração formatada
 class ExameSerializer(serializers.ModelSerializer):
