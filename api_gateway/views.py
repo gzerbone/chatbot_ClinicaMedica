@@ -14,171 +14,21 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from flow_agent.services.gemini_service import GeminiService
-
 from .services.conversation_service import conversation_service
-from .services.intent_detection_service import IntentDetectionService
-from .services.rag_service import RAGService
-from .services.smart_collection_service import smart_collection_service
+from .services.gemini_chatbot_service import gemini_chatbot_service
 from .services.whatsapp_service import WhatsAppService
 
 logger = logging.getLogger(__name__)
 
 # Inicializar serviços
 whatsapp_service = WhatsAppService()
-intent_service = IntentDetectionService()
-gemini_service = GeminiService()
 # Obter dados da clínica através do RAGService
 def get_clinic_data():
     """Obtém dados atualizados da clínica"""
+    from .services.rag_service import RAGService
     return RAGService.get_all_clinic_data()
 
 
-def handle_appointment_confirmation(phone_number: str, message: str, intent: str, entities: Dict, conversation_history: List) -> str:
-    """
-    Trata confirmação de agendamento e gera link de handoff
-    
-    Args:
-        phone_number: Número do telefone do usuário
-        message: Mensagem atual
-        intent: Intenção detectada
-        entities: Entidades extraídas
-        conversation_history: Histórico da conversa
-        
-    Returns:
-        Resposta com link de handoff personalizado
-    """
-    try:
-        from .services.handoff_service import handoff_service
-
-        # Obter informações do paciente da sessão persistente
-        patient_info = conversation_service.get_patient_info(phone_number)
-        
-        # Buscar informações de agendamento no histórico
-        doctor_name = patient_info.get('selected_doctor') or 'Dr. João Carvalho'  # Fallback para médico padrão
-        date = patient_info.get('preferred_date') or 'Data a definir'
-        time = patient_info.get('preferred_time') or 'Horário a definir'
-        
-        # Se não temos informações suficientes, buscar no histórico
-        if doctor_name == 'Dr. João Carvalho' or date == 'Data a definir':
-            for msg in reversed(conversation_history):
-                msg_content = msg.get('content', '').lower()
-                msg_entities = msg.get('entities', {})
-                
-                # Buscar nome do médico
-                if 'dr.' in msg_content or 'dra.' in msg_content:
-                    words = msg_content.split()
-                    for i, word in enumerate(words):
-                        if word in ['dr.', 'dra.', 'doutor', 'doutora']:
-                            if i + 1 < len(words):
-                                if i + 2 < len(words):
-                                    doctor_name = f"{word.title()} {words[i+1].title()} {words[i+2].title()}"
-                                else:
-                                    doctor_name = f"{word.title()} {words[i+1].title()}"
-                                break
-                
-                # Buscar data e horário
-                if 'dates' in msg_entities and msg_entities['dates']:
-                    date = msg_entities['dates'][0]
-                
-                if 'times' in msg_entities and msg_entities['times']:
-                    time = msg_entities['times'][0]
-        
-        # Converter data para formato correto se necessário
-        if date and date != 'Data a definir':
-            try:
-                # Se for uma data em formato brasileiro (DD/MM/YYYY)
-                if '/' in str(date):
-                    day, month, year = str(date).split('/')
-                    if len(year) == 2:
-                        year = '20' + year
-                    date = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
-                # Se for uma data em formato de texto (segunda, terça, etc.)
-                elif any(day in str(date).lower() for day in ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'sabado', 'domingo']):
-                    # Para testes, usar data padrão
-                    from datetime import datetime, timedelta
-                    today = datetime.now()
-                    # Encontrar próxima segunda-feira
-                    days_ahead = 0 - today.weekday()  # Monday is 0
-                    if days_ahead <= 0:  # Target day already happened this week
-                        days_ahead += 7
-                    next_monday = today + timedelta(days=days_ahead)
-                    date = next_monday.strftime('%Y-%m-%d')
-            except Exception as e:
-                logger.warning(f"Erro ao converter data '{date}': {e}")
-                date = 'Data a definir'
-        
-        # Preparar dados do handoff
-        handoff_data = {
-            'patient_name': patient_info.get('patient_name', 'Paciente'),
-            'doctor_name': doctor_name,
-            'specialty': patient_info.get('specialty_interest', 'Consulta Geral'),
-            'appointment_type': patient_info.get('insurance_type', 'Consulta'),
-            'preferred_date': date,
-            'preferred_time': time,
-            'phone_number': phone_number,
-            'insurance': patient_info.get('insurance_type', 'Não informado')
-        }
-        
-        # Criar solicitação de agendamento no banco
-        appointment_data = handoff_data.copy()
-        appointment_data.pop('phone_number', None)  # Remover phone_number do dict
-        
-        appointment_request = conversation_service.create_appointment_request(
-            phone_number,
-            **appointment_data
-        )
-        
-        # Gerar link de handoff
-        logger.info(f"Gerando link de handoff com dados: {handoff_data}")
-        
-        whatsapp_link = handoff_service.generate_appointment_handoff_link(
-            patient_name=handoff_data['patient_name'],
-            doctor_name=handoff_data['doctor_name'],
-            specialty=handoff_data['specialty'],
-            appointment_type=handoff_data['appointment_type'],
-            date=handoff_data['preferred_date'],
-            time=handoff_data['preferred_time'],
-            additional_info={
-                'telefone_paciente': phone_number,
-                'convenio': handoff_data.get('insurance', 'Não informado')
-            }
-        )
-        
-        # Atualizar link no banco
-        if appointment_request:
-            appointment_request.handoff_link = whatsapp_link
-            appointment_request.save()
-        
-        # Criar mensagem de confirmação
-        confirmation_message = handoff_service.create_confirmation_message(
-            handoff_data['doctor_name'],
-            handoff_data['preferred_date'],
-            handoff_data['preferred_time'],
-            handoff_data
-        )
-        
-        # Combinar mensagem de confirmação com link
-        final_message = f"""{confirmation_message}
-
-🔗 **CLIQUE AQUI PARA CONFIRMAR:**
-{whatsapp_link}
-
-💡 **Como funciona:**
-1️⃣ Clique no link acima
-2️⃣ Será direcionado para WhatsApp da clínica
-3️⃣ Mensagem será preenchida automaticamente
-4️⃣ Nossa secretária confirmará seu agendamento
-
-⚡ **Importante:** Este é um pré-agendamento. A confirmação final será feita pela nossa equipe!"""
-        
-        logger.info(f"Handoff gerado para {phone_number}: {doctor_name} - {date} {time}")
-        
-        return final_message
-        
-    except Exception as e:
-        logger.error(f"Erro ao processar confirmação de agendamento: {e}")
-        return "Houve um erro ao processar seu agendamento. Por favor, entre em contato conosco: (11) 99999-9999"
 
 
 @csrf_exempt
@@ -222,27 +72,34 @@ def handle_webhook(request):
     """
     try:
         body = json.loads(request.body.decode('utf-8'))
-        logger.info(f"Webhook recebido: {json.dumps(body, indent=2)}")
-        
+
+        # Log mais limpo do webhook
+        logger.info("📨 Webhook do WhatsApp processado com sucesso")
+
         # Verificar se é uma mensagem válida
         if 'entry' not in body:
+            logger.warning("Webhook sem entries válidas")
             return JsonResponse({'status': 'ok'})
-        
+
+        total_messages = 0
         for entry in body['entry']:
             if 'changes' not in entry:
                 continue
-                
+
             for change in entry['changes']:
                 if change.get('field') == 'messages':
                     messages = change.get('value', {}).get('messages', [])
-                    
+                    total_messages += len(messages)
+
                     for message in messages:
                         process_message(message, change['value'])
-        
+
+        logger.info(f"✅ Webhook processado: {total_messages} mensagens")
+
         return JsonResponse({'status': 'ok'})
-        
+
     except Exception as e:
-        logger.error(f"Erro ao processar webhook: {e}")
+        logger.error(f"❌ Erro ao processar webhook: {e}")
         return JsonResponse({'status': 'error'}, status=500)
 
 
@@ -256,123 +113,143 @@ def process_message(message, webhook_data):
         from_number = message.get('from')
         message_type = message.get('type')
         timestamp = message.get('timestamp')
-        
-        logger.info(f"Processando mensagem {message_id} de {from_number}")
-        
+
+        logger.info(f"🔄 Processando mensagem {message_id} de {from_number}")
+
         # Marcar mensagem como lida
         whatsapp_service.mark_message_as_read(message_id)
-        
+
         # Processar apenas mensagens de texto
         if message_type == 'text':
             text_content = message.get('text', {}).get('body', '')
-            
+
             if text_content:
-                # Detectar intenção com contexto
-                intent, confidence, entities = intent_service.detect_intent_with_context(
-                    from_number, text_content
-                )
-                logger.info(f"Intenção contextual detectada: {intent} (confiança: {confidence})")
-                
-                # Processar com coleta inteligente de informações
-                collection_result = smart_collection_service.process_message_with_collection(
-                    from_number, text_content, intent, entities
-                )
-                
-                # Obter histórico da conversa para contexto
-                conversation_history = conversation_service.get_conversation_history(from_number, limit=3)
-                
-                # Se tem resposta específica da coleta, usar ela
-                if collection_result['response']:
-                    response_text = collection_result['response']
-                # Se precisa de handoff, processar confirmação
-                elif collection_result['requires_handoff']:
-                    response_text = handle_appointment_confirmation(
-                        from_number, text_content, intent, entities, conversation_history
-                    )
-                else:
-                    # Gerar resposta normal com Gemini
-                    response_text = gemini_service.generate_response(
-                        user_message=text_content,
-                        intent=intent,
-                        context={
-                            'entities': entities,
-                            'confidence': confidence,
-                            'message_id': message_id,
-                            'timestamp': timestamp,
-                            'conversation_history': conversation_history,
-                            'info_status': collection_result.get('info_status', {})
-                        },
-                        clinic_data=get_clinic_data()
-                    )
-                
-                # Enviar resposta
-                success = whatsapp_service.send_message(from_number, response_text)
-                
-                if success:
-                    logger.info(f"Resposta enviada com sucesso para {from_number}")
+                logger.info(f"👤 USUÁRIO ({from_number}): {text_content}")
+
+                # NOVO: Usar Gemini Chatbot Service como protagonista principal
+                try:
+                    # Processar mensagem com Gemini centralizado
+                    result = gemini_chatbot_service.process_message(from_number, text_content)
+
+                    response_text = result.get('response', 'Como posso ajudá-lo?')
+                    intent = result.get('intent', 'unknown')
+                    confidence = result.get('confidence', 0.0)
+                    state = result.get('state', 'unknown')
+                    agent = result.get('agent', 'gemini')
+
+                    logger.info(f"🤖 [{intent.upper()}] State: {state} | Conf: {confidence:.2f} | Agent: {agent}")
+
+                    # Enviar resposta
+                    success = whatsapp_service.send_message(from_number, response_text)
+
+                    if success:
+                        logger.info(f"✅ RESPOSTA ENVIADA ({agent})")
+                        logger.info(f"💬 GEMINI: {response_text}")
+
+                        # Log limpo da conversação
+                        from .services.conversation_service import \
+                            conversation_logger
+                        conversation_logger.info(f"💬 {from_number} → {text_content}")
+                        conversation_logger.info(f"🤖 GEMINI → {response_text}")
+                    else:
+                        logger.error(f"❌ Falha ao enviar resposta para {from_number}")
+
+                except Exception as e:
+                    logger.error(f"❌ Erro no Gemini Chatbot Service: {e}")
                     
-                    # Adicionar mensagens ao banco de dados
-                    conversation_service.add_message(
-                        from_number, text_content, 'user', intent, confidence, entities
-                    )
-                    conversation_service.add_message(
-                        from_number, response_text, 'bot', 'resposta_bot', 1.0, {}
-                    )
-                else:
-                    logger.error(f"Falha ao enviar resposta para {from_number}")
-        
+                    # Fallback simples
+                    response_text = "Desculpe, estou temporariamente indisponível. Como posso ajudá-lo?"
+                    success = whatsapp_service.send_message(from_number, response_text)
+                    
+                    if success:
+                        logger.info("✅ Resposta fallback enviada")
+                        logger.info(f"💬 FALLBACK: {response_text}")
+                    else:
+                        logger.error(f"❌ Falha ao enviar resposta fallback para {from_number}")
+
         elif message_type == 'interactive':
             # Processar mensagens interativas (botões, listas)
+            logger.info(f"🔘 Mensagem interativa recebida de {from_number}")
             handle_interactive_message(message, from_number)
-            
+
         else:
-            logger.info(f"Tipo de mensagem não suportado: {message_type}")
-            
+            logger.info(f"ℹ️ Tipo de mensagem não suportado: {message_type}")
+
     except Exception as e:
-        logger.error(f"Erro ao processar mensagem: {e}")
+        logger.error(f"❌ Erro ao processar mensagem: {e}")
 
 
 def handle_interactive_message(message, from_number):
     """
-    Processa mensagens interativas (botões, listas)
+    Processa mensagens interativas (botões, listas) usando o Gemini Chatbot Service
     """
     try:
         interactive = message.get('interactive', {})
         interactive_type = interactive.get('type')
-        
+
         if interactive_type == 'button_reply':
             button_text = interactive.get('button_reply', {}).get('title', '')
-            logger.info(f"Botão clicado: {button_text}")
-            
-            # Processar resposta do botão
-            response_text = gemini_service.generate_response(
-                user_message=f"Botão clicado: {button_text}",
-                intent='interactive_response',
-                context={'interactive_type': 'button', 'button_text': button_text},
-                clinic_data=get_clinic_data()
-            )
-            
-            whatsapp_service.send_message(from_number, response_text)
-            
+            logger.info(f"🔘 Botão clicado por {from_number}: {button_text}")
+
+            # Usar Gemini Chatbot Service para processar resposta do botão
+            try:
+                result = gemini_chatbot_service.process_message(
+                    from_number,
+                    f"Botão clicado: {button_text}"
+                )
+
+                response_text = result.get('response', f"Entendi que você clicou em: {button_text}")
+                intent = result.get('intent', 'interactive_response')
+
+                logger.info(f"🤖 [{intent.upper()}] Processando botão: {button_text}")
+                logger.info(f"💬 GEMINI: {response_text}")
+
+                # Log da conversação interativa
+                from .services.conversation_service import conversation_logger
+                conversation_logger.info(f"🔘 {from_number} → Botão: {button_text}")
+                conversation_logger.info(f"🤖 GEMINI → {response_text}")
+
+                whatsapp_service.send_message(from_number, response_text)
+
+            except Exception as e:
+                logger.error(f"❌ Erro no Gemini para botão: {e}")
+                response_text = f"Entendi que você clicou em: {button_text}. Como posso ajudá-lo?"
+                whatsapp_service.send_message(from_number, response_text)
+
         elif interactive_type == 'list_reply':
             list_item = interactive.get('list_reply', {})
             item_title = list_item.get('title', '')
             item_id = list_item.get('id', '')
-            
-            logger.info(f"Item da lista selecionado: {item_title} (ID: {item_id})")
-            
-            # Processar resposta da lista
-            response_text = gemini_service.generate_response(
-                user_message=f"Item selecionado: {item_title}",
-                intent='interactive_response',
-                context={'interactive_type': 'list', 'item_title': item_title, 'item_id': item_id},
-                clinic_data=get_clinic_data()
-            )
-            
-            whatsapp_service.send_message(from_number, response_text)
-            
+
+            logger.info(f"📋 Item da lista selecionado por {from_number}: {item_title} (ID: {item_id})")
+
+            # Usar Gemini Chatbot Service para processar resposta da lista
+            try:
+                result = gemini_chatbot_service.process_message(
+                    from_number,
+                    f"Item selecionado: {item_title}"
+                )
+
+                response_text = result.get('response', f"Entendi que você selecionou: {item_title}")
+                intent = result.get('intent', 'interactive_response')
+
+                logger.info(f"🤖 [{intent.upper()}] Processando seleção: {item_title}")
+                logger.info(f"💬 GEMINI: {response_text}")
+
+                # Log da conversação interativa
+                from .services.conversation_service import conversation_logger
+                conversation_logger.info(f"📋 {from_number} → Lista: {item_title}")
+                conversation_logger.info(f"🤖 GEMINI → {response_text}")
+
+                whatsapp_service.send_message(from_number, response_text)
+
+            except Exception as e:
+                logger.error(f"❌ Erro no Gemini para lista: {e}")
+                response_text = f"Entendi que você selecionou: {item_title}. Como posso ajudá-lo?"
+                whatsapp_service.send_message(from_number, response_text)
+
     except Exception as e:
-        logger.error(f"Erro ao processar mensagem interativa: {e}")
+        logger.error(f"❌ Erro ao processar mensagem interativa: {e}")
 
 
 @api_view(['POST'])
@@ -417,7 +294,7 @@ def test_gemini_connection(request):
     Endpoint para testar a conexão com o Gemini
     """
     try:
-        is_connected = gemini_service.test_connection()
+        is_connected = gemini_chatbot_service.test_connection()
         
         if is_connected:
             return Response({'status': 'Conexão com Gemini OK'})
@@ -435,89 +312,8 @@ def test_gemini_connection(request):
         )
 
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def test_intent_detection(request):
-    """
-    Endpoint para testar a detecção de intenções
-    """
-    try:
-        data = request.data
-        message = data.get('message', '')
-        phone_number = data.get('phone_number', 'test_user')
-        use_context = data.get('use_context', False)
-        
-        if not message:
-            return Response(
-                {'error': 'Mensagem é obrigatória'}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        if use_context:
-            # Usar detecção contextual
-            intent, confidence, entities = intent_service.detect_intent_with_context(
-                phone_number, message
-            )
-            
-            # Obter histórico para mostrar contexto
-            from .services.context_manager import context_manager
-            history = context_manager.get_conversation_history(phone_number, limit=5)
-            
-            return Response({
-                'message': message,
-                'phone_number': phone_number,
-                'intent': intent,
-                'confidence': confidence,
-                'entities': entities,
-                'conversation_history': history,
-                'contextual_analysis': True
-            })
-        else:
-            # Usar detecção tradicional
-            intent, confidence = intent_service.detect_intent(message)
-            entities = intent_service.extract_entities(message)
-            
-            return Response({
-                'message': message,
-                'intent': intent,
-                'confidence': confidence,
-                'entities': entities,
-                'is_question': intent_service.is_question(message),
-                'contextual_analysis': False
-            })
-        
-    except Exception as e:
-        logger.error(f"Erro no teste de detecção de intenção: {e}")
-        return Response(
-            {'error': 'Erro interno do servidor'}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
 
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def clear_context(request):
-    """
-    Endpoint para limpar contexto de conversa (apenas para testes)
-    """
-    try:
-        data = request.data
-        phone_number = data.get('phone_number', 'test_user')
-        
-        from .services.context_manager import context_manager
-        context_manager.clear_context(phone_number)
-        
-        return Response({
-            'message': f'Contexto limpo para {phone_number}',
-            'phone_number': phone_number
-        })
-        
-    except Exception as e:
-        logger.error(f"Erro ao limpar contexto: {e}")
-        return Response(
-            {'error': 'Erro interno do servidor'}, 
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
 
 
 @api_view(['GET'])
@@ -566,6 +362,182 @@ def get_doctor_availability(request, doctor_name):
         logger.error(f"Erro ao consultar disponibilidade: {e}")
         return Response(
             {'error': 'Erro interno do servidor'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def test_chatbot_service(request):
+    """
+    Endpoint para testar o novo serviço de chatbot Gemini centralizado
+    """
+    try:
+        data = request.data
+        phone_number = data.get('phone_number', '5511999999999')
+        message = data.get('message', 'Olá, gostaria de agendar uma consulta')
+
+        if not message:
+            return Response(
+                {'error': 'Mensagem é obrigatória'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Processar mensagem com o Gemini Chatbot Service
+        result = gemini_chatbot_service.process_message(phone_number, message)
+
+        return Response({
+            'phone_number': phone_number,
+            'message': message,
+            'response': result.get('response'),
+            'intent': result.get('intent'),
+            'confidence': result.get('confidence'),
+            'state': result.get('state'),
+            'session_data': result.get('session_data', {}),
+            'analysis': result.get('analysis', {}),
+            'agent': result.get('agent', 'gemini')
+        })
+
+    except Exception as e:
+        logger.error(f"Erro no teste do chatbot: {e}")
+        return Response(
+            {'error': 'Erro interno do servidor'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def test_intent_analysis(request):
+    """
+    Endpoint para testar a análise de intenção usando Gemini centralizado
+    """
+    try:
+        data = request.data
+        message = data.get('message', 'Olá, quais médicos vocês têm?')
+        phone_number = data.get('phone_number', '5511999999999')
+
+        if not message:
+            return Response(
+                {'error': 'Mensagem é obrigatória'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Processar mensagem com Gemini centralizado
+        result = gemini_chatbot_service.process_message(phone_number, message)
+
+        return Response({
+            'message': message,
+            'phone_number': phone_number,
+            'intent': result.get('intent'),
+            'confidence': result.get('confidence'),
+            'state': result.get('state'),
+            'analysis': result.get('analysis', {}),
+            'response': result.get('response'),
+            'session_data': result.get('session_data', {}),
+            'agent': result.get('agent', 'gemini'),
+            'gemini_available': gemini_chatbot_service.enabled
+        })
+
+    except Exception as e:
+        logger.error(f"Erro no teste de análise de intenção: {e}")
+        return Response(
+            {'error': 'Erro interno do servidor'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def test_entity_extraction(request):
+    """
+    Endpoint para testar especificamente a extração de entidades
+    """
+    try:
+        data = request.data
+        message = data.get('message', 'Meu nome é João Silva, quero agendar com Dr. João Carvalho para segunda-feira às 14h')
+        phone_number = data.get('phone_number', '5511999999999')
+
+        if not message:
+            return Response(
+                {'error': 'Mensagem é obrigatória'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Processar mensagem com Gemini centralizado
+        result = gemini_chatbot_service.process_message(phone_number, message)
+
+        return Response({
+            'message': message,
+            'phone_number': phone_number,
+            'intent': result.get('intent'),
+            'confidence': result.get('confidence'),
+            'state': result.get('state'),
+            'entities_extracted': result.get('analysis', {}).get('entities', {}),
+            'session_data': result.get('session_data', {}),
+            'response': result.get('response'),
+            'agent': result.get('agent', 'gemini'),
+            'gemini_available': gemini_chatbot_service.enabled
+        })
+
+    except Exception as e:
+        logger.error(f"Erro no teste de extração de entidades: {e}")
+        return Response(
+            {'error': 'Erro interno do servidor'},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def check_stored_data(request):
+    """
+    Endpoint para verificar dados armazenados no cache e banco
+    """
+    try:
+        phone_number = request.GET.get('phone_number', '5511999999999')
+        
+        # Verificar sessão no cache
+        from django.core.cache import cache
+        cache_key = f"gemini_session_{phone_number}"
+        cached_session = cache.get(cache_key)
+        
+        # Verificar sessão no banco
+        from .models import ConversationMessage, ConversationSession
+        db_session = ConversationSession.objects.filter(phone_number=phone_number).first()
+        
+        # Verificar mensagens no banco
+        messages = ConversationMessage.objects.filter(session__phone_number=phone_number).order_by('-timestamp')[:5]
+        
+        return Response({
+            'phone_number': phone_number,
+            'cache_session': cached_session,
+            'database_session': {
+                'id': db_session.id if db_session else None,
+                'current_state': db_session.current_state if db_session else None,
+                'patient_name': db_session.patient_name if db_session else None,
+                'name_confirmed': db_session.name_confirmed if db_session else None,
+                'created_at': db_session.created_at if db_session else None,
+                'updated_at': db_session.updated_at if db_session else None,
+            },
+            'recent_messages': [
+                {
+                    'id': msg.id,
+                    'content': msg.content[:100] + '...' if len(msg.content) > 100 else msg.content,
+                    'message_type': msg.message_type,
+                    'intent': msg.intent,
+                    'entities': msg.entities,
+                    'created_at': msg.timestamp
+                } for msg in messages
+            ],
+            'cache_available': cached_session is not None,
+            'database_available': db_session is not None
+        })
+
+    except Exception as e:
+        logger.error(f"Erro ao verificar dados armazenados: {e}")
+        return Response(
+            {'error': 'Erro interno do servidor'},
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
 

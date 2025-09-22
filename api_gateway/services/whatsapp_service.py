@@ -58,14 +58,14 @@ class WhatsAppService:
             response = requests.post(url, headers=headers, json=data)
             
             if response.status_code == 200:
-                logger.info(f"Mensagem enviada com sucesso para {to}")
+                logger.info(f"📱 Mensagem enviada para {to}")
                 return True
             else:
-                logger.error(f"Erro ao enviar mensagem: {response.status_code} - {response.text}")
+                logger.error(f"❌ Erro ao enviar mensagem: {response.status_code} - {response.text}")
                 return False
                 
         except Exception as e:
-            logger.error(f"Erro ao enviar mensagem via WhatsApp: {e}")
+            logger.error(f"❌ Erro ao enviar mensagem via WhatsApp: {e}")
             return False
     
     def send_template_message(self, to: str, template_name: str, parameters: list = None) -> bool:

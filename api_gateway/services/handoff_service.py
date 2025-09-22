@@ -99,9 +99,16 @@ class HandoffService:
             # Juntar com %0A (quebra de linha)
             encoded_message = '%0A'.join(encoded_parts)
             
-            # Gerar link completo
-            whatsapp_link = f"{self.base_url}?phone={self.clinic_phone}&text={encoded_message}"
+            # Gerar link completo - usar mensagem simples para evitar problemas de codificação
+            simple_message = f"""Agendamento via Chatbot:
+Nome: {patient_name}
+Médico: {clean_doctor_name}
+Tipo de Consulta: {final_appointment_type}
+Data/Hora: {final_date} às {final_time}"""
             
+            # Usar codificação simples do urllib
+            encoded_message = urllib.parse.quote(simple_message)
+            whatsapp_link = f"{self.base_url}?phone={self.clinic_phone}&text={encoded_message}"
             logger.info(f"Link de handoff gerado para {patient_name} - {doctor_name}")
             
             return whatsapp_link

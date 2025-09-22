@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.2/ref/settings/
 """
 
+import logging
 from pathlib import Path
 
 from decouple import config
@@ -43,7 +44,6 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'rest_framework',
-    'flow_agent',
     'rag_agent',
     'api_gateway',
 ]
@@ -62,12 +62,49 @@ MIDDLEWARE = [
 ]
 
 # Configurações de logging para desenvolvimento
+class ColoredFormatter(logging.Formatter):
+    """
+    Formatador colorido para logs no terminal
+    """
+
+    # Cores ANSI
+    COLORS = {
+        'DEBUG': '\033[36m',      # Cyan
+        'INFO': '\033[32m',       # Verde
+        'WARNING': '\033[33m',    # Amarelo
+        'ERROR': '\033[31m',      # Vermelho
+        'CRITICAL': '\033[35m',   # Magenta
+    }
+    RESET = '\033[0m'  # Reset
+
+    def format(self, record):
+        # Adicionar cor baseada no nível
+        color = self.COLORS.get(record.levelname, self.RESET)
+        record.levelname = f"{color}{record.levelname}{self.RESET}"
+
+        # Formatação customizada para diferentes tipos de log
+        if hasattr(record, 'agent'):
+            record.levelname = f"{color}[{record.agent.upper()}]{self.RESET}"
+        elif hasattr(record, 'phone_number'):
+            record.levelname = f"{color}[{record.phone_number}]{self.RESET}"
+
+        return super().format(record)
+
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
+            'formatter': 'colored',
+        },
+    },
+    'formatters': {
+        'colored': {
+            '()': ColoredFormatter,
+            'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            'datefmt': '%H:%M:%S'
         },
     },
     'root': {
@@ -77,12 +114,22 @@ LOGGING = {
     'loggers': {
         'api_gateway': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': 'INFO',  # Reduzido de DEBUG para menos verbosidade
             'propagate': False,
         },
         'flow_agent': {
             'handlers': ['console'],
-            'level': 'DEBUG',
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'rag_agent': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'conversation': {
+            'handlers': ['console'],
+            'level': 'INFO',
             'propagate': False,
         },
     },
@@ -163,7 +210,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Configurações do Gemini AI
 GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
 GEMINI_ENABLED = config('GEMINI_ENABLED', default=True, cast=bool)
-GEMINI_MODEL = config('GEMINI_MODEL', default='gemini-1.5-flash')
+GEMINI_MODEL = config('GEMINI_MODEL', default='gemini-2.0-flash')
 GEMINI_TEMPERATURE = config('GEMINI_TEMPERATURE', default=0.7, cast=float)
 GEMINI_MAX_TOKENS = config('GEMINI_MAX_TOKENS', default=1024, cast=int)
 
