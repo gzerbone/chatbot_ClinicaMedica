@@ -12,7 +12,7 @@ from django.core.cache import cache
 from django.utils import timezone
 
 from ..models import (AppointmentRequest, ConversationMessage,
-                      ConversationSession, RAGCache)
+                      ConversationSession)
 
 ''
 logger = logging.getLogger(__name__)

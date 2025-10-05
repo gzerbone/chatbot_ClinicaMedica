@@ -106,7 +106,7 @@ python scripts/testar_persistencia_completa.py
 - ConversationSession    # Sessões de conversa
 - ConversationMessage    # Mensagens
 - AppointmentRequest     # Solicitações
-- RAGCache              # Cache RAG
+
 
 # rag_agent/models.py
 - ClinicaInfo           # Info da clínica

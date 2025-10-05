@@ -87,7 +87,6 @@ O sistema foi completamente refatorado para uma arquitetura **centralizada no Go
 - ConversationSession    # Sessões de conversa persistentes
 - ConversationMessage    # Mensagens individuais
 - AppointmentRequest     # Solicitações de agendamento
-- RAGCache              # Cache de dados RAG
 ```
 
 #### **Services** (`services/`)

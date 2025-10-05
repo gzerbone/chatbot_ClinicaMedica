@@ -118,24 +118,3 @@ class AppointmentRequest(models.Model):
     
     def __str__(self):
         return f"{self.patient_name} - {self.doctor_name} ({self.preferred_date})"
-
-
-class RAGCache(models.Model):
-    """
-    Cache para dados do RAG (informações da clínica)
-    """
-    cache_key = models.CharField(max_length=255, unique=True)
-    data = models.JSONField()
-    expires_at = models.DateTimeField()
-    created_at = models.DateTimeField(auto_now_add=True)
-    
-    class Meta:
-        ordering = ['-created_at']
-        verbose_name = 'Cache RAG'
-        verbose_name_plural = 'Caches RAG'
-    
-    def __str__(self):
-        return f"{self.cache_key} (expires: {self.expires_at})"
-    
-    def is_expired(self):
-        return timezone.now() > self.expires_at
