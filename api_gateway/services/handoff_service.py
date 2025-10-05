@@ -26,8 +26,7 @@ class HandoffService:
                                         specialty: str = None,
                                         appointment_type: str = None,
                                         date: str = None,
-                                        time: str = None,
-                                        additional_info: Dict = None) -> str:
+                                        time: str = None) -> str:
         """
         Gera link de WhatsApp para handoff de agendamento
         
@@ -38,7 +37,6 @@ class HandoffService:
             appointment_type: Tipo de consulta (Particular, Convênio, etc.)
             date: Data da consulta (formato: DD/MM/YYYY)
             time: Horário da consulta (formato: HH:mm)
-            additional_info: Informações adicionais
             
         Returns:
             URL do WhatsApp com mensagem pré-formatada
@@ -89,6 +87,7 @@ class HandoffService:
                 encoded_part = part.replace(' ', '%20')
                 # Substituir caracteres especiais
                 encoded_part = encoded_part.replace(':', '%3A')
+                encoded_part = encoded_part.replace('*', '%2A')
                 encoded_part = encoded_part.replace('/', '%2F')
                 encoded_part = encoded_part.replace('à', '%C3%A0')
                 encoded_part = encoded_part.replace('é', '%C3%A9')
@@ -101,10 +100,10 @@ class HandoffService:
             
             # Gerar link completo - usar mensagem simples para evitar problemas de codificação
             simple_message = f"""Agendamento via Chatbot:
-Nome: {patient_name}
-Médico: {clean_doctor_name}
-Tipo de Consulta: {final_appointment_type}
-Data/Hora: {final_date} às {final_time}"""
+*Nome:* {patient_name}
+*Médico:* {clean_doctor_name}
+*Tipo de Consulta:* {final_appointment_type}
+*Data/Hora:* {final_date} às {final_time}"""
             
             # Usar codificação simples do urllib
             encoded_message = urllib.parse.quote(simple_message)
@@ -116,72 +115,14 @@ Data/Hora: {final_date} às {final_time}"""
         except Exception as e:
             logger.error(f"Erro ao gerar link de handoff: {e}")
             return self._generate_fallback_link()
-    
-    def generate_simple_handoff_link(self, message: str) -> str:
-        """
-        Gera link simples de WhatsApp com mensagem personalizada
-        
-        Args:
-            message: Mensagem a ser enviada
-            
-        Returns:
-            URL do WhatsApp
-        """
-        try:
-            encoded_message = urllib.parse.quote(message)
-            return f"{self.base_url}?phone={self.clinic_phone}&text={encoded_message}"
-        except Exception as e:
-            logger.error(f"Erro ao gerar link simples: {e}")
-            return self._generate_fallback_link()
-    
-    def generate_info_request_link(self, requested_info: str) -> str:
-        """
-        Gera link para solicitar informações específicas
-        
-        Args:
-            requested_info: Tipo de informação solicitada
-            
-        Returns:
-            URL do WhatsApp
-        """
-        message = f"""🤖 *SOLICITAÇÃO VIA CHATBOT*
-
-📋 O paciente solicitou informações sobre:
-{requested_info}
-
-👩‍💼 Secretária: Por favor, forneça as informações solicitadas"""
-        
-        return self.generate_simple_handoff_link(message)
-    
+ 
+ 
     def _generate_fallback_link(self) -> str:
         """Gera link de fallback em caso de erro"""
         fallback_message = "Olá! Gostaria de agendar uma consulta através do chatbot."
         encoded_message = urllib.parse.quote(fallback_message)
         return f"{self.base_url}?phone={self.clinic_phone}&text={encoded_message}"
     
-    def format_appointment_summary(self, 
-                                 patient_name: str,
-                                 doctor_name: str,
-                                 specialty: str,
-                                 date: str,
-                                 time: str,
-                                 appointment_type: str = "Consulta") -> str:
-        """
-        Formata resumo do agendamento para exibição
-        
-        Returns:
-            String formatada com resumo do agendamento
-        """
-        return f"""📋 *RESUMO DO PRÉ-AGENDAMENTO*
-
-👤 **Paciente:** {patient_name}
-👨‍⚕️ **Médico:** {doctor_name}
-🩺 **Especialidade:** {specialty}
-💼 **Tipo:** {appointment_type}
-📅 **Data:** {date}
-🕐 **Horário:** {time}
-
-✅ Para confirmar este agendamento, clique no link abaixo"""
     
     def extract_patient_info_from_context(self, context_history: list, entities: Dict) -> Dict[str, str]:
         """
@@ -277,19 +218,19 @@ Data/Hora: {final_date} às {final_time}"""
         """
         appointment_type = patient_info.get('appointment_type', 'Consulta')
         
-        message = f"""✅ **Perfeito! Vamos confirmar seu pré-agendamento:**
+        message = f"""✅ *Perfeito! Vamos confirmar seu pré-agendamento:*
 
-📋 **RESUMO:**
+📋 **RESUMO:
 👤 Paciente: {patient_info.get('patient_name', 'Não informado')}
 👨‍⚕️ Médico: {doctor_name}
 📅 Data: {date}
 🕐 Horário: {time}
 💼 Tipo: {appointment_type}
 
-**🔄 Para CONFIRMAR definitivamente:**
+*🔄 Para CONFIRMAR definitivamente:*
 👩‍💼 Nossa secretária validará a disponibilidade e confirmará seu agendamento.
 
-**📞 Clique no link abaixo para falar diretamente com nossa equipe:**"""
+*📞 Clique no link abaixo para falar diretamente com nossa equipe:*"""
         
         return message
     

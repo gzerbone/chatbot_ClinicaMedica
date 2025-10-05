@@ -14,9 +14,10 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
-from .services.conversation_service import conversation_service
+from .services.conversation_service import (conversation_logger,
+                                            conversation_service)
 from .services.gemini_chatbot_service import gemini_chatbot_service
-from .services.whatsapp_service import WhatsAppService
+from .services.whatsapp_service import WhatsAppService  
 
 logger = logging.getLogger(__name__)
 
@@ -145,8 +146,6 @@ def process_message(message, webhook_data):
                         logger.info(f"💬 GEMINI: {response_text}")
 
                         # Log limpo da conversação
-                        from .services.conversation_service import \
-                            conversation_logger
                         conversation_logger.info(f"💬 {from_number} → {text_content}")
                         conversation_logger.info(f"🤖 GEMINI → {response_text}")
                     else:

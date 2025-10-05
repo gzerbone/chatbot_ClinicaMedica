@@ -818,7 +818,7 @@ EXAMES DISPONÍVEIS:
                     'current_state': session.get('current_state', 'idle'),
                     'patient_name': session.get('patient_name'),
                     'name_confirmed': bool(session.get('patient_name')),
-                    'pending_name': None,
+                    'pending_name': 'Paciente',
                     'insurance_type': session.get('insurance_type'),
                     'created_at': timezone.now(),
                     'updated_at': timezone.now()
@@ -1141,6 +1141,7 @@ EXAMES DISPONÍVEIS:
             doctor_name = entities.get('medico') or session.get('selected_doctor') or 'Médico'
             date_mentioned = entities.get('data') or session.get('preferred_date') or 'Data a definir'
             time_mentioned = entities.get('horario') or session.get('preferred_time') or 'Horário a definir'
+            insurance_type = entities.get('convenio') or session.get('insurance_type') or 'Particular'
             
             # Gerar link de handoff
             from .handoff_service import handoff_service
@@ -1150,16 +1151,16 @@ EXAMES DISPONÍVEIS:
                 doctor_name=doctor_name,
                 date=date_mentioned,
                 time=time_mentioned,
-                appointment_type='Consulta'
+                appointment_type=appointment_type
             )
             
             # Criar mensagem de confirmação com link
-            confirmation_message = f"""✅ **Perfeito, {patient_name}! Vamos confirmar seu agendamento:**
+            confirmation_message = f"""✅ *Perfeito, {patient_name}! Vamos confirmar seu agendamento:*
 
 📋 *RESUMO:*
 👤 Paciente: {patient_name}
 👨‍⚕️ Médico: {doctor_name}
-💼 Tipo de Consulta: Consulta
+💼 Tipo de Consulta: {insurance_type}
 📅 Data: {date_mentioned}
 🕐 Horário: {time_mentioned}
 
