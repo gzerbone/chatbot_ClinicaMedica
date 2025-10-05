@@ -21,4 +21,8 @@ urlpatterns = [
     path('test/entity-extraction/', views.test_entity_extraction, name='test_entity_extraction'),
     path('test/check-data/', views.check_stored_data, name='check_stored_data'),
     path('test/handoff/', views.test_handoff_generation, name='test_handoff'),
+    
+    # Endpoints de monitoramento de tokens
+    path('monitor/tokens/', views.token_usage_stats, name='token_usage_stats'),
+    path('monitor/tokens/reset/', views.reset_token_usage, name='reset_token_usage'),
 ]

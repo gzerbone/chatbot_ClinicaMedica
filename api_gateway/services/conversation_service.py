@@ -26,12 +26,6 @@ class ConversationService:
     Serviço para gerenciar conversas de agendamento com persistência
     """
     
-    # Cache para dados RAG (temporário)
-    RAG_CACHE_PREFIX = "rag_data_"
-    RAG_CACHE_TIMEOUT = 3600  # 1 hora
-    
-    def __init__(self):
-        self.rag_cache = RAGCacheService()
     
     def get_or_create_session(self, phone_number: str) -> ConversationSession:
         """
@@ -212,7 +206,8 @@ class ConversationService:
             session = self.get_or_create_session(phone_number)
             
             # Resetar nome confirmado para permitir nova sessão
-            FlowAgent.reset_confirmed_name(session)
+            session.name_confirmed = False
+            session.pending_name = None
             
             # Atualizar estado da sessão
             session.current_state = 'idle'
@@ -347,17 +342,57 @@ class ConversationService:
     
     def extract_patient_name(self, message: str) -> Optional[str]:
         """
-        Extrai nome completo do paciente da mensagem - DELEGADO PARA BASESERVICE
+        Extrai nome completo do paciente da mensagem
         """
-        return FlowAgent.extract_patient_name(message)
+        import re
+
+        # Padrões para extrair nome
+        name_patterns = [
+            r'meu\s+nome\s+é\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)',
+            r'sou\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)',
+            r'chamo-me\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)',
+            r'nome\s+é\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)',
+            r'me\s+chamo\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)',
+            r'^([A-Za-zÀ-ÿ]+\s+[A-Za-zÀ-ÿ]+)(?:\s|,|$)'
+        ]
+        
+        for pattern in name_patterns:
+            match = re.search(pattern, message, re.IGNORECASE)
+            if match:
+                name = match.group(1).strip()
+                # Limitar a 3 palavras (nome + sobrenome + sobrenome)
+                name_parts = name.split()[:3]
+                if len(name_parts) >= 2:  # Pelo menos nome e sobrenome
+                    return ' '.join(name_parts).title()
+        
+        return None
     
     def process_patient_name(self, phone_number: str, message: str) -> Dict[str, Any]:
         """
-        Processa nome do paciente com confirmação - DELEGADO PARA BASESERVICE
+        Processa nome do paciente com confirmação
         """
         try:
             session = self.get_or_create_session(phone_number)
-            return FlowAgent.process_patient_name(phone_number, message, session)
+            
+            # Extrair nome da mensagem
+            extracted_name = self.extract_patient_name(message)
+            
+            if extracted_name:
+                # Armazenar nome pendente de confirmação
+                session.pending_name = extracted_name
+                session.save()
+                
+                return {
+                    'status': 'confirmation_needed',
+                    'message': f'Confirma se seu nome é {extracted_name}?',
+                    'extracted_name': extracted_name
+                }
+            else:
+                return {
+                    'status': 'name_not_found',
+                    'message': 'Não consegui identificar seu nome. Por favor, digite seu nome completo.'
+                }
+                
         except Exception as e:
             logger.error(f"Erro ao processar nome do paciente: {e}")
             return {
@@ -367,11 +402,42 @@ class ConversationService:
     
     def confirm_patient_name(self, phone_number: str, confirmation: str) -> Dict[str, Any]:
         """
-        Confirma ou rejeita o nome do paciente - DELEGADO PARA BASESERVICE
+        Confirma ou rejeita o nome do paciente
         """
         try:
             session = self.get_or_create_session(phone_number)
-            return FlowAgent.confirm_patient_name(phone_number, confirmation, session)
+            
+            # Verificar se há nome pendente
+            if not session.pending_name:
+                return {
+                    'status': 'no_pending_name',
+                    'message': 'Não há nome pendente de confirmação.'
+                }
+            
+            # Verificar confirmação
+            confirmation_lower = confirmation.lower()
+            if any(word in confirmation_lower for word in ['sim', 's', 'yes', 'confirmo', 'correto', 'certo']):
+                # Confirmar nome
+                session.patient_name = session.pending_name
+                session.name_confirmed = True
+                session.pending_name = None
+                session.save()
+                
+                return {
+                    'status': 'confirmed',
+                    'message': f'Perfeito, {session.patient_name}! Como posso ajudá-lo hoje?',
+                    'patient_name': session.patient_name
+                }
+            else:
+                # Rejeitar nome
+                session.pending_name = None
+                session.save()
+                
+                return {
+                    'status': 'rejected',
+                    'message': 'Entendi. Por favor, digite seu nome completo novamente.'
+                }
+                
         except Exception as e:
             logger.error(f"Erro ao confirmar nome do paciente: {e}")
             return {
@@ -397,77 +463,6 @@ class ConversationService:
             return 0
 
 
-class RAGCacheService:
-    """
-    Serviço para cache de dados RAG
-    """
-    
-    def get_clinic_data(self) -> Dict[str, Any]:
-        """
-        Obtém dados da clínica do cache ou banco
-        """
-        cache_key = "clinic_data"
-        
-        # Tentar cache primeiro
-        cached_data = cache.get(cache_key)
-        if cached_data:
-            return cached_data
-        
-        # Buscar do banco de dados RAG
-        try:
-            from .rag_service import RAGService
-            clinic_data = RAGService.get_all_clinic_data()
-            
-            # Armazenar no cache
-            cache.set(cache_key, clinic_data, self.RAG_CACHE_TIMEOUT)
-            
-            return clinic_data
-            
-        except Exception as e:
-            logger.error(f"Erro ao obter dados da clínica: {e}")
-            return {}
-    
-    def get_doctor_info(self, doctor_name: str) -> Dict[str, Any]:
-        """
-        Obtém informações de um médico específico
-        """
-        cache_key = f"doctor_{doctor_name.lower().replace(' ', '_')}"
-        
-        # Tentar cache primeiro
-        cached_data = cache.get(cache_key)
-        if cached_data:
-            return cached_data
-        
-        # Buscar do banco
-        try:
-            from .rag_service import RAGService
-            doctor_data = RAGService.get_medico_by_name(doctor_name)
-            
-            if doctor_data:
-                cache.set(cache_key, doctor_data, self.RAG_CACHE_TIMEOUT)
-            
-            return doctor_data or {}
-            
-        except Exception as e:
-            logger.error(f"Erro ao obter dados do médico {doctor_name}: {e}")
-            return {}
-    
-    def clear_cache(self, pattern: str = None):
-        """
-        Limpa cache RAG
-        """
-        try:
-            if pattern:
-                # Limpar cache específico
-                cache.delete(pattern)
-            else:
-                # Limpar todo cache RAG
-                cache.delete_many(cache.keys(f"{self.RAG_CACHE_PREFIX}*"))
-            
-            logger.info("Cache RAG limpo")
-            
-        except Exception as e:
-            logger.error(f"Erro ao limpar cache RAG: {e}")
 
 
 # Instância global do serviço

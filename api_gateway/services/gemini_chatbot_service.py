@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from .rag_service import RAGService
 from .smart_scheduling_service import smart_scheduling_service
+from .token_monitor import token_monitor
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +33,8 @@ class GeminiChatbotService:
         self.api_key = getattr(settings, 'GEMINI_API_KEY', '')
         self.enabled = getattr(settings, 'GEMINI_ENABLED', True)
         
+        # Monitor de tokens será usado via token_monitor
+        
         if not self.api_key:
             logger.warning("GEMINI_API_KEY não configurada nas settings")
             self.enabled = False
@@ -46,7 +49,7 @@ class GeminiChatbotService:
             model_name = getattr(settings, 'GEMINI_MODEL', 'gemini-2.0-flash')
             self.model = genai.GenerativeModel(model_name)
             
-            # Configurações de geração
+            # Configurações de geração (será ajustada pelo token_monitor se necessário)
             self.generation_config = {
                 "temperature": 0.7,
                 "top_p": 0.8,
@@ -54,11 +57,29 @@ class GeminiChatbotService:
                 "max_output_tokens": 1024,
             }
             
+            # Monitor de tokens é inicializado automaticamente no token_monitor
+            
+            # Aplicar configurações de modo econômico se necessário
+            self._apply_economy_config()
+            
             logger.info("✅ Gemini Chatbot Service inicializado com sucesso")
             
         except Exception as e:
             logger.error(f"❌ Erro ao configurar Gemini: {e}")
             self.enabled = False
+    
+    def _apply_economy_config(self):
+        """
+        Aplica configurações de modo econômico se necessário
+        """
+        try:
+            if token_monitor.is_economy_mode_active():
+                economy_config = token_monitor.get_economy_config()
+                if economy_config:
+                    self.generation_config.update(economy_config)
+                    logger.info("💰 Configurações de modo econômico aplicadas")
+        except Exception as e:
+            logger.error(f"Erro ao aplicar configurações de modo econômico: {e}")
     
     def process_message(self, phone_number: str, message: str) -> Dict[str, Any]:
         """
@@ -78,8 +99,8 @@ class GeminiChatbotService:
             # Obter sessão da conversa
             session = self._get_or_create_session(phone_number)
             
-            # Obter dados da clínica
-            clinic_data = RAGService.get_all_clinic_data()
+            # Obter dados da clínica de forma otimizada
+            clinic_data = self._get_clinic_data_optimized()
             
             # Obter histórico da conversa
             conversation_history = self._get_conversation_history(phone_number)
@@ -106,10 +127,18 @@ class GeminiChatbotService:
             
             # Verificar se é confirmação de agendamento e gerar handoff
             if analysis_result['intent'] == 'confirmar_agendamento':
-                handoff_result = self._handle_appointment_confirmation(phone_number, session, analysis_result)
-                if handoff_result:
-                    response_result['response'] = handoff_result['message']
-                    response_result['handoff_link'] = handoff_result['handoff_link']
+                # Validar informações de agendamento
+                validation_result = self._validate_appointment_info(session, analysis_result)
+                
+                if validation_result['is_complete']:
+                    # Todas as informações estão presentes - gerar handoff
+                    handoff_result = self._handle_appointment_confirmation(phone_number, session, analysis_result)
+                    if handoff_result:
+                        response_result['response'] = handoff_result['message']
+                        response_result['handoff_link'] = handoff_result['handoff_link']
+                else:
+                    # Informações faltantes - solicitar a primeira informação faltante
+                    response_result['response'] = validation_result['message']
             
             # Atualizar sessão
             self._update_session(phone_number, session, analysis_result, response_result)
@@ -155,6 +184,9 @@ class GeminiChatbotService:
                 }
             )
             
+            # Log do uso de tokens para análise
+            token_monitor.log_token_usage("ANÁLISE", analysis_prompt, response.text, session.get('phone_number'))
+            
             # Extrair análise da resposta
             analysis_result = self._extract_analysis_from_response(response.text)
             analysis_result['original_message'] = message  # Adicionar mensagem original para fallback
@@ -183,6 +215,9 @@ class GeminiChatbotService:
                 generation_config=self.generation_config
             )
             
+            # Log do uso de tokens para resposta
+            token_monitor.log_token_usage("RESPOSTA", response_prompt, response.text, session.get('phone_number'))
+            
             return {
                 'response': response.text.strip(),
                 'intent': analysis_result['intent'],
@@ -196,12 +231,14 @@ class GeminiChatbotService:
     def _build_analysis_prompt(self, message: str, session: Dict, 
                              conversation_history: List, clinic_data: Dict) -> str:
         """
-        Constrói prompt para análise da mensagem
+        Constrói prompt para análise da mensagem com contexto otimizado
         """
         # Informações da clínica
         clinic_info = clinic_data.get('clinica_info', {})
         medicos = clinic_data.get('medicos', [])
         especialidades = clinic_data.get('especialidades', [])
+        convenios = clinic_data.get('convenios', [])
+        exames = clinic_data.get('exames', [])
         
         # Estado atual da sessão
         current_state = session.get('current_state', 'idle')
@@ -216,6 +253,9 @@ class GeminiChatbotService:
                 role = "Paciente" if msg['is_user'] else "Assistente"
                 history_text += f"- {role}: {msg['content']}\n"
         
+        # Formatar informações da clínica de forma mais detalhada
+        clinic_details = self._format_clinic_info_for_analysis(clinic_info, medicos, especialidades, convenios, exames)
+        
         prompt = f"""Você é um assistente virtual especializado da {clinic_info.get('nome', 'clínica médica')}.
 
 ANÁLISE DA MENSAGEM:
@@ -228,10 +268,7 @@ CONTEXTO ATUAL:
 
 {history_text}
 
-INFORMAÇÕES DA CLÍNICA:
-- Nome: {clinic_info.get('nome', 'Clínica Médica')}
-- Especialidades: {', '.join([esp['nome'] for esp in especialidades[:5]])}
-- Médicos: {', '.join([med['nome'] for med in medicos[:3]])}
+{clinic_details}
 
 ANÁLISE NECESSÁRIA:
 Analise a mensagem e determine:
@@ -308,7 +345,7 @@ Responda APENAS com um JSON válido no formato:
                              session: Dict, conversation_history: List,
                              clinic_data: Dict) -> str:
         """
-        Constrói prompt para geração de resposta
+        Constrói prompt para geração de resposta com contexto otimizado
         """
         intent = analysis_result['intent']
         entities = analysis_result['entities']
@@ -318,12 +355,16 @@ Responda APENAS com um JSON válido no formato:
         clinic_info = clinic_data.get('clinica_info', {})
         medicos = clinic_data.get('medicos', [])
         especialidades = clinic_data.get('especialidades', [])
+        convenios = clinic_data.get('convenios', [])
         exames = clinic_data.get('exames', [])
         
         # Estado atual da sessão
         current_state = session.get('current_state', 'idle')
         patient_name = session.get('patient_name')
         selected_doctor = session.get('selected_doctor')
+        
+        # Formatar informações detalhadas da clínica
+        clinic_details = self._format_clinic_info_for_response(clinic_info, medicos, especialidades, convenios, exames)
         
         prompt = f"""Você é um assistente virtual especializado da {clinic_info.get('nome', 'clínica médica')}.
 
@@ -336,20 +377,7 @@ CONTEXTO DA CONVERSA:
 
 MENSAGEM DO PACIENTE: "{message}"
 
-INFORMAÇÕES DA CLÍNICA:
-- Nome: {clinic_info.get('nome', 'Clínica Médica')}
-- Endereço: {clinic_info.get('endereco', 'Endereço não informado')}
-- Telefone: {clinic_info.get('telefone_contato', 'Telefone não informado')}
-- WhatsApp: {clinic_info.get('whatsapp_contato', 'WhatsApp não informado')}
-
-MÉDICOS DISPONÍVEIS:
-{self._format_medicos_for_prompt(medicos)}
-
-ESPECIALIDADES:
-{self._format_especialidades_for_prompt(especialidades)}
-
-EXAMES DISPONÍVEIS:
-{self._format_exames_for_prompt(exames)}
+{clinic_details}
 
 INSTRUÇÕES ESPECÍFICAS PARA INTENÇÃO "{intent}":
 {self._get_intent_instructions(intent)}
@@ -363,6 +391,8 @@ REGRAS IMPORTANTES:
 6. Se não souber algo específico, oriente o paciente a entrar em contato
 7. Use linguagem clara e acessível
 8. Mantenha o foco em saúde e bem-estar
+9. Para perguntas sobre médicos, forneça informações específicas sobre especialidades e convênios aceitos
+10. Para perguntas sobre exames, explique o que é o exame e como funciona
 
 Gere uma resposta apropriada para a intenção "{intent}" considerando o contexto atual da conversa."""
         
@@ -432,41 +462,60 @@ Gere uma resposta apropriada para a intenção "{intent}" considerando o context
             
             'buscar_info': """
             - Forneça APENAS as informações específicas que o paciente perguntou
-            - Se perguntar sobre endereço, forneça apenas o endereço
+            - Se perguntar sobre endereço, forneça apenas o endereço completo
             - Se perguntar sobre telefone, forneça apenas o telefone
-            - Se perguntar sobre horários, forneça apenas os horários
+            - Se perguntar sobre WhatsApp, forneça apenas o WhatsApp
+            - Se perguntar sobre horários de funcionamento, forneça apenas os horários
             - Se perguntar sobre convênios, liste apenas os convênios aceitos
+            - Se perguntar sobre especialidades, liste as especialidades atendidas
+            - Se perguntar sobre exames, liste os exames disponíveis
+            - Se perguntar sobre preços, informe os preços dos serviços
             - NÃO forneça informações não solicitadas
+            - Seja específico e direto na resposta
             """,
             
             'agendar_consulta': """
-            - Guie o paciente através do processo de agendamento
-            - Se não tiver o nome, solicite o nome completo primeiro
-            - Se tiver o nome, prossiga para seleção de médico
+            - Guie o paciente através do processo de agendamento passo a passo
+            - ETAPA 1: Se não tiver o nome, solicite o nome completo primeiro
+            - ETAPA 2: Se tiver o nome, solicite qual médico/especialidade deseja
+            - ETAPA 3: Se tiver médico, solicite a data desejada
+            - ETAPA 4: Se tiver data, solicite o horário preferido
+            - ETAPA 5: Só confirme quando tiver TODAS as informações (nome, médico, data, horário)
             - Seja claro sobre as etapas necessárias
-            - Mantenha o processo organizado e fácil
+            - Mantenha o processo organizado e sequencial
+            - NÃO pule etapas - colete uma informação por vez
             """,
             
             'confirmar_agendamento': """
-            - Verifique se tem todas as informações necessárias
-            - Confirme nome, médico, data e horário
-            - Se estiver tudo correto, gere link de handoff
+            - ANTES de confirmar, verifique se tem TODAS as informações:
+              * Nome completo do paciente
+              * Médico/especialidade escolhida
+              * Data da consulta
+              * Horário da consulta
+            - Se FALTAR alguma informação, solicite a informação faltante
+            - Só confirme e gere handoff quando tiver TODAS as informações
+            - Se tiver tudo, confirme os dados e gere o link de handoff
             - Oriente sobre próximos passos
             """,
             
             'buscar_medico': """
-            - Apresente os médicos disponíveis
-            - Informe especialidades, convênios aceitos e preços
+            - Apresente os médicos disponíveis com informações completas
+            - Para cada médico, informe: nome, CRM, especialidades, convênios aceitos e preço particular
+            - Se o paciente mencionar uma especialidade específica, filtre os médicos dessa especialidade
             - Se houver mais de um médico, pergunte qual deseja agendar
+            - Explique as especialidades de forma clara e acessível
             - NÃO mencione telefone/WhatsApp a menos que o paciente peça
+            - Se o paciente perguntar sobre convênios, liste todos os convênios aceitos pela clínica
             """,
             
             'buscar_exame': """
-            - Explique o que é o exame de forma clara
-            - Detalhe como funciona o procedimento
-            - Mencione preparação necessária
-            - Informe preço e duração
-            - Destaque benefícios do exame
+            - Explique o que é o exame de forma clara e didática
+            - Detalhe como funciona o procedimento passo a passo
+            - Mencione preparação necessária (jejum, medicamentos, etc.)
+            - Informe preço, duração e quando o resultado fica pronto
+            - Destaque benefícios do exame para a saúde
+            - Se o paciente perguntar sobre exames específicos, forneça informações detalhadas
+            - Explique a importância do exame para o diagnóstico
             """,
             
             'buscar_horarios': """
@@ -541,6 +590,144 @@ Gere uma resposta apropriada para a intenção "{intent}" considerando o context
         
         return "\n".join(formatted)
     
+    def _format_clinic_info_for_analysis(self, clinic_info: Dict, medicos: List[Dict], 
+                                       especialidades: List[Dict], convenios: List[Dict], 
+                                       exames: List[Dict]) -> str:
+        """
+        Formata informações detalhadas da clínica para análise do Gemini
+        """
+        # Informações básicas da clínica
+        clinic_name = clinic_info.get('nome', 'Clínica Médica')
+        clinic_address = clinic_info.get('endereco', 'Endereço não informado')
+        clinic_phone = clinic_info.get('telefone_contato', 'Telefone não informado')
+        clinic_whatsapp = clinic_info.get('whatsapp_contato', 'WhatsApp não informado')
+        clinic_hours = clinic_info.get('horario_funcionamento', 'Horário não informado')
+        
+        # Formatar médicos com especialidades e convênios
+        medicos_info = []
+        for medico in medicos[:5]:  # Limitar a 5 médicos
+            nome = medico.get('nome', 'Nome não informado')
+            especialidades_medico = medico.get('especialidades_display', 'Especialidade não informada')
+            convenios_medico = medico.get('convenios_display', 'Convênios não informados')
+            preco = medico.get('preco_particular', 'Preço não informado')
+            
+            medicos_info.append(f"• {nome}")
+            medicos_info.append(f"  - Especialidades: {especialidades_medico}")
+            medicos_info.append(f"  - Convênios aceitos: {convenios_medico}")
+            medicos_info.append(f"  - Preço particular: R$ {preco}")
+            medicos_info.append("")
+        
+        # Formatar especialidades
+        especialidades_info = []
+        for esp in especialidades[:5]:  # Limitar a 5 especialidades
+            nome = esp.get('nome', 'Nome não informado')
+            descricao = esp.get('descricao', 'Descrição não informada')
+            especialidades_info.append(f"• {nome}: {descricao}")
+        
+        # Formatar convênios
+        convenios_info = []
+        for conv in convenios[:5]:  # Limitar a 5 convênios
+            nome = conv.get('nome', 'Nome não informado')
+            convenios_info.append(f"• {nome}")
+        
+        # Formatar exames
+        exames_info = []
+        for exame in exames[:3]:  # Limitar a 3 exames
+            nome = exame.get('nome', 'Nome não informado')
+            preco = exame.get('preco', 'Preço não informado')
+            duracao = exame.get('duracao_formatada', 'Duração não informada')
+            exames_info.append(f"• {nome}: R$ {preco} ({duracao})")
+        
+        return f"""INFORMAÇÕES DETALHADAS DA CLÍNICA:
+🏥 Nome: {clinic_name}
+📍 Endereço: {clinic_address}
+📞 Telefone: {clinic_phone}
+💬 WhatsApp: {clinic_whatsapp}
+🕒 Horário de funcionamento: {clinic_hours}
+
+👨‍⚕️ MÉDICOS DISPONÍVEIS:
+{chr(10).join(medicos_info) if medicos_info else "Nenhum médico cadastrado"}
+
+🏥 ESPECIALIDADES ATENDIDAS:
+{chr(10).join(especialidades_info) if especialidades_info else "Nenhuma especialidade cadastrada"}
+
+🏥 CONVÊNIOS ACEITOS:
+{chr(10).join(convenios_info) if convenios_info else "Nenhum convênio cadastrado"}
+
+🔬 EXAMES DISPONÍVEIS:
+{chr(10).join(exames_info) if exames_info else "Nenhum exame cadastrado"}"""
+    
+    def _format_clinic_info_for_response(self, clinic_info: Dict, medicos: List[Dict], 
+                                        especialidades: List[Dict], convenios: List[Dict], 
+                                        exames: List[Dict]) -> str:
+        """
+        Formata informações da clínica para resposta do Gemini
+        """
+        # Informações básicas da clínica
+        clinic_name = clinic_info.get('nome', 'Clínica Médica')
+        clinic_address = clinic_info.get('endereco', 'Endereço não informado')
+        clinic_phone = clinic_info.get('telefone_contato', 'Telefone não informado')
+        clinic_whatsapp = clinic_info.get('whatsapp_contato', 'WhatsApp não informado')
+        clinic_hours = clinic_info.get('horario_funcionamento', 'Horário não informado')
+        
+        # Formatar médicos com informações detalhadas
+        medicos_detalhados = []
+        for medico in medicos[:5]:  # Limitar a 5 médicos
+            nome = medico.get('nome', 'Nome não informado')
+            especialidades_medico = medico.get('especialidades_display', 'Especialidade não informada')
+            convenios_medico = medico.get('convenios_display', 'Convênios não informados')
+            preco = medico.get('preco_particular', 'Preço não informado')
+            crm = medico.get('crm', 'CRM não informado')
+            
+            medicos_detalhados.append(f"👨‍⚕️ {nome} (CRM: {crm})")
+            medicos_detalhados.append(f"   📋 Especialidades: {especialidades_medico}")
+            medicos_detalhados.append(f"   🏥 Convênios aceitos: {convenios_medico}")
+            medicos_detalhados.append(f"   💰 Preço particular: R$ {preco}")
+            medicos_detalhados.append("")
+        
+        # Formatar especialidades com descrições
+        especialidades_detalhadas = []
+        for esp in especialidades[:5]:  # Limitar a 5 especialidades
+            nome = esp.get('nome', 'Nome não informado')
+            descricao = esp.get('descricao', 'Descrição não informada')
+            especialidades_detalhadas.append(f"🏥 {nome}: {descricao}")
+        
+        # Formatar convênios
+        convenios_detalhados = []
+        for conv in convenios[:5]:  # Limitar a 5 convênios
+            nome = conv.get('nome', 'Nome não informado')
+            convenios_detalhados.append(f"🏥 {nome}")
+        
+        # Formatar exames com informações completas
+        exames_detalhados = []
+        for exame in exames[:3]:  # Limitar a 3 exames
+            nome = exame.get('nome', 'Nome não informado')
+            preco = exame.get('preco', 'Preço não informado')
+            duracao = exame.get('duracao_formatada', 'Duração não informada')
+            descricao = exame.get('descricao', 'Descrição não informada')
+            exames_detalhados.append(f"🔬 {nome}: R$ {preco} ({duracao})")
+            if descricao:
+                exames_detalhados.append(f"   📝 {descricao}")
+        
+        return f"""INFORMAÇÕES DA CLÍNICA:
+🏥 Nome: {clinic_name}
+📍 Endereço: {clinic_address}
+📞 Telefone: {clinic_phone}
+💬 WhatsApp: {clinic_whatsapp}
+🕒 Horário de funcionamento: {clinic_hours}
+
+MÉDICOS DISPONÍVEIS:
+{chr(10).join(medicos_detalhados) if medicos_detalhados else "Nenhum médico cadastrado"}
+
+ESPECIALIDADES ATENDIDAS:
+{chr(10).join(especialidades_detalhadas) if especialidades_detalhadas else "Nenhuma especialidade cadastrada"}
+
+CONVÊNIOS ACEITOS:
+{chr(10).join(convenios_detalhados) if convenios_detalhados else "Nenhum convênio cadastrado"}
+
+EXAMES DISPONÍVEIS:
+{chr(10).join(exames_detalhados) if exames_detalhados else "Nenhum exame cadastrado"}"""
+    
     def _get_or_create_session(self, phone_number: str) -> Dict[str, Any]:
         """Obtém ou cria sessão da conversa"""
         cache_key = f"gemini_session_{phone_number}"
@@ -558,7 +745,7 @@ Gere uma resposta apropriada para a intenção "{intent}" considerando o context
                 'created_at': timezone.now().isoformat(),
                 'last_activity': timezone.now().isoformat()
             }
-            cache.set(cache_key, session, 3600)  # 1 hora
+            cache.set(cache_key, session, token_monitor.get_cache_timeout())
         
         return session
     
@@ -597,9 +784,18 @@ Gere uma resposta apropriada para a intenção "{intent}" considerando o context
                 session['preferred_time'] = entities['horario']
                 logger.info(f"✅ Horário atualizado: {entities['horario']}")
             
+            # Log do status das informações coletadas
+            info_status = {
+                'nome': bool(session.get('patient_name')),
+                'medico': bool(session.get('selected_doctor')),
+                'data': bool(session.get('preferred_date')),
+                'horario': bool(session.get('preferred_time'))
+            }
+            logger.info(f"📋 Status das informações: {info_status}")
+            
             # Salvar sessão
             cache_key = f"gemini_session_{phone_number}"
-            cache.set(cache_key, session, 3600)
+            cache.set(cache_key, session, token_monitor.get_cache_timeout())
             
             # Log do estado final da sessão
             logger.info(f"📋 Sessão atualizada - Estado: {session['current_state']}, Nome: {session.get('patient_name')}, Médico: {session.get('selected_doctor')}")
@@ -858,6 +1054,72 @@ Gere uma resposta apropriada para a intenção "{intent}" considerando o context
             'reasoning': 'Análise de horários via smart_scheduling_service'
         }
     
+    def _validate_appointment_info(self, session: Dict, analysis_result: Dict) -> Dict[str, Any]:
+        """
+        Valida informações de agendamento e retorna status completo
+        
+        Args:
+            session: Sessão da conversa
+            analysis_result: Resultado da análise
+            
+        Returns:
+            Dict com status de validação e mensagem se necessário
+        """
+        entities = analysis_result.get('entities', {})
+        patient_name = session.get('patient_name', 'Paciente')
+        
+        # Mapear informações obrigatórias
+        required_info = {
+            'nome_paciente': {
+                'entity_key': 'nome_paciente',
+                'session_key': 'patient_name',
+                'message': f"Olá, {patient_name}! Para prosseguir com o agendamento, preciso confirmar seu nome completo. Poderia me informar novamente?"
+            },
+            'medico': {
+                'entity_key': 'medico',
+                'session_key': 'selected_doctor',
+                'message': f"Perfeito, {patient_name}! Agora preciso saber com qual médico você gostaria de agendar. Qual especialidade você precisa ou tem algum médico específico em mente?"
+            },
+            'data': {
+                'entity_key': 'data',
+                'session_key': 'preferred_date',
+                'message': f"Ótimo! Agora preciso saber quando você gostaria de agendar. Qual data seria melhor para você?"
+            },
+            'horario': {
+                'entity_key': 'horario',
+                'session_key': 'preferred_time',
+                'message': f"Perfeito! E qual horário seria mais conveniente para você?"
+            }
+        }
+        
+        # Verificar cada informação obrigatória
+        missing_info = []
+        for info_key, info_config in required_info.items():
+            has_info = bool(
+                entities.get(info_config['entity_key']) or 
+                session.get(info_config['session_key'])
+            )
+            if not has_info:
+                missing_info.append(info_key)
+        
+        # Retornar status completo
+        is_complete = len(missing_info) == 0
+        
+        if is_complete:
+            return {
+                'is_complete': True,
+                'missing_info': [],
+                'message': None
+            }
+        else:
+            # Retornar mensagem para a primeira informação faltante
+            first_missing = missing_info[0]
+            return {
+                'is_complete': False,
+                'missing_info': missing_info,
+                'message': required_info[first_missing]['message']
+            }
+    
     def _handle_appointment_confirmation(self, phone_number: str, session: Dict, analysis_result: Dict) -> Optional[Dict]:
         """
         Processa confirmação de agendamento e gera handoff
@@ -894,17 +1156,17 @@ Gere uma resposta apropriada para a intenção "{intent}" considerando o context
             # Criar mensagem de confirmação com link
             confirmation_message = f"""✅ **Perfeito, {patient_name}! Vamos confirmar seu agendamento:**
 
-📋 **RESUMO:**
+📋 *RESUMO:*
 👤 Paciente: {patient_name}
 👨‍⚕️ Médico: {doctor_name}
-💼 Tipo de Consulta: {appointment_type}
+💼 Tipo de Consulta: Consulta
 📅 Data: {date_mentioned}
 🕐 Horário: {time_mentioned}
 
-**🔄 Para FINALIZAR o agendamento:**
+*🔄 Para FINALIZAR o agendamento:*
 👩‍💼 Nossa secretária validará a disponibilidade e confirmará seu agendamento através do link abaixo.
 
-**📞 Clique no link abaixo para falar diretamente com nossa equipe:**
+*📞 Clique no link abaixo para falar diretamente com nossa equipe:*
 {handoff_link}"""
             
             return {
@@ -916,6 +1178,117 @@ Gere uma resposta apropriada para a intenção "{intent}" considerando o context
             logger.error(f"Erro ao gerar handoff: {e}")
             return None
     
+    def _get_clinic_data_optimized(self) -> Dict[str, Any]:
+        """
+        Obtém dados da clínica de forma otimizada com cache inteligente
+        """
+        cache_key = "gemini_clinic_data"
+        
+        # Tentar cache primeiro
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            logger.debug("📋 Dados da clínica obtidos do cache")
+            return cached_data
+        
+        # Buscar dados frescos do RAGService
+        try:
+            clinic_data = RAGService.get_all_clinic_data()
+            
+            # Cache por 30 minutos (dados da clínica não mudam frequentemente)
+            cache.set(cache_key, clinic_data, token_monitor.get_cache_timeout())
+            
+            logger.info("📋 Dados da clínica carregados do banco e armazenados no cache")
+            return clinic_data
+            
+        except Exception as e:
+            logger.error(f"Erro ao obter dados da clínica: {e}")
+            return {}
+    
+    def _get_doctor_info_optimized(self, doctor_name: str) -> Dict[str, Any]:
+        """
+        Obtém informações de um médico específico de forma otimizada
+        """
+        cache_key = f"gemini_doctor_{doctor_name.lower().replace(' ', '_')}"
+        
+        # Tentar cache primeiro
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return cached_data
+        
+        # Buscar do RAGService
+        try:
+            doctor_data = RAGService.get_medico_by_name(doctor_name)
+            
+            if doctor_data:
+                # Cache por 1 hora
+                cache.set(cache_key, doctor_data, token_monitor.get_cache_timeout())
+            
+            return doctor_data or {}
+            
+        except Exception as e:
+            logger.error(f"Erro ao obter dados do médico {doctor_name}: {e}")
+            return {}
+    
+    def _get_doctors_by_specialty_optimized(self, specialty: str) -> List[Dict[str, Any]]:
+        """
+        Obtém médicos de uma especialidade específica de forma otimizada
+        """
+        cache_key = f"gemini_specialty_{specialty.lower().replace(' ', '_')}"
+        
+        # Tentar cache primeiro
+        cached_data = cache.get(cache_key)
+        if cached_data:
+            return cached_data
+        
+        # Buscar do RAGService
+        try:
+            # Primeiro, buscar especialidade por nome
+            especialidades = RAGService.get_especialidades()
+            specialty_id = None
+            
+            for esp in especialidades:
+                if specialty.lower() in esp.get('nome', '').lower():
+                    specialty_id = esp.get('id')
+                    break
+            
+            if specialty_id:
+                doctors = RAGService.get_medicos_por_especialidade(specialty_id)
+                # Cache por 1 hora
+                cache.set(cache_key, doctors, token_monitor.get_cache_timeout())
+                return doctors
+            
+            return []
+            
+        except Exception as e:
+            logger.error(f"Erro ao obter médicos da especialidade {specialty}: {e}")
+            return []
+    
+    def _clear_clinic_cache(self):
+        """
+        Limpa cache de dados da clínica
+        """
+        try:
+            cache.delete("gemini_clinic_data")
+            # Limpar cache de médicos
+            cache.delete_many(cache.keys("gemini_doctor_*"))
+            # Limpar cache de especialidades
+            cache.delete_many(cache.keys("gemini_specialty_*"))
+            logger.info("🧹 Cache de dados da clínica limpo")
+        except Exception as e:
+            logger.error(f"Erro ao limpar cache: {e}")
+
+    def get_token_usage_stats(self) -> Dict[str, Any]:
+        """
+        Retorna estatísticas de uso de tokens (delega para token_monitor)
+        """
+        return token_monitor.get_token_usage_stats()
+    
+    def reset_daily_token_usage(self):
+        """
+        Reseta o contador de tokens do dia (delega para token_monitor)
+        """
+        token_monitor.reset_daily_token_usage()
+
     def test_connection(self) -> bool:
         """Testa conexão com Gemini"""
         if not self.enabled:

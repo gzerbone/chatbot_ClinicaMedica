@@ -213,6 +213,9 @@ GEMINI_ENABLED = config('GEMINI_ENABLED', default=True, cast=bool)
 GEMINI_MODEL = config('GEMINI_MODEL', default='gemini-2.0-flash')
 GEMINI_TEMPERATURE = config('GEMINI_TEMPERATURE', default=0.7, cast=float)
 GEMINI_MAX_TOKENS = config('GEMINI_MAX_TOKENS', default=1024, cast=int)
+GEMINI_TOKEN_MONITORING = True  # Habilitar monitoramento
+GEMINI_DAILY_TOKEN_LIMIT = 1500000  # Limite diário (1.5M tokens)
+
 
 # Configurações do WhatsApp API
 WHATSAPP_ACCESS_TOKEN = config('WHATSAPP_ACCESS_TOKEN', default='')
@@ -238,7 +241,6 @@ DOCTOR_EVENT_PATTERNS = {
     'dra. maria santos': ['dra. maria', 'dra maria', 'maria santos', 'santos'],
     # Adicionar mais médicos conforme necessário
 }
-
 # Configurações de CORS para desenvolvimento
 CORS_ALLOW_ALL_ORIGINS = True  # Apenas para desenvolvimento
 CORS_ALLOWED_ORIGINS = [

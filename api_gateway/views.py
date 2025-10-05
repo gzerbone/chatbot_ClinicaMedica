@@ -116,11 +116,12 @@ def process_message(message, webhook_data):
 
         logger.info(f"🔄 Processando mensagem {message_id} de {from_number}")
 
-        # Processar apenas mensagens de texto
+        # Verificar se é mensagem de texto válida
         if message_type == 'text':
             text_content = message.get('text', {}).get('body', '')
 
-            if text_content:
+            # Validar se o conteúdo de texto não está vazio e tem tamanho mínimo
+            if text_content and len(text_content.strip()) > 0:
                 logger.info(f"👤 USUÁRIO ({from_number}): {text_content}")
 
                 # NOVO: Usar Gemini Chatbot Service como protagonista principal
@@ -164,89 +165,41 @@ def process_message(message, webhook_data):
                     else:
                         logger.error(f"❌ Falha ao enviar resposta fallback para {from_number}")
 
-        elif message_type == 'interactive':
-            # Processar mensagens interativas (botões, listas)
-            logger.info(f"🔘 Mensagem interativa recebida de {from_number}")
-            handle_interactive_message(message, from_number)
+            else:
+                # Mensagem de texto vazia ou inválida
+                logger.warning(f"⚠️ Mensagem de texto vazia ou inválida de {from_number}")
+                response_text = "❌ Desculpe, não consegui processar sua mensagem. Por favor, envie uma mensagem de texto válida."
+                whatsapp_service.send_message(from_number, response_text)
+                logger.info(f"💬 ERRO TEXTO: {response_text}")
 
         else:
-            logger.info(f"ℹ️ Tipo de mensagem não suportado: {message_type}")
+            # Rejeitar todos os outros tipos de mensagem (imagem, áudio, vídeo, documento, etc.)
+            logger.warning(f"❌ Tipo de mensagem não suportado: {message_type} de {from_number}")
+            
+            # Mensagem de erro personalizada baseada no tipo
+            error_messages = {
+                'image': "📷 Desculpe, não consigo processar imagens. Por favor, envie sua mensagem como texto.",
+                'audio': "🎵 Desculpe, não consigo processar áudios. Por favor, envie sua mensagem como texto.",
+                'video': "🎬 Desculpe, não consigo processar vídeos. Por favor, envie sua mensagem como texto.",
+                'document': "📄 Desculpe, não consigo processar documentos. Por favor, envie sua mensagem como texto.",
+                'sticker': "😊 Desculpe, não consigo processar figurinhas. Por favor, envie sua mensagem como texto.",
+                'location': "📍 Desculpe, não consigo processar localizações. Por favor, envie sua mensagem como texto.",
+                'contacts': "👥 Desculpe, não consigo processar contatos. Por favor, envie sua mensagem como texto.",
+                'interactive': "🔘 Desculpe, não consigo processar mensagens interativas. Por favor, envie sua mensagem como texto.",
+                'button': "🔘 Desculpe, não consigo processar botões. Por favor, envie sua mensagem como texto.",
+                'list': "📋 Desculpe, não consigo processar listas. Por favor, envie sua mensagem como texto."
+            }
+            
+            # Mensagem padrão para tipos não mapeados
+            response_text = error_messages.get(message_type, 
+                f"❌ Desculpe, não consigo processar mensagens do tipo '{message_type}'. Por favor, envie sua mensagem como texto.")
+            
+            # Enviar mensagem de erro
+            whatsapp_service.send_message(from_number, response_text)
+            logger.info(f"💬 ERRO FORMATO: {response_text}")
 
     except Exception as e:
         logger.error(f"❌ Erro ao processar mensagem: {e}")
-
-
-def handle_interactive_message(message, from_number):
-    """
-    Processa mensagens interativas (botões, listas) usando o Gemini Chatbot Service
-    """
-    try:
-        interactive = message.get('interactive', {})
-        interactive_type = interactive.get('type')
-
-        if interactive_type == 'button_reply':
-            button_text = interactive.get('button_reply', {}).get('title', '')
-            logger.info(f"🔘 Botão clicado por {from_number}: {button_text}")
-
-            # Usar Gemini Chatbot Service para processar resposta do botão
-            try:
-                result = gemini_chatbot_service.process_message(
-                    from_number,
-                    f"Botão clicado: {button_text}"
-                )
-
-                response_text = result.get('response', f"Entendi que você clicou em: {button_text}")
-                intent = result.get('intent', 'interactive_response')
-
-                logger.info(f"🤖 [{intent.upper()}] Processando botão: {button_text}")
-                logger.info(f"💬 GEMINI: {response_text}")
-
-                # Log da conversação interativa
-                from .services.conversation_service import conversation_logger
-                conversation_logger.info(f"🔘 {from_number} → Botão: {button_text}")
-                conversation_logger.info(f"🤖 GEMINI → {response_text}")
-
-                whatsapp_service.send_message(from_number, response_text)
-
-            except Exception as e:
-                logger.error(f"❌ Erro no Gemini para botão: {e}")
-                response_text = f"Entendi que você clicou em: {button_text}. Como posso ajudá-lo?"
-                whatsapp_service.send_message(from_number, response_text)
-
-        elif interactive_type == 'list_reply':
-            list_item = interactive.get('list_reply', {})
-            item_title = list_item.get('title', '')
-            item_id = list_item.get('id', '')
-
-            logger.info(f"📋 Item da lista selecionado por {from_number}: {item_title} (ID: {item_id})")
-
-            # Usar Gemini Chatbot Service para processar resposta da lista
-            try:
-                result = gemini_chatbot_service.process_message(
-                    from_number,
-                    f"Item selecionado: {item_title}"
-                )
-
-                response_text = result.get('response', f"Entendi que você selecionou: {item_title}")
-                intent = result.get('intent', 'interactive_response')
-
-                logger.info(f"🤖 [{intent.upper()}] Processando seleção: {item_title}")
-                logger.info(f"💬 GEMINI: {response_text}")
-
-                # Log da conversação interativa
-                from .services.conversation_service import conversation_logger
-                conversation_logger.info(f"📋 {from_number} → Lista: {item_title}")
-                conversation_logger.info(f"🤖 GEMINI → {response_text}")
-
-                whatsapp_service.send_message(from_number, response_text)
-
-            except Exception as e:
-                logger.error(f"❌ Erro no Gemini para lista: {e}")
-                response_text = f"Entendi que você selecionou: {item_title}. Como posso ajudá-lo?"
-                whatsapp_service.send_message(from_number, response_text)
-
-    except Exception as e:
-        logger.error(f"❌ Erro ao processar mensagem interativa: {e}")
 
 
 @api_view(['POST'])
@@ -309,10 +262,6 @@ def test_gemini_connection(request):
         )
 
 
-
-
-
-
 @api_view(['GET'])
 @permission_classes([AllowAny])
 def test_calendar_connection(request):
@@ -347,6 +296,7 @@ def get_doctor_availability(request, doctor_name):
     try:
         days_ahead = int(request.GET.get('days', 7))
         
+        from .services.rag_service import RAGService
         availability = RAGService.get_doctor_availability(doctor_name, days_ahead)
         
         return Response({
@@ -596,5 +546,81 @@ def test_handoff_generation(request):
         logger.error(f"Erro ao testar handoff: {e}")
         return Response(
             {'error': 'Erro interno do servidor'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def token_usage_stats(request):
+    """
+    Endpoint para monitorar uso de tokens do Gemini
+    """
+    try:
+        # Obter estatísticas de tokens
+        from .services.token_monitor import token_monitor
+        stats = token_monitor.get_token_usage_stats()
+        
+        # Adicionar informações adicionais
+        stats['monitoring_enabled'] = token_monitor.enabled
+        stats['daily_limit_formatted'] = f"{stats.get('daily_limit', 0):,}"
+        stats['tokens_used_formatted'] = f"{stats.get('tokens_used_today', 0):,}"
+        stats['tokens_remaining_formatted'] = f"{stats.get('tokens_remaining', 0):,}"
+        
+        # Status baseado no uso
+        usage_percentage = stats.get('usage_percentage', 0)
+        if usage_percentage >= 95:
+            status_level = 'CRITICAL'
+            status_message = 'Uso crítico de tokens - modo econômico ativado'
+        elif usage_percentage >= 90:
+            status_level = 'WARNING'
+            status_message = 'Uso alto de tokens - atenção necessária'
+        elif usage_percentage >= 80:
+            status_level = 'CAUTION'
+            status_message = 'Uso moderado de tokens - monitorar'
+        else:
+            status_level = 'NORMAL'
+            status_message = 'Uso normal de tokens'
+        
+        stats['status'] = {
+            'level': status_level,
+            'message': status_message,
+            'percentage': usage_percentage
+        }
+        
+        return Response({
+            'success': True,
+            'data': stats,
+            'message': 'Estatísticas de tokens obtidas com sucesso'
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao obter estatísticas de tokens: {e}")
+        return Response(
+            {'error': 'Erro ao obter estatísticas de tokens'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def reset_token_usage(request):
+    """
+    Endpoint para resetar contador de tokens (usar com cuidado!)
+    """
+    try:
+        # Verificar se é uma requisição autorizada (adicionar autenticação se necessário)
+        from .services.token_monitor import token_monitor
+        token_monitor.reset_daily_token_usage()
+        
+        return Response({
+            'success': True,
+            'message': 'Contador de tokens resetado com sucesso'
+        })
+        
+    except Exception as e:
+        logger.error(f"Erro ao resetar contador de tokens: {e}")
+        return Response(
+            {'error': 'Erro ao resetar contador de tokens'}, 
             status=status.HTTP_500_INTERNAL_SERVER_ERROR
         )
