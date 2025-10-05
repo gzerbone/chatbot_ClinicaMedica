@@ -116,9 +116,6 @@ def process_message(message, webhook_data):
 
         logger.info(f"🔄 Processando mensagem {message_id} de {from_number}")
 
-        # Marcar mensagem como lida
-        whatsapp_service.mark_message_as_read(message_id)
-
         # Processar apenas mensagens de texto
         if message_type == 'text':
             text_content = message.get('text', {}).get('body', '')

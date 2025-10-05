@@ -121,7 +121,6 @@ class WhatsAppService:
             logger.error(f"Erro ao enviar template via WhatsApp: {e}")
             return False
     
-    def mark_message_as_read(self, message_id: str) -> bool:
         """
         Marca uma mensagem como lida
         
