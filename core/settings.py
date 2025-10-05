@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rag_agent',
     'api_gateway',
+    'langchain_integration',  # Novo app para LangChain
 ]
 
 MIDDLEWARE = [

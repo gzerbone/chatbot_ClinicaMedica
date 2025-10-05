@@ -11,6 +11,14 @@ from django.conf import settings
 from django.core.cache import cache
 from django.utils import timezone
 
+from langchain_integration.agents.compatibility_agents import \
+    compatibility_agent_service
+from langchain_integration.chains.compatibility_chains import \
+    compatibility_chain_service
+from langchain_integration.compatibility_service import \
+    compatibility_rag_service
+from langchain_integration.prompts.template_manager import template_manager
+
 from .rag_service import RAGService
 from .smart_scheduling_service import smart_scheduling_service
 
@@ -62,7 +70,7 @@ class GeminiChatbotService:
     
     def process_message(self, phone_number: str, message: str) -> Dict[str, Any]:
         """
-        Processa mensagem do usuário usando o Gemini como protagonista principal
+        Processa mensagem do usuário usando LangChain Chains
         
         Args:
             phone_number: Número do telefone do usuário
@@ -75,62 +83,73 @@ class GeminiChatbotService:
             if not self.enabled:
                 return self._get_fallback_response(message)
             
-            # Obter sessão da conversa
-            session = self._get_or_create_session(phone_number)
-            
-            # Obter dados da clínica
-            clinic_data = RAGService.get_all_clinic_data()
-            
-            # Obter histórico da conversa
-            conversation_history = self._get_conversation_history(phone_number)
-            
-            # Verificar se é solicitação de horários
+            # Verificar se é solicitação de horários (manter lógica específica)
             if self._is_scheduling_request(message):
-                # Usar serviço de consulta de horários
-                scheduling_result = smart_scheduling_service.analyze_scheduling_request(message, session)
-                analysis_result = self._convert_scheduling_to_gemini_format(scheduling_result)
-                response_result = {
-                    'response': scheduling_result['message'],
-                    'intent': 'buscar_horarios',
-                    'confidence': 0.9
-                }
+                return self._handle_scheduling_request(phone_number, message)
+            
+            # Obter sessão e dados da clínica para verificação de complexidade
+            session = self._get_or_create_session(phone_number)
+            clinic_data = compatibility_rag_service.get_all_clinic_data()
+            
+            # Verificar se é uma mensagem complexa que requer agent
+            agent_result = compatibility_agent_service.process_complex_message(
+                phone_number, message, session, clinic_data
+            )
+            
+            if agent_result:
+                # Usar resultado do agent
+                result = agent_result
+                logger.info(f"🤖 Agent processou mensagem complexa: {result.get('intent', 'UNKNOWN')}")
             else:
-                # Usar Gemini para outras solicitações
-                analysis_result = self._analyze_message_with_gemini(
-                    message, session, conversation_history, clinic_data
-                )
-
-                response_result = self._generate_response_with_gemini(
-                    message, analysis_result, session, conversation_history, clinic_data
-                )
+                # Usar LangChain Chains para processamento geral
+                result = compatibility_chain_service.process_message(phone_number, message)
             
             # Verificar se é confirmação de agendamento e gerar handoff
-            if analysis_result['intent'] == 'confirmar_agendamento':
-                handoff_result = self._handle_appointment_confirmation(phone_number, session, analysis_result)
+            if result.get('intent') == 'confirmar_agendamento':
+                handoff_result = self._handle_appointment_confirmation(
+                    phone_number, result.get('session_data', {}), result.get('analysis', {})
+                )
                 if handoff_result:
-                    response_result['response'] = handoff_result['message']
-                    response_result['handoff_link'] = handoff_result['handoff_link']
+                    result['response'] = handoff_result['message']
+                    result['handoff_link'] = handoff_result['handoff_link']
             
-            # Atualizar sessão
-            self._update_session(phone_number, session, analysis_result, response_result)
+            logger.info(f"🔗 [{result.get('intent', 'UNKNOWN').upper()}] {result.get('confidence', 0):.2f} - {result.get('response', '')[:100]}...")
             
-            # Salvar mensagens no histórico com entidades
-            self._save_conversation_messages(phone_number, message, response_result['response'], analysis_result)
-            
-            logger.info(f"🤖 [{analysis_result['intent'].upper()}] {analysis_result['confidence']:.2f} - {response_result['response'][:100]}...")
-            
-            return {
-                'response': response_result['response'],
-                'intent': analysis_result['intent'],
-                'confidence': analysis_result['confidence'],
-                'state': session['current_state'],
-                'session_data': session,
-                'analysis': analysis_result,
-                'agent': 'gemini'
-            }
+            return result
             
         except Exception as e:
             logger.error(f"❌ Erro no processamento da mensagem: {e}")
+            return self._get_fallback_response(message)
+    
+    def _handle_scheduling_request(self, phone_number: str, message: str) -> Dict[str, Any]:
+        """Processa solicitações de horários usando lógica específica"""
+        try:
+            # Obter sessão da conversa
+            session = self._get_or_create_session(phone_number)
+            
+            # Usar serviço de consulta de horários
+            scheduling_result = smart_scheduling_service.analyze_scheduling_request(message, session)
+            analysis_result = self._convert_scheduling_to_gemini_format(scheduling_result)
+            
+            # Atualizar sessão
+            self._update_session(phone_number, session, analysis_result, {
+                'response': scheduling_result['message'],
+                'intent': 'buscar_horarios',
+                'confidence': 0.9
+            })
+            
+            return {
+                'response': scheduling_result['message'],
+                'intent': 'buscar_horarios',
+                'confidence': 0.9,
+                'state': session['current_state'],
+                'session_data': session,
+                'analysis': analysis_result,
+                'agent': 'smart_scheduling'
+            }
+            
+        except Exception as e:
+            logger.error(f"Erro no processamento de horários: {e}")
             return self._get_fallback_response(message)
     
     def _analyze_message_with_gemini(self, message: str, session: Dict, 
@@ -196,177 +215,31 @@ class GeminiChatbotService:
     def _build_analysis_prompt(self, message: str, session: Dict, 
                              conversation_history: List, clinic_data: Dict) -> str:
         """
-        Constrói prompt para análise da mensagem
+        Constrói prompt para análise da mensagem usando templates LangChain
         """
-        # Informações da clínica
-        clinic_info = clinic_data.get('clinica_info', {})
-        medicos = clinic_data.get('medicos', [])
-        especialidades = clinic_data.get('especialidades', [])
-        
-        # Estado atual da sessão
-        current_state = session.get('current_state', 'idle')
-        patient_name = session.get('patient_name')
-        selected_doctor = session.get('selected_doctor')
-        
-        # Histórico da conversa
-        history_text = ""
-        if conversation_history:
-            history_text = "Histórico da conversa:\n"
-            for msg in conversation_history[-3:]:  # Últimas 3 mensagens
-                role = "Paciente" if msg['is_user'] else "Assistente"
-                history_text += f"- {role}: {msg['content']}\n"
-        
-        prompt = f"""Você é um assistente virtual especializado da {clinic_info.get('nome', 'clínica médica')}.
-
-ANÁLISE DA MENSAGEM:
-Mensagem do paciente: "{message}"
-
-CONTEXTO ATUAL:
-- Estado da conversa: {current_state}
-- Nome do paciente: {patient_name or 'Não informado'}
-- Médico selecionado: {selected_doctor or 'Não selecionado'}
-
-{history_text}
-
-INFORMAÇÕES DA CLÍNICA:
-- Nome: {clinic_info.get('nome', 'Clínica Médica')}
-- Especialidades: {', '.join([esp['nome'] for esp in especialidades[:5]])}
-- Médicos: {', '.join([med['nome'] for med in medicos[:3]])}
-
-ANÁLISE NECESSÁRIA:
-Analise a mensagem e determine:
-
-EXEMPLOS DE EXTRAÇÃO DE ENTIDADES:
-- "Meu nome é João Silva" → nome_paciente: "João Silva"
-- "Quero agendar com Dr. João Carvalho" → medico: "Dr. João Carvalho"
-- "Quero agendar para segunda-feira às 14h" → data: "segunda-feira", horario: "14:00"
-- "Preciso de um cardiologista" → especialidade: "cardiologia"
-- "Quero fazer um hemograma" → exame: "hemograma"
-
-1. INTENÇÃO PRINCIPAL (uma das opções abaixo):
-   - saudacao: Cumprimentos, oi, olá, bom dia
-   - buscar_info: Perguntas sobre clínica, médicos, exames, preços, endereço
-   - agendar_consulta: Quero agendar, marcar consulta, agendamento
-   - confirmar_agendamento: Confirmar dados, sim, está correto
-   - cancelar_agendamento: Cancelar, desmarcar, não posso mais
-   - buscar_medico: Quais médicos, médico específico, especialidade
-   - buscar_exame: Exames disponíveis, procedimentos
-   - buscar_horarios: Horários disponíveis, quando atende
-   - despedida: Tchau, obrigado, até logo
-   - duvida: Não entendi, pode repetir, ajuda
-
-2. PRÓXIMO ESTADO DA CONVERSA:
-   - idle: Estado inicial
-   - coletando_nome: Coletando nome do paciente
-   - confirmando_nome: Confirmando nome extraído
-   - selecionando_medico: Escolhendo médico
-   - escolhendo_horario: Escolhendo data/horário
-   - confirmando_agendamento: Confirmando dados finais
-   - agendamento_concluido: Processo finalizado
-   - fornecendo_info: Fornecendo informações solicitadas
-
-3. ENTIDADES EXTRAÍDAS (EXTRAIA SEMPRE QUE POSSÍVEL):
-   - nome_paciente: Nome completo do paciente (ex: "João Silva", "Maria Santos")
-   - medico: Nome do médico mencionado (ex: "Dr. João", "Dra. Ana", "João Carvalho")
-   - especialidade: Especialidade médica (ex: "cardiologia", "dermatologia", "pediatria")
-   - data: Data em formato DD/MM/YYYY ou texto (ex: "15/09/2024", "segunda-feira", "amanhã")
-   - horario: Horário em formato HH:MM ou texto (ex: "14:30", "2h30", "2 da tarde")
-   - exame: Nome do exame mencionado (ex: "hemograma", "raio-x", "ultrassom")
-
-IMPORTANTE: Se a mensagem contém informações como nome, médico, data ou horário, EXTRAIA essas informações mesmo que já estejam na sessão anterior. O paciente pode estar corrigindo ou confirmando dados.
-
-4. CONFIANÇA: Nível de confiança na análise (0.0 a 1.0)
-
-INSTRUÇÕES PARA EXTRAÇÃO DE ENTIDADES:
-- Se encontrar um nome (ex: "João Silva"), coloque em "nome_paciente"
-- Se encontrar médico (ex: "Dr. João"), coloque em "medico"  
-- Se encontrar data (ex: "15/09", "segunda"), coloque em "data"
-- Se encontrar horário (ex: "14h", "2 da tarde"), coloque em "horario"
-- Se encontrar especialidade (ex: "cardiologia"), coloque em "especialidade"
-- Se encontrar exame (ex: "hemograma"), coloque em "exame"
-- Se NÃO encontrar a informação, use null
-
-Responda APENAS com um JSON válido no formato:
-{{
-    "intent": "intenção_detectada",
-    "next_state": "próximo_estado",
-    "entities": {{
-        "nome_paciente": "nome_extraído_ou_null",
-        "medico": "médico_extraído_ou_null",
-        "especialidade": "especialidade_extraída_ou_null",
-        "data": "data_extraída_ou_null",
-        "horario": "horário_extraído_ou_null",
-        "exame": "exame_extraído_ou_null"
-    }},
-    "confidence": 0.95,
-    "reasoning": "Explicação breve da análise"
-}}"""
-        
-        return prompt
+        try:
+            # Usar template manager para gerar prompt
+            return template_manager.get_analysis_prompt(
+                message, session, conversation_history, clinic_data
+            )
+        except Exception as e:
+            logger.error(f"Erro ao gerar prompt de análise: {e}")
+            return self._get_fallback_analysis_prompt(message, session)
     
     def _build_response_prompt(self, message: str, analysis_result: Dict,
                              session: Dict, conversation_history: List,
                              clinic_data: Dict) -> str:
         """
-        Constrói prompt para geração de resposta
+        Constrói prompt para geração de resposta usando templates LangChain
         """
-        intent = analysis_result['intent']
-        entities = analysis_result['entities']
-        next_state = analysis_result['next_state']
-        
-        # Informações da clínica
-        clinic_info = clinic_data.get('clinica_info', {})
-        medicos = clinic_data.get('medicos', [])
-        especialidades = clinic_data.get('especialidades', [])
-        exames = clinic_data.get('exames', [])
-        
-        # Estado atual da sessão
-        current_state = session.get('current_state', 'idle')
-        patient_name = session.get('patient_name')
-        selected_doctor = session.get('selected_doctor')
-        
-        prompt = f"""Você é um assistente virtual especializado da {clinic_info.get('nome', 'clínica médica')}.
-
-CONTEXTO DA CONVERSA:
-- Estado atual: {current_state}
-- Próximo estado: {next_state}
-- Intenção detectada: {intent}
-- Nome do paciente: {patient_name or 'Não informado'}
-- Médico selecionado: {selected_doctor or 'Não selecionado'}
-
-MENSAGEM DO PACIENTE: "{message}"
-
-INFORMAÇÕES DA CLÍNICA:
-- Nome: {clinic_info.get('nome', 'Clínica Médica')}
-- Endereço: {clinic_info.get('endereco', 'Endereço não informado')}
-- Telefone: {clinic_info.get('telefone_contato', 'Telefone não informado')}
-- WhatsApp: {clinic_info.get('whatsapp_contato', 'WhatsApp não informado')}
-
-MÉDICOS DISPONÍVEIS:
-{self._format_medicos_for_prompt(medicos)}
-
-ESPECIALIDADES:
-{self._format_especialidades_for_prompt(especialidades)}
-
-EXAMES DISPONÍVEIS:
-{self._format_exames_for_prompt(exames)}
-
-INSTRUÇÕES ESPECÍFICAS PARA INTENÇÃO "{intent}":
-{self._get_intent_instructions(intent)}
-
-REGRAS IMPORTANTES:
-1. Seja sempre cordial, profissional e prestativo
-2. Use emojis moderadamente para tornar a conversa mais amigável
-3. Mantenha respostas concisas e diretas
-4. NÃO mencione telefone ou WhatsApp a menos que o paciente peça especificamente
-5. Foque apenas no que o paciente perguntou
-6. Se não souber algo específico, oriente o paciente a entrar em contato
-7. Use linguagem clara e acessível
-8. Mantenha o foco em saúde e bem-estar
-
-Gere uma resposta apropriada para a intenção "{intent}" considerando o contexto atual da conversa."""
-        
-        return prompt
+        try:
+            # Usar template manager para gerar prompt
+            return template_manager.get_response_prompt(
+                message, analysis_result, session, conversation_history, clinic_data
+            )
+        except Exception as e:
+            logger.error(f"Erro ao gerar prompt de resposta: {e}")
+            return self._get_fallback_response_prompt(message)
     
     def _extract_analysis_from_response(self, response_text: str) -> Dict[str, Any]:
         """
@@ -808,6 +681,29 @@ Gere uma resposta apropriada para a intenção "{intent}" considerando o context
             'analysis': {'intent': 'duvida', 'confidence': 0.5},
             'agent': 'fallback'
         }
+    
+    def _get_fallback_analysis_prompt(self, message: str, session: Dict) -> str:
+        """Prompt de fallback para análise"""
+        return f"""
+        Analise a mensagem: "{message}"
+        
+        Estado da sessão: {session.get('current_state', 'idle')}
+        
+        Responda com JSON contendo:
+        - intent: intenção detectada
+        - next_state: próximo estado
+        - entities: entidades extraídas
+        - confidence: nível de confiança
+        """
+    
+    def _get_fallback_response_prompt(self, message: str) -> str:
+        """Prompt de fallback para resposta"""
+        return f"""
+        Responda à mensagem: "{message}"
+        
+        Seja cordial, profissional e prestativo.
+        Use linguagem clara e acessível.
+        """
     
     def _is_scheduling_request(self, message: str) -> bool:
         """

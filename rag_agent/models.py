@@ -2,6 +2,7 @@ from decimal import Decimal
 
 from django.db import models
 
+
 # Modelo para as especialidades médicas
 class Especialidade(models.Model):
     nome = models.CharField(max_length=100, unique=True)
@@ -29,6 +30,11 @@ class ClinicaInfo(models.Model):
     referencia_localizacao = models.CharField(max_length=200)
     politica_agendamento = models.TextField(
         help_text="Texto sobre a política de horários pré-agendados e possíveis demoras."
+    )
+    horario_funcionamento = models.CharField(
+        max_length=200,
+        default="Segunda a Sexta, das 09:00 às 17:00",
+        help_text="Horário de funcionamento da clínica"
     )
 
     # ID da agenda principal da clínica (Google Calendar)

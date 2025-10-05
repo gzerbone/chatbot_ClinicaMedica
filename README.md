@@ -1,8 +1,18 @@
-# 🤖 Chatbot Clínica Médica - Sistema Inteligente de Agendamento
+# 🤖 Chatbot Clínica Médica - Sistema Inteligente com LangChain
 
 ## 📋 Visão Geral
 
-Sistema de chatbot inteligente desenvolvido em Django REST Framework para automatizar o agendamento de consultas médicas na Clínica PneumoSono. O sistema utiliza Google Gemini AI como motor principal de conversação, integração com WhatsApp Business API e Google Calendar para gerenciamento de agendamentos.
+Sistema de chatbot inteligente desenvolvido em Django REST Framework para automatizar o agendamento de consultas médicas na Clínica PneumoSono. O sistema utiliza **LangChain** como framework principal, Google Gemini AI como motor de conversação, integração com WhatsApp Business API e Google Calendar para gerenciamento de agendamentos.
+
+## 🚀 **Nova Arquitetura LangChain**
+
+O sistema foi **completamente migrado para LangChain**, oferecendo:
+
+- ✅ **RAG Inteligente** com busca semântica
+- ✅ **Templates Organizados** para prompts
+- ✅ **Chains de Conversação** para fluxos complexos
+- ✅ **Agents Inteligentes** para decisões avançadas
+- ✅ **Memória Inteligente** com contexto persistente
 
 ## 🏗️ Arquitetura Atual
 
