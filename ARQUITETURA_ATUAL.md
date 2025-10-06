@@ -12,9 +12,10 @@ O sistema foi completamente refatorado para uma arquitetura **centralizada no Go
 - **Eliminação** de múltiplos serviços redundantes
 
 ### 2. **Arquitetura Simplificada**
-- **6 serviços essenciais** (antes: 8+ serviços)
+- **8 serviços essenciais** (antes: 10+ serviços)
 - **Fluxo linear** e previsível
 - **Manutenibilidade** aprimorada
+- **Monitoramento** de tokens integrado
 
 ### 3. **Persistência Inteligente**
 - **Sessões persistentes** em banco de dados
@@ -73,6 +74,15 @@ O sistema foi completamente refatorado para uma arquitetura **centralizada no Go
 │ │ • Disponibilidade│ │ • Transferência │ │ • Agendamento   │ │
 │ │ • Eventos       │ │ • Links         │ │ • Horários      │ │
 │ │ • Sincronização │ │ • Notificações  │ │ • Otimização    │ │
+│ └─────────────────┘ └─────────────────┘ └─────────────────┘ │
+│                                                               │
+│ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ │
+│ │ TOKEN MONITOR   │ │ RAG SERVICE     │ │ CONVERSATION     │ │
+│ │ SERVICE         │ │                 │ │ SERVICE         │ │
+│ │                 │ │                 │ │                 │ │
+│ │ • Monitoramento │ │ • Base Conhecimento│ │ • Persistência  │ │
+│ │ • Modo Econômico│ │ • Cache Dados   │ │ • Sessões        │ │
+│ │ • Otimização    │ │ • Serialização  │ │ • Histórico      │ │
 │ └─────────────────┘ └─────────────────┘ └─────────────────┘ │
 └───────────────────────────────────────────────────────────────┘
 ```
@@ -162,11 +172,12 @@ class HandoffService:
 # Arquivo: smart_scheduling_service.py
 class SmartSchedulingService:
     """
-    Agendamento inteligente
+    Consulta de horários inteligente
     Responsabilidades:
-    - Otimização de horários
-    - Sugestões inteligentes
-    - Conflitos de agenda
+    - Consulta disponibilidade no Google Calendar
+    - Análise de solicitações de agendamento
+    - Validação de médicos no banco
+    - Geração de informações de disponibilidade
     """
 ```
 
@@ -175,11 +186,26 @@ class SmartSchedulingService:
 # Arquivo: rag_service.py
 class RAGService:
     """
-    Sistema RAG
+    Sistema RAG - Base de Conhecimento
     Responsabilidades:
-    - Acesso à base de conhecimento
-    - Cache de dados
-    - Consultas inteligentes
+    - Acesso à base de conhecimento da clínica
+    - Cache inteligente de dados
+    - Consultas otimizadas
+    - Serialização para Gemini
+    """
+```
+
+##### **Token Monitor Service**
+```python
+# Arquivo: token_monitor.py
+class TokenMonitor:
+    """
+    Monitoramento de tokens do Gemini
+    Responsabilidades:
+    - Monitoramento de uso de tokens
+    - Aplicação de modo econômico
+    - Otimização automática de configurações
+    - Alertas de limite
     """
 ```
 
@@ -241,8 +267,7 @@ STATES = [
     'selecting_doctor',        # Selecionando médico
     'choosing_schedule',       # Escolhendo horário
     'confirming',              # Confirmando
-    'completed',               # Concluído
-    'cancelled'                # Cancelado
+    'fornecendo_info'          # Fornecendo informações
 ]
 ```
 
@@ -263,8 +288,10 @@ MESSAGE_TYPES = [
 
 ### **Cache**
 - **Django Cache Framework**
-- **RAG Cache** para dados da clínica
+- **RAG Cache** para dados da clínica (30 minutos)
 - **Session Cache** para conversas ativas
+- **Token Cache** para monitoramento
+- **Doctor Cache** para médicos específicos
 
 ### **Armazenamento**
 - **Sessões persistentes** em banco
@@ -288,7 +315,9 @@ MESSAGE_TYPES = [
 ### **Otimizações Implementadas**
 - **Cache inteligente** para dados RAG
 - **Sessões persistentes** para continuidade
-- **Processamento assíncrono** (planejado)
+- **Monitoramento de tokens** com modo econômico
+- **Extração de entidades** otimizada
+- **Validação de dados** em tempo real
 
 ### **Métricas**
 - **Tempo de resposta**: < 2s

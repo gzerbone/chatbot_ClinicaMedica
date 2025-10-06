@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from django.core.cache import cache
 from django.utils import timezone
 
-from ..models import (AppointmentRequest, ConversationMessage,
+from ..models import (ConversationMessage,
                       ConversationSession)
 
 ''
@@ -164,34 +164,6 @@ class ConversationService:
             logger.error(f"Erro ao obter informações do paciente: {e}")
             return {}
     
-    def create_appointment_request(self, phone_number: str, **appointment_data) -> Optional[AppointmentRequest]:
-        """
-        Cria uma solicitação de agendamento
-        """
-        try:
-            session = self.get_or_create_session(phone_number)
-            
-            # Verificar se já existe uma solicitação pendente
-            if hasattr(session, 'appointment_request') and session.appointment_request.status == 'pending':
-                logger.warning(f"Já existe solicitação pendente para {phone_number}")
-                return session.appointment_request
-            
-            appointment = AppointmentRequest.objects.create(
-                session=session,
-                **appointment_data
-            )
-            
-            # Atualizar estado da sessão para concluído
-            session.current_state = 'completed'
-            session.save()
-            
-            logger.info(f"Solicitação de agendamento criada para {phone_number}")
-            return appointment
-            
-        except Exception as e:
-            logger.error(f"Erro ao criar solicitação de agendamento: {e}")
-            return None
-    
     def finalize_session(self, phone_number: str) -> bool:
         """
         Finaliza uma sessão e reseta o nome confirmado para permitir nova sessão
@@ -220,17 +192,6 @@ class ConversationService:
             logger.error(f"Erro ao finalizar sessão: {e}")
             return False
     
-    def get_appointment_request(self, phone_number: str) -> Optional[AppointmentRequest]:
-        """
-        Obtém solicitação de agendamento da sessão
-        """
-        try:
-            session = self.get_or_create_session(phone_number)
-            return getattr(session, 'appointment_request', None)
-            
-        except Exception as e:
-            logger.error(f"Erro ao obter solicitação de agendamento: {e}")
-            return None
     
     def _update_session_state(self, session: ConversationSession, intent: str, entities: Dict):
         """
@@ -461,9 +422,6 @@ class ConversationService:
         except Exception as e:
             logger.error(f"Erro ao limpar sessões antigas: {e}")
             return 0
-
-
-
 
 # Instância global do serviço
 conversation_service = ConversationService()

@@ -73,6 +73,7 @@ class HandoffService:
                 message_parts.append(f"- Convênios aceitos: {convenios_str}")
             
             # Adicionar informações extras se fornecidas
+            additional_info = {}  # Definir como dicionário vazio por padrão
             if additional_info:
                 for key, value in additional_info.items():
                     if value:
@@ -87,7 +88,6 @@ class HandoffService:
                 encoded_part = part.replace(' ', '%20')
                 # Substituir caracteres especiais
                 encoded_part = encoded_part.replace(':', '%3A')
-                encoded_part = encoded_part.replace('*', '%2A')
                 encoded_part = encoded_part.replace('/', '%2F')
                 encoded_part = encoded_part.replace('à', '%C3%A0')
                 encoded_part = encoded_part.replace('é', '%C3%A9')
@@ -100,10 +100,10 @@ class HandoffService:
             
             # Gerar link completo - usar mensagem simples para evitar problemas de codificação
             simple_message = f"""Agendamento via Chatbot:
-*Nome:* {patient_name}
-*Médico:* {clean_doctor_name}
-*Tipo de Consulta:* {final_appointment_type}
-*Data/Hora:* {final_date} às {final_time}"""
+Nome: {patient_name}
+Médico: {clean_doctor_name}
+Tipo de Consulta: {final_appointment_type}
+Data/Hora: {final_date} às {final_time}"""
             
             # Usar codificação simples do urllib
             encoded_message = urllib.parse.quote(simple_message)
@@ -220,7 +220,7 @@ class HandoffService:
         
         message = f"""✅ *Perfeito! Vamos confirmar seu pré-agendamento:*
 
-📋 **RESUMO:
+📋 *RESUMO:*
 👤 Paciente: {patient_info.get('patient_name', 'Não informado')}
 👨‍⚕️ Médico: {doctor_name}
 📅 Data: {date}

@@ -22,9 +22,7 @@ class ConversationSession(models.Model):
             ('confirming_name', 'Confirmando Nome do Paciente'),
             ('selecting_doctor', 'Selecionando Médico'),
             ('choosing_schedule', 'Escolhendo Horário'),
-            ('confirming', 'Confirmando'),
-            ('completed', 'Concluído'),
-            ('cancelled', 'Cancelado')
+            ('confirming', 'Confirmando')
         ],
         default='idle'
     )
@@ -83,38 +81,3 @@ class ConversationMessage(models.Model):
     def __str__(self):
         return f"{self.get_message_type_display()}: {self.content[:50]}..."
 
-
-class AppointmentRequest(models.Model):
-    """
-    Solicitações de agendamento geradas pelo chatbot
-    """
-    STATUS_CHOICES = [
-        ('pending', 'Pendente'),
-        ('confirmed', 'Confirmado'),
-        ('cancelled', 'Cancelado'),
-        ('completed', 'Concluído')
-    ]
-    
-    session = models.OneToOneField(ConversationSession, on_delete=models.CASCADE, related_name='appointment_request')
-    patient_name = models.CharField(max_length=100)
-    phone_number = models.CharField(max_length=20)
-    doctor_name = models.CharField(max_length=100)
-    specialty = models.CharField(max_length=100)
-    appointment_type = models.CharField(max_length=50)  # Particular, Convênio, etc.
-    preferred_date = models.DateField()
-    preferred_time = models.TimeField()
-    insurance = models.CharField(max_length=50, blank=True, null=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    handoff_link = models.URLField(blank=True, null=True)
-    confirmation_code = models.CharField(max_length=20, blank=True, null=True)
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        ordering = ['-created_at']
-        verbose_name = 'Solicitação de Agendamento'
-        verbose_name_plural = 'Solicitações de Agendamento'
-    
-    def __str__(self):
-        return f"{self.patient_name} - {self.doctor_name} ({self.preferred_date})"

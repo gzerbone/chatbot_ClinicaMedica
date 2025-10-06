@@ -1,8 +1,8 @@
-# Arquitetura Gemini Centralizada - Chatbot Simplificado
+# Arquitetura Gemini Centralizada - Chatbot Clínica Médica
 
 ## Visão Geral
 
-O projeto foi refatorado para usar o **Google Gemini AI** como protagonista principal do chatbot, responsável por gerenciar todo o fluxo de conversação e responder pacientes com base nas informações do RAG (Retrieval-Augmented Generation).
+O projeto foi completamente refatorado para usar o **Google Gemini AI** como protagonista principal do chatbot, responsável por gerenciar todo o fluxo de conversação e responder pacientes com base nas informações do RAG (Retrieval-Augmented Generation). Esta arquitetura centralizada elimina a fragmentação anterior e simplifica drasticamente o fluxo de dados.
 
 ## Arquitetura Simplificada
 
@@ -13,27 +13,49 @@ O projeto foi refatorado para usar o **Google Gemini AI** como protagonista prin
    - Identifica intenções e estados da conversa
    - Responde pacientes com base nas informações do RAG
    - Coordena pré-agendamentos e informações da clínica
+   - Extrai entidades (nome, médico, data, horário) usando IA
+   - Valida informações de agendamento
+   - Gera handoff quando necessário
 
 2. **`rag_service.py`** - **Base de Conhecimento**
    - Acessa dados da clínica (médicos, especialidades, exames, preços)
    - Serializa informações para o Gemini
    - Integra com Google Calendar para disponibilidade
+   - Fornece dados otimizados com cache inteligente
 
 3. **`conversation_service.py`** - **Persistência**
    - Salva mensagens e histórico de conversas
    - Gerencia sessões de conversa
+   - Processa confirmação de nomes de pacientes
+   - Limpa sessões antigas automaticamente
 
 4. **`whatsapp_service.py`** - **Integração WhatsApp**
    - Processa webhooks do WhatsApp
    - Envia mensagens para pacientes
+   - Suporta templates e mensagens personalizadas
+   - Valida webhooks do WhatsApp
 
 5. **`handoff_service.py`** - **Transferência para Secretária**
    - Gera links de handoff para agendamentos
    - Cria mensagens de confirmação
+   - Valida informações do médico no banco de dados
+   - Formata mensagens para WhatsApp
 
-6. **`google_calendar_service.py`** - **Agenda**
+6. **`smart_scheduling_service.py`** - **Consulta de Horários**
+   - Consulta disponibilidade no Google Calendar
+   - Analisa solicitações de agendamento
+   - Valida médicos no banco de dados
+   - Gera informações de disponibilidade
+
+7. **`google_calendar_service.py`** - **Agenda**
    - Consulta disponibilidade de médicos
    - Integra com Google Calendar
+   - Sincroniza eventos
+
+8. **`token_monitor.py`** - **Monitoramento de Tokens**
+   - Monitora uso de tokens do Gemini
+   - Aplica modo econômico quando necessário
+   - Otimiza configurações automaticamente
 
 ## Fluxo de Conversação
 
@@ -80,12 +102,12 @@ Mensagem do WhatsApp → Gemini Chatbot Service → Análise + Resposta → What
 ## Estados da Conversa
 
 - **idle**: Estado inicial
-- **coletando_nome**: Coletando nome do paciente
-- **confirmando_nome**: Confirmando nome extraído
-- **selecionando_medico**: Escolhendo médico
-- **escolhendo_horario**: Escolhendo data/horário
-- **confirmando_agendamento**: Confirmando dados finais
-- **agendamento_concluido**: Processo finalizado
+- **collecting_patient_info**: Coletando dados do paciente
+- **collecting_info**: Coletando informações
+- **confirming_name**: Confirmando nome do paciente
+- **selecting_doctor**: Selecionando médico
+- **choosing_schedule**: Escolhendo horário
+- **confirming**: Confirmando
 - **fornecendo_info**: Fornecendo informações solicitadas
 
 ## Arquivos Removidos (Simplificação)
@@ -117,11 +139,23 @@ result = gemini_chatbot_service.process_message(phone_number, message)
 response = result['response']
 intent = result['intent']
 confidence = result['confidence']
+state = result['state']
+session_data = result['session_data']
 ```
 
 ### Teste de Conexão
 ```python
 is_connected = gemini_chatbot_service.test_connection()
+```
+
+### Monitoramento de Tokens
+```python
+from api_gateway.services.token_monitor import token_monitor
+
+stats = token_monitor.get_token_usage_stats()
+print(f"Tokens usados hoje: {stats['tokens_used_today']}")
+print(f"Limite diário: {stats['daily_limit']}")
+print(f"Modo econômico: {stats['economy_mode_active']}")
 ```
 
 ## Configuração
@@ -148,7 +182,11 @@ INSTALLED_APPS = [
 - `GET /test-gemini-connection/` - Testa conexão com Gemini
 - `POST /test-chatbot-service/` - Testa processamento de mensagem
 - `POST /test-intent-analysis/` - Testa análise de intenção
+- `POST /test-entity-extraction/` - Testa extração de entidades
 - `POST /test-handoff-generation/` - Testa geração de handoff
+- `GET /check-stored-data/` - Verifica dados armazenados
+- `GET /token-usage-stats/` - Monitora uso de tokens
+- `POST /reset-token-usage/` - Reseta contador de tokens
 
 ## Logs e Monitoramento
 
@@ -157,6 +195,27 @@ O sistema gera logs detalhados para monitoramento:
 - Estados da conversa
 - Respostas geradas
 - Erros e fallbacks
+- Uso de tokens do Gemini
+- Entidades extraídas
+- Sessões de conversa
+- Handoffs gerados
+
+## Persistência de Dados
+
+### Modelos Principais
+- **ConversationSession**: Sessões de conversa persistentes
+- **ConversationMessage**: Mensagens individuais com entidades
+- **ClinicaInfo**: Informações da clínica
+- **Medico**: Dados dos médicos
+- **Especialidade**: Especialidades médicas
+- **Convenio**: Convênios aceitos
+- **Exame**: Exames disponíveis
+
+### Cache Inteligente
+- Cache de dados da clínica (30 minutos)
+- Cache de sessões de conversa
+- Cache de médicos específicos
+- Cache de especialidades
 
 ## Próximos Passos
 
@@ -165,3 +224,5 @@ O sistema gera logs detalhados para monitoramento:
 3. Ajustar prompts se necessário
 4. Monitorar logs de conversação
 5. Expandir intenções conforme necessário
+6. Configurar Google Calendar
+7. Testar handoff com secretária

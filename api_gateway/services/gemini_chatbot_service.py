@@ -776,13 +776,62 @@ EXAMES DISPONÍVEIS:
             
             # Atualizar data preferida
             if entities.get('data') and entities['data'] != 'null':
-                session['preferred_date'] = entities['data']
-                logger.info(f"✅ Data atualizada: {entities['data']}")
+                try:
+                    import re
+                    date_str = entities['data']
+                    
+                    # Primeiro, tentar extrair data de formatos como "Sexta (10/10/2025)"
+                    date_pattern = r'\((\d{1,2}/\d{1,2}/\d{4})\)'
+                    match = re.search(date_pattern, date_str)
+                    if match:
+                        extracted_date = match.group(1)
+                        logger.info(f"🔍 Data extraída do padrão: {extracted_date}")
+                        date_str = extracted_date
+                    
+                    # Normalizar data usando a função dedicada
+                    normalized_date = self._normalize_date_for_database(date_str)
+                    
+                    if normalized_date:
+                        session['preferred_date'] = normalized_date
+                        logger.info(f"✅ Data atualizada (normalizada): {normalized_date}")
+                    else:
+                        # Se não conseguir normalizar, salvar como string para processamento posterior
+                        session['preferred_date'] = date_str
+                        logger.info(f"✅ Data atualizada (string): {date_str}")
+                        
+                except Exception as e:
+                    logger.error(f"Erro ao processar data: {e}")
+                    session['preferred_date'] = entities['data']
+                    logger.info(f"✅ Data atualizada (fallback): {entities['data']}")
             
             # Atualizar horário preferido
             if entities.get('horario') and entities['horario'] != 'null':
-                session['preferred_time'] = entities['horario']
-                logger.info(f"✅ Horário atualizado: {entities['horario']}")
+                try:
+                    # Converter string de horário para formato adequado
+                    from datetime import datetime
+                    time_str = entities['horario']
+                    # Tentar diferentes formatos de horário
+                    time_formats = ['%H:%M', '%H:%M:%S', '%I:%M %p', '%I:%M:%S %p']
+                    parsed_time = None
+                    
+                    for fmt in time_formats:
+                        try:
+                            parsed_time = datetime.strptime(time_str, fmt).time()
+                            break
+                        except ValueError:
+                            continue
+                    
+                    if parsed_time:
+                        session['preferred_time'] = parsed_time
+                        logger.info(f"✅ Horário atualizado: {parsed_time}")
+                    else:
+                        # Se não conseguir fazer parse, salvar como string
+                        session['preferred_time'] = time_str
+                        logger.info(f"✅ Horário atualizado (string): {time_str}")
+                except Exception as e:
+                    logger.error(f"Erro ao processar horário: {e}")
+                    session['preferred_time'] = entities['horario']
+                    logger.info(f"✅ Horário atualizado (fallback): {entities['horario']}")
             
             # Log do status das informações coletadas
             info_status = {
@@ -806,10 +855,84 @@ EXAMES DISPONÍVEIS:
         except Exception as e:
             logger.error(f"Erro ao atualizar sessão: {e}")
     
+    def _normalize_date_for_database(self, date_value):
+        """
+        Normaliza data para formato adequado ao banco de dados
+        Converte datas em formato DD/MM para DD/MM/YYYY com ano atual
+        """
+        if not date_value:
+            return None
+        
+        try:
+            from datetime import date, datetime
+
+            # Se já é um objeto date, retornar como está
+            if isinstance(date_value, date):
+                return date_value
+            
+            # Se é string, tentar converter
+            if isinstance(date_value, str):
+                # Se já tem ano (formato DD/MM/YYYY ou YYYY-MM-DD), tentar converter diretamente
+                if len(date_value.split('/')) == 3 or '-' in date_value:
+                    try:
+                        if '/' in date_value:
+                            return datetime.strptime(date_value, '%d/%m/%Y').date()
+                        else:
+                            return datetime.strptime(date_value, '%Y-%m-%d').date()
+                    except ValueError:
+                        pass
+                
+                # Se é formato DD/MM, adicionar ano atual ou próximo
+                if len(date_value.split('/')) == 2:
+                    try:
+                        day, month = date_value.split('/')
+                        current_year = datetime.now().year
+                        
+                        # Tentar com o ano atual primeiro
+                        test_date = datetime.strptime(f"{day}/{month}/{current_year}", '%d/%m/%Y').date()
+                        
+                        # Se a data já passou este ano, usar o próximo ano
+                        if test_date < datetime.now().date():
+                            next_year = current_year + 1
+                            return datetime.strptime(f"{day}/{month}/{next_year}", '%d/%m/%Y').date()
+                        else:
+                            return test_date
+                            
+                    except ValueError:
+                        pass
+                
+                # Tentar outros formatos comuns
+                date_formats = [
+                    '%d/%m/%Y',      # 15/01/2024
+                    '%d-%m-%Y',      # 15-01-2024
+                    '%Y-%m-%d',      # 2024-01-15
+                    '%Y/%m/%d',      # 2024/01/15
+                    '%d/%m/%y',      # 15/01/24
+                    '%d-%m-%y',      # 15-01-24
+                ]
+                
+                for fmt in date_formats:
+                    try:
+                        return datetime.strptime(date_value, fmt).date()
+                    except ValueError:
+                        continue
+                
+                logger.warning(f"Formato de data não reconhecido: {date_value}")
+                return None
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Erro ao normalizar data '{date_value}': {e}")
+            return None
+
     def _sync_session_to_database(self, phone_number: str, session: Dict):
         """Sincroniza sessão do cache com o banco de dados"""
         try:
             from api_gateway.models import ConversationSession
+
+            # Normalizar data antes de salvar
+            normalized_date = self._normalize_date_for_database(session.get('preferred_date'))
 
             # Obter ou criar sessão no banco
             db_session, created = ConversationSession.objects.get_or_create(
@@ -820,6 +943,11 @@ EXAMES DISPONÍVEIS:
                     'name_confirmed': bool(session.get('patient_name')),
                     'pending_name': 'Paciente',
                     'insurance_type': session.get('insurance_type'),
+                    'selected_doctor': session.get('selected_doctor'),
+                    'preferred_date': normalized_date,
+                    'preferred_time': session.get('preferred_time'),
+                    'specialty_interest': session.get('specialty_interest'),
+                    'additional_notes': session.get('additional_notes'),
                     'created_at': timezone.now(),
                     'updated_at': timezone.now()
                 }
@@ -831,10 +959,15 @@ EXAMES DISPONÍVEIS:
                 db_session.patient_name = session.get('patient_name')
                 db_session.name_confirmed = bool(session.get('patient_name'))
                 db_session.insurance_type = session.get('insurance_type')
+                db_session.selected_doctor = session.get('selected_doctor')
+                db_session.preferred_date = normalized_date
+                db_session.preferred_time = session.get('preferred_time')
+                db_session.specialty_interest = session.get('specialty_interest')
+                db_session.additional_notes = session.get('additional_notes')
                 db_session.updated_at = timezone.now()
                 db_session.save()
             
-            logger.info(f"💾 Sessão sincronizada com banco - ID: {db_session.id}, Nome: {db_session.patient_name}")
+            logger.info(f"💾 Sessão sincronizada com banco - ID: {db_session.id}, Nome: {db_session.patient_name}, Data: {normalized_date}")
             
         except Exception as e:
             logger.error(f"Erro ao sincronizar sessão com banco: {e}")
@@ -1151,24 +1284,24 @@ EXAMES DISPONÍVEIS:
                 doctor_name=doctor_name,
                 date=date_mentioned,
                 time=time_mentioned,
-                appointment_type=appointment_type
+                appointment_type='Consulta'
             )
             
-            # Criar mensagem de confirmação com link
-            confirmation_message = f"""✅ *Perfeito, {patient_name}! Vamos confirmar seu agendamento:*
-
-📋 *RESUMO:*
-👤 Paciente: {patient_name}
-👨‍⚕️ Médico: {doctor_name}
-💼 Tipo de Consulta: {insurance_type}
-📅 Data: {date_mentioned}
-🕐 Horário: {time_mentioned}
-
-*🔄 Para FINALIZAR o agendamento:*
-👩‍💼 Nossa secretária validará a disponibilidade e confirmará seu agendamento através do link abaixo.
-
-*📞 Clique no link abaixo para falar diretamente com nossa equipe:*
-{handoff_link}"""
+            # Criar mensagem de confirmação usando função do handoff_service
+            patient_info = {
+                'patient_name': patient_name,
+                'appointment_type': 'Consulta'
+            }
+            
+            confirmation_message = handoff_service.create_confirmation_message(
+                doctor_name=doctor_name,
+                date=str(date_mentioned),
+                time=str(time_mentioned),
+                patient_info=patient_info
+            )
+            
+            # Adicionar o link de handoff à mensagem
+            confirmation_message += f"\n{handoff_link}"
             
             return {
                 'message': confirmation_message,
