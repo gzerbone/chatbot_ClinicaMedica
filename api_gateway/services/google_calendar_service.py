@@ -151,24 +151,8 @@ class GoogleCalendarService:
         """
         doctor_events = []
         
-        # Obter padrões configurados para o médico
-        doctor_patterns = getattr(settings, 'DOCTOR_EVENT_PATTERNS', {})
-        normalized_doctor_name = doctor_name.lower().replace('dr. ', '').replace('dra. ', '')
-        
-        # Buscar padrões específicos do médico
-        keywords = []
-        for pattern_key, pattern_list in doctor_patterns.items():
-            if normalized_doctor_name in pattern_key:
-                keywords.extend(pattern_list)
-                break
-        
-        # Se não encontrar padrões específicos, usar nome do médico
-        if not keywords:
-            keywords = [
-                doctor_name.lower(),
-                normalized_doctor_name,
-                doctor_name.split()[-1].lower(),  # Último nome
-            ]
+        # Gerar keywords de forma inteligente
+        keywords = self._generate_doctor_keywords(doctor_name)
         
         logger.debug(f"Buscando eventos para {doctor_name} com keywords: {keywords}")
         
@@ -184,6 +168,99 @@ class GoogleCalendarService:
         
         logger.info(f"Encontrados {len(doctor_events)} eventos para {doctor_name} no calendário da clínica")
         return doctor_events
+    
+    def _generate_doctor_keywords(self, doctor_name: str) -> List[str]:
+        """
+        Gera keywords para identificar eventos do médico no calendário
+        
+        PRIORIDADE:
+        1. Padrões configurados manualmente (DOCTOR_EVENT_PATTERNS no settings.py)
+        2. Padrões gerados automaticamente do banco de dados
+        3. Padrões gerados do nome fornecido
+        
+        Args:
+            doctor_name: Nome do médico
+            
+        Returns:
+            Lista de keywords para buscar eventos
+        """
+        keywords = []
+        normalized_doctor_name = doctor_name.lower().replace('dr. ', '').replace('dra. ', '')
+        
+        # 1. Tentar padrões configurados manualmente (FALLBACK para casos especiais)
+        doctor_patterns = getattr(settings, 'DOCTOR_EVENT_PATTERNS', {})
+        for pattern_key, pattern_list in doctor_patterns.items():
+            if normalized_doctor_name in pattern_key or pattern_key in normalized_doctor_name:
+                keywords.extend(pattern_list)
+                logger.debug(f"✅ Usando padrões manuais configurados para {doctor_name}")
+                return keywords
+        
+        # 2. Tentar gerar padrões do banco de dados (RECOMENDADO)
+        try:
+            from rag_agent.models import Medico
+
+            # Buscar médico no banco
+            medico = Medico.objects.filter(nome__icontains=normalized_doctor_name).first()
+            
+            if medico:
+                # Gerar variações do nome do médico
+                nome_completo = medico.nome.lower()
+                partes_nome = nome_completo.split()
+                
+                keywords = [
+                    nome_completo,                    # "joão carvalho"
+                    f"dr. {nome_completo}",          # "dr. joão carvalho"
+                    f"dra. {nome_completo}",         # "dra. joão carvalho"
+                    f"dr {nome_completo}",           # "dr joão carvalho" (sem ponto)
+                    f"dra {nome_completo}",          # "dra joão carvalho" (sem ponto)
+                ]
+                
+                # Adicionar primeiro nome
+                if len(partes_nome) > 0:
+                    primeiro_nome = partes_nome[0]
+                    keywords.extend([
+                        primeiro_nome,
+                        f"dr. {primeiro_nome}",
+                        f"dra. {primeiro_nome}",
+                        f"dr {primeiro_nome}",
+                        f"dra {primeiro_nome}",
+                    ])
+                
+                # Adicionar último sobrenome
+                if len(partes_nome) > 1:
+                    ultimo_sobrenome = partes_nome[-1]
+                    keywords.extend([
+                        ultimo_sobrenome,
+                        f"dr. {ultimo_sobrenome}",
+                        f"dra. {ultimo_sobrenome}",
+                    ])
+                
+                logger.debug(f"✅ Keywords geradas automaticamente do banco para {doctor_name}: {len(keywords)} variações")
+                return list(set(keywords))  # Remover duplicatas
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Não foi possível buscar médico no banco: {e}")
+        
+        # 3. Padrões gerados do nome fornecido (FALLBACK final)
+        partes_nome = normalized_doctor_name.split()
+        
+        keywords = [
+            doctor_name.lower(),
+            normalized_doctor_name,
+        ]
+        
+        # Adicionar primeiro nome
+        if len(partes_nome) > 0:
+            keywords.append(partes_nome[0])
+            keywords.append(f"dr. {partes_nome[0]}")
+            keywords.append(f"dra. {partes_nome[0]}")
+        
+        # Adicionar último nome
+        if len(partes_nome) > 1:
+            keywords.append(partes_nome[-1])
+        
+        logger.debug(f"⚠️ Usando keywords genéricas para {doctor_name}")
+        return list(set(keywords))  # Remover duplicatas
     
     def _process_availability(self, doctor_name: str, events: List[Dict], start_date: datetime, days_ahead: int) -> Dict[str, Any]:
         """
