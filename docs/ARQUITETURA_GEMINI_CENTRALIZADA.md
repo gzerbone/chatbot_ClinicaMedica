@@ -1,4 +1,4 @@
-# Arquitetura Gemini Centralizada - Chatbot Clínica Médica
+# Arquitetura Gemini Centralizada - Chatbot Clínica Médica - Atualizada 05/09 (mais recente)
 
 ## Visão Geral
 
@@ -161,12 +161,18 @@ print(f"Modo econômico: {stats['economy_mode_active']}")
 ## Configuração
 
 ### Variáveis de Ambiente
+Todas as configurações sensíveis são gerenciadas pelo arquivo `.env` na raiz do projeto.
+
+**Importante:** Nunca exponha valores reais de API keys ou tokens. Use o arquivo `.env.example` como referência para as variáveis necessárias.
+
 ```bash
-GEMINI_API_KEY=sua_chave_aqui
-GEMINI_ENABLED=True
-GEMINI_MODEL=gemini-1.5-flash
-GEMINI_TEMPERATURE=0.7
-GEMINI_MAX_TOKENS=1024
+# Ver arquivo .env.example para lista completa
+# Variáveis principais incluem:
+# - GEMINI_API_KEY
+# - WHATSAPP_ACCESS_TOKEN
+# - WHATSAPP_VERIFY_TOKEN
+# - GOOGLE_CALENDAR_ID
+# - E outras...
 ```
 
 ### Django Settings

@@ -227,26 +227,31 @@ class ConversationMessage(models.Model):
 
 ### **Variáveis de Ambiente**
 
+Todas as configurações sensíveis são gerenciadas pelo arquivo `.env` na raiz do projeto.
+
+**Importante:** 
+- Nunca exponha valores reais de API keys ou tokens na documentação
+- Use o arquivo `.env.example` como referência
+- O arquivo `.env` deve estar no `.gitignore`
+
 ```bash
-# Gemini AI
-GEMINI_API_KEY=sua_chave_aqui
-GEMINI_ENABLED=True
-GEMINI_MODEL=gemini-2.0-flash
-GEMINI_TEMPERATURE=0.7
-GEMINI_MAX_TOKENS=1024
+# Copiar o arquivo de exemplo
+cp .env.example .env
 
-# WhatsApp
-WHATSAPP_ACCESS_TOKEN=seu_token
-WHATSAPP_PHONE_NUMBER_ID=seu_id
-WHATSAPP_VERIFY_TOKEN=seu_verify_token
-WHATSAPP_API_URL=https://graph.facebook.com/v18.0
+# Editar com suas credenciais reais
+nano .env
 
-# Google Calendar
-GOOGLE_CALENDAR_ID=seu_calendar_id
-GOOGLE_SERVICE_ACCOUNT_FILE=service-account-key.json
-
-# Clínica
-CLINIC_WHATSAPP_NUMBER=5511999999999
+# Variáveis principais configuradas no .env:
+# - GEMINI_API_KEY
+# - WHATSAPP_ACCESS_TOKEN
+# - WHATSAPP_PHONE_NUMBER_ID
+# - WHATSAPP_VERIFY_TOKEN
+# - WHATSAPP_API_URL
+# - GOOGLE_CALENDAR_ENABLED
+# - GOOGLE_SERVICE_ACCOUNT_FILE
+# - CLINIC_DOMAIN
+# - CLINIC_CALENDAR_ID
+# - CLINIC_WHATSAPP_NUMBER
 ```
 
 ### **Django Settings**
@@ -370,6 +375,11 @@ venv\Scripts\activate  # Windows
 
 # Instalar dependências
 pip install -r requirements.txt
+
+# Configurar variáveis de ambiente
+# IMPORTANTE: Crie um arquivo .env na raiz do projeto com todas as variáveis necessárias
+# Referência: Use o .env.example como template (se disponível)
+# O arquivo .env NÃO deve ser commitado no git
 ```
 
 ### **2. Configuração do Banco**
@@ -419,9 +429,11 @@ tail -f logs/gemini.log
 
 #### **2. WhatsApp não envia mensagens**
 ```bash
-# Verificar configurações
-echo $WHATSAPP_ACCESS_TOKEN
-echo $WHATSAPP_PHONE_NUMBER_ID
+# Verificar se variáveis estão configuradas
+python manage.py shell
+>>> from django.conf import settings
+>>> print(settings.WHATSAPP_ACCESS_TOKEN is not None)
+>>> print(settings.WHATSAPP_PHONE_NUMBER_ID is not None)
 
 # Testar envio
 POST /send-test-message/
@@ -471,10 +483,41 @@ POST /reset-token-usage/
 - **Validação** de dados
 - **Rate limiting** (planejado)
 
+### **Gestão de Configurações Sensíveis**
+
+#### **Arquivo .env**
+```bash
+# ✅ FAZER
+- Manter .env fora do controle de versão (.gitignore)
+- Usar valores diferentes para dev/produção
+- Rotacionar chaves periodicamente
+- Criar .env.example com valores de exemplo
+
+# ❌ NUNCA FAZER
+- Commitar arquivo .env com valores reais
+- Expor API keys em código ou documentação
+- Usar mesmas credenciais em dev e produção
+- Compartilhar arquivo .env por email/chat
+```
+
+#### **Variáveis Configuradas no .env**
+Todas as credenciais sensíveis estão configuradas em:
+- `WHATSAPP_VERIFY_TOKEN`
+- `WHATSAPP_ACCESS_TOKEN`
+- `WHATSAPP_PHONE_NUMBER_ID`
+- `GEMINI_API_KEY`
+- `WHATSAPP_API_URL`
+- `GOOGLE_CALENDAR_ENABLED`
+- `GOOGLE_SERVICE_ACCOUNT_FILE`
+- `CLINIC_DOMAIN`
+- `CLINIC_CALENDAR_ID`
+- `CLINIC_WHATSAPP_NUMBER`
+
 ### **Dados Sensíveis**
-- **Nomes de pacientes** criptografados
+- **Nomes de pacientes** armazenados com segurança
 - **Números de telefone** mascarados em logs
-- **Tokens** em variáveis de ambiente
+- **Tokens e API Keys** carregados via .env
+- **Mensagens** persistidas apenas necessárias
 
 ## 📚 Próximos Passos
 

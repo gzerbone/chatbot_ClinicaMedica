@@ -1,4 +1,4 @@
-# 🏗️ Arquitetura Atual do Sistema - Chatbot Clínica Médica
+# 🏗️ Arquitetura Atual do Sistema - Chatbot Clínica Médica - Atualizada 05/10 (mais recente)
 
 ## 📐 Visão Geral da Arquitetura
 
@@ -96,7 +96,6 @@ O sistema foi completamente refatorado para uma arquitetura **centralizada no Go
 # Principais modelos
 - ConversationSession    # Sessões de conversa persistentes
 - ConversationMessage    # Mensagens individuais
-- AppointmentRequest     # Solicitações de agendamento
 ```
 
 #### **Services** (`services/`)
@@ -227,10 +226,14 @@ class TokenMonitor:
 #### **Settings** (`settings.py`)
 ```python
 # Configurações principais
-- GEMINI_API_KEY       # Chave do Gemini AI
-- WHATSAPP_TOKEN       # Token WhatsApp
-- GOOGLE_CALENDAR_ID   # ID do calendário
-- DATABASE_CONFIG      # Configuração do banco
+# Todas as configurações sensíveis são carregadas do arquivo .env
+# Ver .env.example para lista completa de variáveis necessárias
+
+INSTALLED_APPS = [
+    'rag_agent',
+    'api_gateway',
+    # ...
+]
 ```
 
 ## 🔄 Fluxo de Dados
