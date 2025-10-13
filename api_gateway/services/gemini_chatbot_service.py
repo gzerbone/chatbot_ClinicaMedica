@@ -972,7 +972,7 @@ EXAMES DISPONÍVEIS:
         except Exception as e:
             logger.error(f"Erro ao sincronizar sessão com banco: {e}")
     
-    def _get_conversation_history(self, phone_number: str, limit: int = 5) -> List[Dict]:
+    def _get_conversation_history(self, phone_number: str, limit: int = 10) -> List[Dict]:
         """Obtém histórico da conversa"""
         try:
             from .conversation_service import conversation_service

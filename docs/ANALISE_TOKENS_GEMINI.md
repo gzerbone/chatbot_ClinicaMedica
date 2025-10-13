@@ -1,4 +1,4 @@
-# 📊 Análise Detalhada do Consumo de Tokens - Gemini API
+# 📊 Análise Detalhada do Consumo de Tokens - Gemini API - Atualizada 05/10
 
 ## 🎯 Objetivo
 Este documento analisa o fluxo de entrada e saída de tokens do Gemini API no chatbot da clínica médica, fornecendo insights sobre consumo e estratégias de otimização.

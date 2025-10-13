@@ -2,539 +2,1385 @@
 
 ## 🎯 Visão Geral
 
-Este documento descreve o fluxo completo do sistema de chatbot para clínica médica, desde a recepção de mensagens do WhatsApp até a geração de handoffs para a secretária.
-
-## 🏗️ Arquitetura do Sistema
-
-### Componentes Principais
-
-1. **WhatsApp Business API** - Interface de comunicação
-2. **Django Server** - Backend principal
-3. **Google Gemini AI** - Motor de IA centralizado
-4. **Google Calendar** - Sistema de agendamento
-5. **Banco de Dados** - Persistência de dados
-6. **Cache** - Otimização de performance
-
-## 🔄 Fluxo Detalhado
-
-### 1. **Recepção de Mensagem**
-
-```
-📱 Paciente envia mensagem no WhatsApp
-    ↓
-🌐 WhatsApp Business API recebe mensagem
-    ↓
-🔗 Webhook envia para Django Server
-    ↓
-📨 Django processa webhook em views.py
-```
-
-**Código responsável:**
-- `api_gateway/views.py` - `whatsapp_webhook()`
-- `api_gateway/views.py` - `process_message()`
-
-### 2. **Processamento com Gemini AI**
-
-```
-🤖 Gemini Chatbot Service recebe mensagem
-    ↓
-🧠 Análise de intenção e extração de entidades
-    ↓
-📊 Consulta dados da clínica via RAG Service
-    ↓
-💾 Atualiza sessão de conversa
-    ↓
-🎯 Gera resposta contextualizada
-```
-
-**Código responsável:**
-- `api_gateway/services/gemini_chatbot_service.py` - `process_message()`
-- `api_gateway/services/rag_service.py` - Dados da clínica
-- `api_gateway/services/conversation_service.py` - Persistência
-
-### 3. **Análise de Intenção**
-
-O Gemini AI identifica automaticamente:
-
-#### **Intenções Suportadas:**
-- `saudacao` - Cumprimentos e início de conversa
-- `buscar_info` - Informações sobre clínica, endereço, telefone
-- `agendar_consulta` - Processo de agendamento
-- `confirmar_agendamento` - Confirmação de dados
-- `buscar_medico` - Informações sobre médicos
-- `buscar_exame` - Informações sobre exames
-- `buscar_horarios` - Horários disponíveis
-- `cancelar_agendamento` - Cancelamento
-- `despedida` - Encerramento de conversa
-- `duvida` - Quando não entende a mensagem
-
-#### **Entidades Extraídas:**
-- `nome_paciente` - Nome completo do paciente
-- `medico` - Nome do médico mencionado
-- `especialidade` - Especialidade médica
-- `data` - Data da consulta
-- `horario` - Horário da consulta
-- `exame` - Nome do exame mencionado
-
-### 4. **Estados da Conversa**
-
-```
-idle → collecting_patient_info → selecting_doctor → choosing_schedule → confirming
-```
-
-#### **Estados Detalhados:**
-- `idle` - Estado inicial
-- `collecting_patient_info` - Coletando dados do paciente
-- `collecting_info` - Coletando informações
-- `confirming_name` - Confirmando nome do paciente
-- `selecting_doctor` - Selecionando médico
-- `choosing_schedule` - Escolhendo horário
-- `confirming` - Confirmando dados finais
-- `fornecendo_info` - Fornecendo informações solicitadas
-
-### 5. **Fluxo de Agendamento**
-
-#### **Etapa 1: Coleta do Nome**
-```
-👤 Paciente: "Olá, gostaria de agendar uma consulta"
-🤖 Bot: "Olá! Como posso ajudá-lo? Primeiro, preciso do seu nome completo."
-👤 Paciente: "Meu nome é João Silva"
-🤖 Bot: "Perfeito, João! Com qual médico gostaria de agendar?"
-```
-
-#### **Etapa 2: Seleção do Médico**
-```
-👤 Paciente: "Com Dr. João Carvalho"
-🤖 Bot: "Ótimo! Dr. João Carvalho atende Cardiologia. Qual data seria melhor?"
-```
-
-#### **Etapa 3: Escolha de Data/Horário**
-```
-👤 Paciente: "Segunda-feira às 14h"
-🤖 Bot: "Perfeito! Vamos confirmar: João Silva, Dr. João Carvalho, Segunda-feira às 14h. Está correto?"
-```
-
-#### **Etapa 4: Confirmação e Handoff**
-```
-👤 Paciente: "Sim, está correto"
-🤖 Bot: "✅ Perfeito! Vamos confirmar seu pré-agendamento:
-
-📋 RESUMO:
-👤 Paciente: João Silva
-👨‍⚕️ Médico: Dr. João Carvalho
-📅 Data: Segunda-feira
-🕐 Horário: 14h
-
-🔄 Para CONFIRMAR definitivamente:
-👩‍💼 Nossa secretária validará a disponibilidade e confirmará seu agendamento.
-
-📞 Clique no link abaixo para falar diretamente com nossa equipe:
-[LINK DE HANDOFF]"
-```
-
-### 6. **Geração de Handoff**
-
-Quando o paciente confirma o agendamento:
-
-```
-🔗 Handoff Service gera link personalizado
-    ↓
-📝 Cria mensagem formatada com dados do paciente
-    ↓
-📱 Link direciona para WhatsApp da secretária
-    ↓
-👩‍💼 Secretária recebe informações completas
-```
-
-**Código responsável:**
-- `api_gateway/services/handoff_service.py` - `generate_appointment_handoff_link()`
-
-### 7. **Consulta de Horários**
-
-Para solicitações de horários:
-
-```
-📅 Smart Scheduling Service analisa solicitação
-    ↓
-🔍 Valida médico no banco de dados
-    ↓
-📊 Consulta Google Calendar
-    ↓
-📋 Retorna horários disponíveis
-```
-
-**Código responsável:**
-- `api_gateway/services/smart_scheduling_service.py` - `analyze_scheduling_request()`
-
-## 🗄️ Persistência de Dados
-
-### **Modelos Principais**
-
-#### **ConversationSession**
-```python
-class ConversationSession(models.Model):
-    phone_number = models.CharField(max_length=20, unique=True)
-    patient_name = models.CharField(max_length=100, blank=True, null=True)
-    current_state = models.CharField(max_length=50, default='idle')
-    selected_doctor = models.CharField(max_length=100, blank=True, null=True)
-    preferred_date = models.DateField(blank=True, null=True)
-    preferred_time = models.TimeField(blank=True, null=True)
-    # ... outros campos
-```
-
-#### **ConversationMessage**
-```python
-class ConversationMessage(models.Model):
-    session = models.ForeignKey(ConversationSession, on_delete=models.CASCADE)
-    message_type = models.CharField(max_length=10, choices=MESSAGE_TYPES)
-    content = models.TextField()
-    intent = models.CharField(max_length=50, blank=True, null=True)
-    confidence = models.FloatField(blank=True, null=True)
-    entities = models.JSONField(default=dict, blank=True)
-    # ... outros campos
-```
-
-### **Dados da Clínica (RAG Agent)**
-
-#### **ClinicaInfo**
-- Nome da clínica
-- Endereço e contatos
-- Horário de funcionamento
-- Política de agendamento
-
-#### **Medico**
-- Nome e CRM
-- Especialidades
-- Convênios aceitos
-- Preço particular
-- Horários de trabalho
-
-#### **Especialidade**
-- Nome da especialidade
-- Descrição
-- Status ativo
-
-#### **Convenio**
-- Nome do convênio
-- Descrição
-
-#### **Exame**
-- Nome do exame
-- Descrição e preparação
-- Preço e duração
-
-## 🔧 Configuração e Deploy
-
-### **Variáveis de Ambiente**
-
-Todas as configurações sensíveis são gerenciadas pelo arquivo `.env` na raiz do projeto.
-
-**Importante:** 
-- Nunca exponha valores reais de API keys ou tokens na documentação
-- Use o arquivo `.env.example` como referência
-- O arquivo `.env` deve estar no `.gitignore`
-
-```bash
-# Copiar o arquivo de exemplo
-cp .env.example .env
-
-# Editar com suas credenciais reais
-nano .env
-
-# Variáveis principais configuradas no .env:
-# - GEMINI_API_KEY
-# - WHATSAPP_ACCESS_TOKEN
-# - WHATSAPP_PHONE_NUMBER_ID
-# - WHATSAPP_VERIFY_TOKEN
-# - WHATSAPP_API_URL
-# - GOOGLE_CALENDAR_ENABLED
-# - GOOGLE_SERVICE_ACCOUNT_FILE
-# - CLINIC_DOMAIN
-# - CLINIC_CALENDAR_ID
-# - CLINIC_WHATSAPP_NUMBER
-```
-
-### **Django Settings**
-
-```python
-INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.messages',
-    'django.contrib.staticfiles',
-    'rest_framework',
-    'rag_agent',
-    'api_gateway',
-]
-
-# Configurações de cache
-CACHES = {
-    'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'unique-snowflake',
-    }
-}
-```
-
-## 📊 Monitoramento e Logs
-
-### **Logs Estruturados**
-
-O sistema gera logs detalhados para monitoramento:
-
-```
-🤖 [AGENDAR_CONSULTA] State: collecting_patient_info | Conf: 0.95 | Agent: gemini
-🔍 Entidades extraídas: {'nome_paciente': 'João Silva', 'medico': 'Dr. João'}
-✅ Nome atualizado: João Silva
-✅ Médico atualizado: Dr. João
-📋 Status das informações: {'nome': True, 'medico': True, 'data': False, 'horario': False}
-💾 Sessão sincronizada com banco - ID: 123, Nome: João Silva, Data: None
-```
-
-### **Monitoramento de Tokens**
-
-```python
-# Estatísticas de uso
-stats = token_monitor.get_token_usage_stats()
-print(f"Tokens usados hoje: {stats['tokens_used_today']}")
-print(f"Limite diário: {stats['daily_limit']}")
-print(f"Modo econômico: {stats['economy_mode_active']}")
-```
-
-## 🧪 Endpoints de Teste
-
-### **Teste de Conexão**
-```bash
-GET /test-gemini-connection/
-```
-
-### **Teste de Processamento**
-```bash
-POST /test-chatbot-service/
-{
-    "phone_number": "5511999999999",
-    "message": "Olá, gostaria de agendar uma consulta"
-}
-```
-
-### **Teste de Análise de Intenção**
-```bash
-POST /test-intent-analysis/
-{
-    "message": "Quais médicos vocês têm?",
-    "phone_number": "5511999999999"
-}
-```
-
-### **Teste de Extração de Entidades**
-```bash
-POST /test-entity-extraction/
-{
-    "message": "Meu nome é João Silva, quero agendar com Dr. João Carvalho para segunda-feira às 14h",
-    "phone_number": "5511999999999"
-}
-```
-
-### **Teste de Handoff**
-```bash
-POST /test-handoff-generation/
-{
-    "patient_name": "João Silva",
-    "doctor_name": "Dr. João Carvalho",
-    "date": "15/09/2025",
-    "time": "14:30"
-}
-```
-
-### **Verificação de Dados**
-```bash
-GET /check-stored-data/?phone_number=5511999999999
-```
-
-### **Estatísticas de Tokens**
-```bash
-GET /token-usage-stats/
-```
-
-## 🚀 Fluxo de Deploy
-
-### **1. Preparação do Ambiente**
-
-```bash
-# Clonar repositório
-git clone <repository_url>
-cd chatbot_ClinicaMedica
-
-# Criar ambiente virtual
-python -m venv venv
-source venv/bin/activate  # Linux/Mac
-# ou
-venv\Scripts\activate  # Windows
-
-# Instalar dependências
-pip install -r requirements.txt
-
-# Configurar variáveis de ambiente
-# IMPORTANTE: Crie um arquivo .env na raiz do projeto com todas as variáveis necessárias
-# Referência: Use o .env.example como template (se disponível)
-# O arquivo .env NÃO deve ser commitado no git
-```
-
-### **2. Configuração do Banco**
-
-```bash
-# Aplicar migrações
-python manage.py migrate
-
-# Criar superusuário
-python manage.py createsuperuser
-
-# Carregar dados iniciais
-python scripts/criar_dados_pneumosono.py
-```
-
-### **3. Configuração de Serviços**
-
-```bash
-# Configurar Google Calendar
-python scripts/setup_calendar_dev.py
-
-# Testar conexões
-python manage.py runserver
-# Acessar: http://localhost:8000/test-gemini-connection/
-```
-
-### **4. Configuração do WhatsApp**
-
-```bash
-# Configurar webhook
-# URL: https://seu-dominio.com/webhook/
-# Token: seu_verify_token
-```
-
-## 🔍 Troubleshooting
-
-### **Problemas Comuns**
-
-#### **1. Gemini não responde**
-```bash
-# Verificar API key
-GET /test-gemini-connection/
-
-# Verificar logs
-tail -f logs/gemini.log
-```
-
-#### **2. WhatsApp não envia mensagens**
-```bash
-# Verificar se variáveis estão configuradas
-python manage.py shell
->>> from django.conf import settings
->>> print(settings.WHATSAPP_ACCESS_TOKEN is not None)
->>> print(settings.WHATSAPP_PHONE_NUMBER_ID is not None)
-
-# Testar envio
-POST /send-test-message/
-```
-
-#### **3. Banco de dados não persiste**
-```bash
-# Verificar migrações
-python manage.py showmigrations
-
-# Verificar dados
-GET /check-stored-data/
-```
-
-#### **4. Tokens esgotados**
-```bash
-# Verificar estatísticas
-GET /token-usage-stats/
-
-# Resetar contador (cuidado!)
-POST /reset-token-usage/
-```
-
-## 📈 Métricas de Performance
-
-### **Tempos de Resposta**
-- **Análise de intenção**: < 500ms
-- **Geração de resposta**: < 1s
-- **Consulta de horários**: < 2s
-- **Geração de handoff**: < 200ms
-
-### **Limites do Sistema**
-- **Tokens diários**: 1,000,000 (configurável)
-- **Sessões ativas**: 1,000 (cache)
-- **Mensagens por minuto**: 100+
-- **Disponibilidade**: 99.9%
-
-## 🔐 Segurança
-
-### **Autenticação**
-- **WhatsApp Verify Token** para webhooks
-- **Google Service Account** para Calendar API
-- **Gemini API Key** para IA
-
-### **Validação**
-- **Sanitização** de inputs
-- **Validação** de dados
-- **Rate limiting** (planejado)
-
-### **Gestão de Configurações Sensíveis**
-
-#### **Arquivo .env**
-```bash
-# ✅ FAZER
-- Manter .env fora do controle de versão (.gitignore)
-- Usar valores diferentes para dev/produção
-- Rotacionar chaves periodicamente
-- Criar .env.example com valores de exemplo
-
-# ❌ NUNCA FAZER
-- Commitar arquivo .env com valores reais
-- Expor API keys em código ou documentação
-- Usar mesmas credenciais em dev e produção
-- Compartilhar arquivo .env por email/chat
-```
-
-#### **Variáveis Configuradas no .env**
-Todas as credenciais sensíveis estão configuradas em:
-- `WHATSAPP_VERIFY_TOKEN`
-- `WHATSAPP_ACCESS_TOKEN`
-- `WHATSAPP_PHONE_NUMBER_ID`
-- `GEMINI_API_KEY`
-- `WHATSAPP_API_URL`
-- `GOOGLE_CALENDAR_ENABLED`
-- `GOOGLE_SERVICE_ACCOUNT_FILE`
-- `CLINIC_DOMAIN`
-- `CLINIC_CALENDAR_ID`
-- `CLINIC_WHATSAPP_NUMBER`
-
-### **Dados Sensíveis**
-- **Nomes de pacientes** armazenados com segurança
-- **Números de telefone** mascarados em logs
-- **Tokens e API Keys** carregados via .env
-- **Mensagens** persistidas apenas necessárias
-
-## 📚 Próximos Passos
-
-### **Melhorias Planejadas**
-1. **Processamento assíncrono** para melhor performance
-2. **Rate limiting** para proteção contra spam
-3. **Métricas avançadas** com Grafana
-4. **Backup automático** de dados
-5. **Integração com CRM** da clínica
-
-### **Expansões Futuras**
-1. **Múltiplas clínicas** em uma instância
-2. **Agendamento automático** via Google Calendar
-3. **Notificações push** para pacientes
-4. **Relatórios analíticos** de conversas
-5. **Integração com sistemas de pagamento**
+Este documento descreve **detalhadamente e visualmente** o fluxo completo do sistema de chatbot para clínica médica, desde a recepção de mensagens do WhatsApp até a geração de handoffs para a secretária.
 
 ---
 
-**Esta documentação representa o estado atual do sistema após a refatoração completa para centralização no Gemini AI.**
+## 📑 Índice
+
+- [Arquitetura do Sistema](#arquitetura-do-sistema)
+- [Fluxo de Dados Completo](#fluxo-de-dados-completo)
+- [Detalhamento por Componente](#detalhamento-por-componente)
+- [Fluxo de Agendamento Visual](#fluxo-de-agendamento-visual)
+- [Persistência e Sincronização](#persistência-e-sincronização)
+- [Monitoramento e Logs](#monitoramento-e-logs)
+- [Diagramas de Sequência](#diagramas-de-sequência)
+- [Configuração e Deploy](#configuração-e-deploy)
+
+---
+
+## 🏗️ Arquitetura do Sistema
+
+### Visão Macro da Arquitetura
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│                         SISTEMA CHATBOT CLÍNICA                           │
+└──────────────────────────────────────────────────────────────────────────┘
+
+                           ┌─────────────────┐
+                           │   📱 PACIENTE   │
+                           │    WhatsApp     │
+                           └────────┬────────┘
+                                    │
+                                    │ Mensagem
+                                    ▼
+                    ┌───────────────────────────────┐
+                    │  🌐 WhatsApp Business API     │
+                    │  - Recebe mensagens           │
+                    │  - Envia respostas            │
+                    └───────────┬───────────────────┘
+                                │
+                                │ Webhook POST
+                                ▼
+┌───────────────────────────────────────────────────────────────────────┐
+│                         🖥️ DJANGO SERVER                               │
+├───────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│  ┌─────────────────────────────────────────────────────────────────┐ │
+│  │  📨 API GATEWAY (app)                                           │ │
+│  ├─────────────────────────────────────────────────────────────────┤ │
+│  │                                                                   │ │
+│  │  ┌──────────────────┐         ┌──────────────────┐             │ │
+│  │  │  views.py        │────────►│ process_message  │             │ │
+│  │  │  - webhook       │         │ - orchestrator   │             │ │
+│  │  └──────────────────┘         └────────┬─────────┘             │ │
+│  │                                         │                        │ │
+│  │                                         ▼                        │ │
+│  │              ┌─────────────────────────────────────────┐        │ │
+│  │              │    🤖 GEMINI CHATBOT SERVICE            │        │ │
+│  │              │    (ORQUESTRADOR PRINCIPAL)             │        │ │
+│  │              ├─────────────────────────────────────────┤        │ │
+│  │              │  1. Obtém sessão                        │        │ │
+│  │              │  2. Analisa intenção (Gemini AI)        │        │ │
+│  │              │  3. Extrai entidades                     │        │ │
+│  │              │  4. Consulta dados (RAG)                │        │ │
+│  │              │  5. Gera resposta (Gemini AI)           │        │ │
+│  │              │  6. Valida agendamento                  │        │ │
+│  │              │  7. Gera handoff (se completo)          │        │ │
+│  │              │  8. Atualiza sessão                     │        │ │
+│  │              └───┬─────────────────────────┬───────────┘        │ │
+│  │                  │                         │                    │ │
+│  └──────────────────┼─────────────────────────┼────────────────────┘ │
+│                     │                         │                      │
+│  ┌──────────────────▼─────────────────────────▼──────────────────┐  │
+│  │              SERVIÇOS DE APOIO                                 │  │
+│  ├────────────────────────────────────────────────────────────────┤  │
+│  │                                                                  │  │
+│  │  📊 ConversationService    🔍 SmartSchedulingService           │  │
+│  │  - Gerencia sessões         - Consulta horários                │  │
+│  │  - Histórico de msgs        - Google Calendar                  │  │
+│  │  - Extração de nomes        - Valida médicos                   │  │
+│  │                                                                  │  │
+│  │  📚 RAGService              🔗 HandoffService                   │  │
+│  │  - Dados da clínica         - Gera links WhatsApp              │  │
+│  │  - Médicos, exames          - Mensagens formatadas             │  │
+│  │  - Especialidades           - Transferência secretária         │  │
+│  │                                                                  │  │
+│  │  📈 TokenMonitor            📅 GoogleCalendarService            │  │
+│  │  - Monitora tokens          - Disponibilidade real             │  │
+│  │  - Modo econômico           - Horários livres                  │  │
+│  │  - Alertas de uso           - Validação de datas               │  │
+│  │                                                                  │  │
+│  └──────────────────────────────────────────────────────────────────┘  │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘
+
+           ┌──────────────────────────┬──────────────────────────┐
+           │                          │                          │
+           ▼                          ▼                          ▼
+    ┌─────────────┐          ┌─────────────┐          ┌─────────────┐
+    │ 💾 DATABASE │          │ 💨 CACHE    │          │ 🔮 GEMINI AI│
+    │   SQLite3   │          │ Django Mem  │          │  Google API │
+    ├─────────────┤          ├─────────────┤          ├─────────────┤
+    │ - Sessions  │          │ - Sessions  │          │ - Análise   │
+    │ - Messages  │          │ - Clinic    │          │ - Resposta  │
+    │ - Clinic    │          │   Data      │          │ - Entidades │
+    │   Data      │          │ - Tokens    │          │             │
+    └─────────────┘          └─────────────┘          └─────────────┘
+
+                    ┌────────────────────────────┐
+                    │  📅 GOOGLE CALENDAR API    │
+                    │  - Disponibilidade médicos │
+                    │  - Horários livres         │
+                    └────────────────────────────┘
+```
+
+---
+
+## 🔄 Fluxo de Dados Completo
+
+### Sequência Detalhada: Da Mensagem à Resposta
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ ETAPA 1: RECEPÇÃO DA MENSAGEM                                       │
+└─────────────────────────────────────────────────────────────────────┘
+
+📱 Paciente (WhatsApp)
+   │
+   │ Envia: "Olá, gostaria de agendar uma consulta"
+   │
+   ▼
+🌐 WhatsApp Business API
+   │
+   │ POST https://seu-dominio.com/webhook/
+   │ {
+   │   "from": "5573988221003",
+   │   "text": "Olá, gostaria de agendar uma consulta",
+   │   "timestamp": "2024-10-09T14:30:00Z"
+   │ }
+   │
+   ▼
+📨 Django: api_gateway/views.py
+   │
+   │ def whatsapp_webhook(request):
+   │     ├─ Valida verificação (GET)
+   │     ├─ Processa mensagem (POST)
+   │     └─ Chama process_message()
+   │
+   ▼
+
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ ETAPA 2: PROCESSAMENTO INICIAL                                      │
+└─────────────────────────────────────────────────────────────────────┘
+
+📨 views.process_message(phone, message)
+   │
+   │ 1. Extrai dados do webhook
+   │    ├─ phone_number: "5573988221003"
+   │    ├─ message_text: "Olá, gostaria de agendar..."
+   │    └─ timestamp: "2024-10-09T14:30:00Z"
+   │
+   │ 2. Chama GeminiChatbotService
+   │
+   ▼
+🤖 gemini_chatbot_service.process_message()
+   │
+   │ Log: 🔍 Processando mensagem de 5573988221003
+   │
+   ▼
+
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ ETAPA 3: ORQUESTRAÇÃO (GeminiChatbotService)                        │
+└─────────────────────────────────────────────────────────────────────┘
+
+🤖 GeminiChatbotService.process_message()
+   │
+   ├─ PASSO 1: Obter/Criar Sessão
+   │  │
+   │  ├─ session = _get_or_create_session(phone_number)
+   │  │  │
+   │  │  ├─ Busca em cache: gemini_session_5573988221003
+   │  │  │
+   │  │  ├─ Se não existe:
+   │  │  │  └─ Cria nova sessão:
+   │  │  │     {
+   │  │  │       'phone_number': '5573988221003',
+   │  │  │       'current_state': 'idle',
+   │  │  │       'patient_name': None,
+   │  │  │       'selected_doctor': None,
+   │  │  │       'preferred_date': None,
+   │  │  │       'preferred_time': None
+   │  │  │     }
+   │  │  │
+   │  │  └─ Salva em cache (15 min)
+   │  │
+   │  └─ Log: ✅ Sessão obtida - Estado: idle
+   │
+   ├─ PASSO 2: Obter Dados da Clínica (Otimizado)
+   │  │
+   │  ├─ clinic_data = _get_clinic_data_optimized()
+   │  │  │
+   │  │  ├─ Verifica cache: gemini_clinic_data
+   │  │  │
+   │  │  ├─ Se cache vazio:
+   │  │  │  └─ RAGService.get_all_clinic_data()
+   │  │  │     ├─ Consulta banco de dados
+   │  │  │     ├─ Retorna:
+   │  │  │     │  {
+   │  │  │     │    'clinica_info': {...},
+   │  │  │     │    'medicos': [...],
+   │  │  │     │    'especialidades': [...],
+   │  │  │     │    'convenios': [...],
+   │  │  │     │    'exames': [...]
+   │  │  │     │  }
+   │  │  │     └─ Salva em cache (15 min normal, dinâmico)
+   │  │  │
+   │  │  └─ Se cache existe: retorna do cache
+   │  │
+   │  └─ Log: 📋 Dados da clínica obtidos (cache: sim/não)
+   │
+   ├─ PASSO 3: Obter Histórico da Conversa
+   │  │
+   │  ├─ conversation_history = _get_conversation_history(phone_number, limit=10)
+   │  │  │
+   │  │  ├─ conversation_service.get_conversation_history()
+   │  │  │  │
+   │  │  │  ├─ Consulta banco:
+   │  │  │  │  ConversationMessage.objects.filter(
+   │  │  │  │    session__phone_number=phone_number
+   │  │  │  │  ).order_by('-timestamp')[:5]
+   │  │  │  │
+   │  │  │  └─ Retorna últimas 10 mensagens
+   │  │  │
+   │  │  └─ Retorna: [
+   │  │       {'content': '...', 'message_type': 'user', ...},
+   │  │       {'content': '...', 'message_type': 'bot', ...}
+   │  │     ]
+   │  │
+   │  └─ Log: 📜 Histórico obtido: 0 mensagens (primeira conversa)
+   │
+   ├─ PASSO 4: Verificar se é Solicitação de Horários
+   │  │
+   │  ├─ is_scheduling = _is_scheduling_request(message)
+   │  │  │
+   │  │  ├─ Verifica palavras-chave:
+   │  │  │  - horário, agendar, marcar, consulta
+   │  │  │  - disponível, quando, que horas
+   │  │  │
+   │  │  └─ Retorna: True (contém "agendar")
+   │  │
+   │  └─ Log: 🔍 Solicitação de agendamento detectada
+   │
+   ├─ PASSO 5: Análise com Gemini AI
+   │  │
+   │  ├─ analysis_result = _analyze_message_with_gemini(
+   │  │      message, session, history, clinic_data
+   │  │    )
+   │  │  │
+   │  │  ├─ Construir prompt de análise:
+   │  │  │  │
+   │  │  │  └─ prompt = """
+   │  │  │      Você é assistente da Clínica PneumoSono.
+   │  │  │      
+   │  │  │      MENSAGEM: "Olá, gostaria de agendar uma consulta"
+   │  │  │      ESTADO: idle
+   │  │  │      HISTÓRICO: (vazio)
+   │  │  │      
+   │  │  │      ANALISE:
+   │  │  │      - Qual a intenção?
+   │  │  │      - Próximo estado?
+   │  │  │      - Entidades extraídas?
+   │  │  │      
+   │  │  │      Responda em JSON.
+   │  │  │      """
+   │  │  │
+   │  │  ├─ Enviar para Gemini:
+   │  │  │  │
+   │  │  │  ├─ model.generate_content(
+   │  │  │  │    prompt,
+   │  │  │  │    generation_config={
+   │  │  │  │      "temperature": 0.1,
+   │  │  │  │      "max_output_tokens": 300
+   │  │  │  │    }
+   │  │  │  │  )
+   │  │  │  │
+   │  │  │  └─ Resposta Gemini:
+   │  │  │      {
+   │  │  │        "intent": "agendar_consulta",
+   │  │  │        "next_state": "collecting_patient_info",
+   │  │  │        "entities": {},
+   │  │  │        "confidence": 0.95
+   │  │  │      }
+   │  │  │
+   │  │  ├─ token_monitor.log_token_usage("ANÁLISE", ...)
+   │  │  │  │
+   │  │  │  └─ Log: 📊 TOKENS - ANÁLISE: 
+   │  │  │           Input=1,245, Output=156, Total=1,401
+   │  │  │
+   │  │  └─ Retorna análise parseada
+   │  │
+   │  └─ Log: 🔍 Intenção: agendar_consulta (0.95)
+   │
+   ├─ PASSO 6: Gerar Resposta com Gemini
+   │  │
+   │  ├─ response_result = _generate_response_with_gemini(
+   │  │      message, analysis_result, session, history, clinic_data
+   │  │    )
+   │  │  │
+   │  │  ├─ Construir prompt de resposta:
+   │  │  │  │
+   │  │  │  └─ prompt = """
+   │  │  │      INTENÇÃO: agendar_consulta
+   │  │  │      PRÓXIMO ESTADO: collecting_patient_info
+   │  │  │      
+   │  │  │      Gere uma resposta cordial solicitando 
+   │  │  │      o nome completo do paciente.
+   │  │  │      """
+   │  │  │
+   │  │  ├─ Enviar para Gemini:
+   │  │  │  │
+   │  │  │  └─ Resposta: "Olá! 😊 Fico feliz em ajudar 
+   │  │  │                 com seu agendamento. Para 
+   │  │  │                 começar, qual é o seu nome 
+   │  │  │                 completo?"
+   │  │  │
+   │  │  ├─ token_monitor.log_token_usage("RESPOSTA", ...)
+   │  │  │  │
+   │  │  │  └─ Log: 📊 TOKENS - RESPOSTA:
+   │  │  │           Input=2,134, Output=287, Total=2,421
+   │  │  │
+   │  │  └─ Retorna resposta formatada
+   │  │
+   │  └─ Log: 💬 Resposta gerada (287 tokens)
+   │
+   ├─ PASSO 7: Verificar Confirmação de Agendamento
+   │  │
+   │  ├─ if analysis_result['intent'] == 'confirmar_agendamento':
+   │  │    └─ (Neste caso: não, é 'agendar_consulta')
+   │  │
+   │  └─ Pula validação de handoff
+   │
+   ├─ PASSO 8: Atualizar Sessão
+   │  │
+   │  ├─ _update_session(phone_number, session, 
+   │  │                  analysis_result, response_result)
+   │  │  │
+   │  │  ├─ Atualiza estado:
+   │  │  │  session['current_state'] = 'collecting_patient_info'
+   │  │  │  session['last_activity'] = now()
+   │  │  │
+   │  │  ├─ Extrai entidades (neste caso: nenhuma)
+   │  │  │
+   │  │  ├─ Salva em cache
+   │  │  │
+   │  │  └─ Sincroniza com banco:
+   │  │     _sync_session_to_database(phone_number, session)
+   │  │     │
+   │  │     ├─ ConversationSession.objects.update_or_create(
+   │  │     │    phone_number=phone_number,
+   │  │     │    defaults={...}
+   │  │     │  )
+   │  │     │
+   │  │     └─ Log: 💾 Sessão sincronizada - ID: 1
+   │  │
+   │  └─ Log: ✅ Sessão atualizada - Estado: collecting_patient_info
+   │
+   ├─ PASSO 9: Salvar Mensagens no Banco
+   │  │
+   │  ├─ _save_conversation_messages(
+   │  │      phone_number, message, response, analysis
+   │  │    )
+   │  │  │
+   │  │  ├─ Salvar mensagem do usuário:
+   │  │  │  │
+   │  │  │  ├─ ConversationMessage.objects.create(
+   │  │  │  │    session=session,
+   │  │  │  │    message_type='user',
+   │  │  │  │    content="Olá, gostaria de agendar...",
+   │  │  │  │    intent='agendar_consulta',
+   │  │  │  │    confidence=0.95,
+   │  │  │  │    entities={}
+   │  │  │  │  )
+   │  │  │  │
+   │  │  │  └─ Log: 💾 Mensagem usuário salva - ID: 1
+   │  │  │
+   │  │  └─ Salvar resposta do bot:
+   │  │     │
+   │  │     ├─ ConversationMessage.objects.create(
+   │  │     │    session=session,
+   │  │     │    message_type='bot',
+   │  │     │    content="Olá! 😊 Fico feliz...",
+   │  │     │    intent='bot_response',
+   │  │     │    entities={}
+   │  │     │  )
+   │  │     │
+   │  │     └─ Log: 💾 Mensagem bot salva - ID: 2
+   │  │
+   │  └─ Log: 💾 Conversa persistida no banco
+   │
+   └─ PASSO 10: Retornar Resultado
+      │
+      └─ return {
+           'response': "Olá! 😊 Fico feliz em ajudar...",
+           'intent': 'agendar_consulta',
+           'confidence': 0.95,
+           'state': 'collecting_patient_info',
+           'agent': 'gemini'
+         }
+
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ ETAPA 4: ENVIO DA RESPOSTA                                          │
+└─────────────────────────────────────────────────────────────────────┘
+
+📨 views.process_message()
+   │
+   ├─ Recebe resultado do GeminiChatbotService
+   │
+   ├─ whatsapp_service.send_message(
+   │    phone_number="5573988221003",
+   │    message="Olá! 😊 Fico feliz em ajudar..."
+   │  )
+   │  │
+   │  ├─ POST https://graph.facebook.com/v17.0/.../messages
+   │  │  {
+   │  │    "messaging_product": "whatsapp",
+   │  │    "to": "5573988221003",
+   │  │    "text": {
+   │  │      "body": "Olá! 😊 Fico feliz em ajudar..."
+   │  │    }
+   │  │  }
+   │  │
+   │  └─ Log: ✅ Mensagem enviada para WhatsApp
+   │
+   ├─ return JsonResponse({'success': True})
+   │
+   └─ Log: 🎯 Processamento completo - 2.3s
+```
+
+---
+
+## 🎬 Fluxo de Agendamento Visual (Exemplo Completo)
+
+### Conversa Passo a Passo com Estados e Banco de Dados
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ MENSAGEM 1: SAUDAÇÃO E SOLICITAÇÃO                                  │
+└─────────────────────────────────────────────────────────────────────┘
+
+👤 PACIENTE: "Olá, gostaria de agendar uma consulta"
+
+┌──────────────────────────────────────┐
+│ PROCESSAMENTO                         │
+├──────────────────────────────────────┤
+│ Intent: agendar_consulta             │
+│ Confidence: 0.95                     │
+│ Estado Atual: idle                   │
+│ Próximo Estado: collecting_patient_info│
+│ Entidades: {}                        │
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│ BANCO DE DADOS                        │
+├──────────────────────────────────────┤
+│ ConversationSession #1:              │
+│ ├─ phone: 5573988221003              │
+│ ├─ state: collecting_patient_info    │
+│ ├─ patient_name: null                │
+│ ├─ selected_doctor: null             │
+│ ├─ preferred_date: null              │
+│ └─ preferred_time: null              │
+│                                      │
+│ ConversationMessage #1:              │
+│ ├─ type: user                        │
+│ ├─ content: "Olá, gostaria..."       │
+│ ├─ intent: agendar_consulta          │
+│ └─ entities: {}                      │
+│                                      │
+│ ConversationMessage #2:              │
+│ ├─ type: bot                         │
+│ └─ content: "Olá! 😊 Fico feliz..."  │
+└──────────────────────────────────────┘
+
+🤖 BOT: "Olá! 😊 Fico feliz em ajudar com seu agendamento.
+        Para começar, qual é o seu nome completo?"
+
+═══════════════════════════════════════════════════════════════════════
+
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ MENSAGEM 2: FORNECIMENTO DO NOME                                    │
+└─────────────────────────────────────────────────────────────────────┘
+
+👤 PACIENTE: "Meu nome é João Silva Santos"
+
+┌──────────────────────────────────────┐
+│ PROCESSAMENTO                         │
+├──────────────────────────────────────┤
+│ Intent: fornecer_nome                │
+│ Confidence: 0.98                     │
+│ Estado Atual: collecting_patient_info│
+│ Próximo Estado: confirming_name      │
+│ Entidades: {                         │
+│   nome_paciente: "João Silva Santos" │
+│ }                                    │
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│ EXTRAÇÃO DE ENTIDADES (Gemini)       │
+├──────────────────────────────────────┤
+│ Regex Patterns aplicados:           │
+│ ✓ "meu nome é ([A-Z][a-z]+ ...)"    │
+│                                      │
+│ Gemini Analysis:                     │
+│ {                                    │
+│   "nome_paciente": "João Silva Santos"│
+│ }                                    │
+│                                      │
+│ Validação:                           │
+│ ✓ Nome tem >= 2 palavras            │
+│ ✓ Formato válido                    │
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│ BANCO DE DADOS (Atualizado)          │
+├──────────────────────────────────────┤
+│ ConversationSession #1:              │
+│ ├─ state: confirming_name            │
+│ ├─ pending_name: "João Silva Santos" │← Aguardando confirmação
+│ ├─ patient_name: null                │
+│ ├─ name_confirmed: false             │
+│ └─ ...                               │
+│                                      │
+│ ConversationMessage #3:              │
+│ ├─ type: user                        │
+│ ├─ content: "Meu nome é João..."     │
+│ ├─ entities: {                       │
+│ │    nome_paciente: "João Silva..."  │
+│ │  }                                 │
+└──────────────────────────────────────┘
+
+🤖 BOT: "Prazer em conhecê-lo! Só para confirmar, seu nome é 
+        João Silva Santos? (Sim/Não)"
+
+═══════════════════════════════════════════════════════════════════════
+
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ MENSAGEM 3: CONFIRMAÇÃO DO NOME                                     │
+└─────────────────────────────────────────────────────────────────────┘
+
+👤 PACIENTE: "Sim"
+
+┌──────────────────────────────────────┐
+│ PROCESSAMENTO                         │
+├──────────────────────────────────────┤
+│ Intent: confirmar                    │
+│ Confidence: 1.0                      │
+│ Estado Atual: confirming_name        │
+│ Próximo Estado: selecting_doctor     │
+│ Entidades: {}                        │
+│                                      │
+│ Lógica de Confirmação:               │
+│ ├─ Palavras detectadas: ["sim"]     │
+│ ├─ pending_name existe: ✓            │
+│ └─ Ação: Confirmar nome              │
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│ BANCO DE DADOS (Atualizado)          │
+├──────────────────────────────────────┤
+│ ConversationSession #1:              │
+│ ├─ state: selecting_doctor           │
+│ ├─ patient_name: "João Silva Santos" │← CONFIRMADO!
+│ ├─ pending_name: null                │← Limpo
+│ ├─ name_confirmed: true              │← Flag ativada
+│ └─ ...                               │
+└──────────────────────────────────────┘
+
+🤖 BOT: "Perfeito, João Silva Santos! 👏
+        
+        Agora, com qual médico você gostaria de agendar?
+        
+        Nossos médicos:
+        👨‍⚕️ Dr. Gustavo - Medicina do Sono, Pneumologia
+        👨‍⚕️ Dr. Gleyton Porto - Endocrinologia"
+
+═══════════════════════════════════════════════════════════════════════
+
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ MENSAGEM 4: SELEÇÃO DO MÉDICO                                       │
+└─────────────────────────────────────────────────────────────────────┘
+
+👤 PACIENTE: "Dr. Gustavo"
+
+┌──────────────────────────────────────┐
+│ PROCESSAMENTO                         │
+├──────────────────────────────────────┤
+│ Intent: selecionar_medico            │
+│ Confidence: 0.97                     │
+│ Estado Atual: selecting_doctor       │
+│ Próximo Estado: choosing_schedule    │
+│ Entidades: {                         │
+│   medico: "Dr. Gustavo"              │
+│ }                                    │
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│ VALIDAÇÃO DE MÉDICO                  │
+├──────────────────────────────────────┤
+│ SmartSchedulingService:              │
+│ ├─ _validate_doctor("Dr. Gustavo")   │
+│ │  │                                 │
+│ │  ├─ Query: Medico.objects.filter( │
+│ │  │   nome__icontains="gustavo"    │
+│ │  │ )                               │
+│ │  │                                 │
+│ │  └─ Resultado: ✓ Médico encontrado│
+│ │     {                              │
+│ │       id: 1,                       │
+│ │       nome: "Dr. Gustavo",         │
+│ │       especialidades: ["Medicina   │
+│ │         do Sono", "Pneumologia"],  │
+│ │       preco_particular: 150.00     │
+│ │     }                              │
+│ │                                    │
+│ └─ Buscar horários disponíveis:      │
+│    GoogleCalendarService.get_doctor_ │
+│      availability("Dr. Gustavo", 7)  │
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│ CONSULTA GOOGLE CALENDAR              │
+├──────────────────────────────────────┤
+│ API Call:                            │
+│ calendar.events().list(              │
+│   calendarId='primary',              │
+│   timeMin='2024-10-09T00:00:00Z',    │
+│   timeMax='2024-10-16T23:59:59Z',    │
+│   q='Dr. Gustavo'                    │
+│ )                                    │
+│                                      │
+│ Resultado:                           │
+│ {                                    │
+│   "days": [                          │
+│     {                                │
+│       "date": "14/10/2024",          │
+│       "weekday": "Segunda-feira",    │
+│       "available_times": [           │
+│         "08:00", "09:00", "10:00",   │
+│         "14:00", "15:00", "16:00"    │
+│       ]                              │
+│     },                               │
+│     {                                │
+│       "date": "16/10/2024",          │
+│       "weekday": "Quarta-feira",     │
+│       "available_times": [           │
+│         "08:00", "09:00", "14:00"    │
+│       ]                              │
+│     }                                │
+│   ]                                  │
+│ }                                    │
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│ BANCO DE DADOS (Atualizado)          │
+├──────────────────────────────────────┤
+│ ConversationSession #1:              │
+│ ├─ state: choosing_schedule          │
+│ ├─ patient_name: "João Silva Santos" │
+│ ├─ selected_doctor: "Dr. Gustavo"    │← ATUALIZADO!
+│ └─ ...                               │
+└──────────────────────────────────────┘
+
+🤖 BOT: "Excelente escolha! 👨‍⚕️
+        
+        Dr. Gustavo
+        🩺 Medicina do Sono, Pneumologia
+        💰 Consulta particular: R$ 150,00
+        
+        📅 Horários disponíveis:
+        
+        Segunda-feira (14/10/2024):
+        ✅ 08:00, 09:00, 10:00, 14:00, 15:00, 16:00
+        
+        Quarta-feira (16/10/2024):
+        ✅ 08:00, 09:00, 14:00
+        
+        Qual data e horário seria melhor para você?"
+
+═══════════════════════════════════════════════════════════════════════
+
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ MENSAGEM 5: ESCOLHA DE DATA E HORÁRIO                               │
+└─────────────────────────────────────────────────────────────────────┘
+
+👤 PACIENTE: "Segunda-feira às 14h"
+
+┌──────────────────────────────────────┐
+│ PROCESSAMENTO                         │
+├──────────────────────────────────────┤
+│ Intent: escolher_horario             │
+│ Confidence: 0.96                     │
+│ Estado Atual: choosing_schedule      │
+│ Próximo Estado: confirming           │
+│ Entidades: {                         │
+│   data: "segunda-feira",             │
+│   horario: "14:00"                   │
+│ }                                    │
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│ NORMALIZAÇÃO DE DATA                 │
+├──────────────────────────────────────┤
+│ Input: "segunda-feira"               │
+│                                      │
+│ _normalize_date_for_database():      │
+│ ├─ Detecta: dia da semana            │
+│ ├─ Hoje: 09/10/2024 (Quarta)        │
+│ ├─ Próxima segunda: 14/10/2024       │
+│ └─ Retorna: date(2024, 10, 14)       │
+│                                      │
+│ Input: "14h"                         │
+│                                      │
+│ _parse_time():                       │
+│ ├─ Detecta: "(\d{1,2})h"             │
+│ ├─ Extrai: hora=14                   │
+│ └─ Retorna: "14:00"                  │
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│ BANCO DE DADOS (Atualizado)          │
+├──────────────────────────────────────┤
+│ ConversationSession #1:              │
+│ ├─ state: confirming                 │
+│ ├─ patient_name: "João Silva Santos" │
+│ ├─ selected_doctor: "Dr. Gustavo"    │
+│ ├─ preferred_date: 2024-10-14        │← ATUALIZADO!
+│ ├─ preferred_time: 14:00:00          │← ATUALIZADO!
+│ └─ ...                               │
+└──────────────────────────────────────┘
+
+🤖 BOT: "Perfeito! 📋
+        
+        Vamos confirmar os dados do seu pré-agendamento:
+        
+        👤 Paciente: João Silva Santos
+        👨‍⚕️ Médico: Dr. Gustavo
+        📅 Data: Segunda-feira, 14/10/2024
+        🕐 Horário: 14:00
+        
+        Está tudo correto? (Sim/Não)"
+
+═══════════════════════════════════════════════════════════════════════
+
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ MENSAGEM 6: CONFIRMAÇÃO FINAL E HANDOFF                             │
+└─────────────────────────────────────────────────────────────────────┘
+
+👤 PACIENTE: "Sim, está correto"
+
+┌──────────────────────────────────────┐
+│ PROCESSAMENTO                         │
+├──────────────────────────────────────┤
+│ Intent: confirmar_agendamento        │← GATILHO!
+│ Confidence: 0.99                     │
+│ Estado Atual: confirming             │
+│ Próximo Estado: confirming           │
+│ Entidades: {}                        │
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│ VALIDAÇÃO DE INFORMAÇÕES              │
+├──────────────────────────────────────┤
+│ _validate_appointment_info():        │
+│                                      │
+│ Verificando campos obrigatórios:     │
+│ ✓ Nome: "João Silva Santos"         │
+│ ✓ Médico: "Dr. Gustavo"              │
+│ ✓ Data: 2024-10-14                   │
+│ ✓ Horário: 14:00                     │
+│                                      │
+│ Resultado:                           │
+│ {                                    │
+│   is_complete: true,                 │
+│   missing_info: []                   │
+│ }                                    │
+│                                      │
+│ ✅ TODAS INFORMAÇÕES PRESENTES!      │
+│ Prosseguir com handoff...            │
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│ GERAÇÃO DE HANDOFF                   │
+├──────────────────────────────────────┤
+│ handoff_service.generate_appointment_│
+│   handoff_link():                    │
+│                                      │
+│ 1. Coletar informações:              │
+│    ├─ patient: "João Silva Santos"   │
+│    ├─ doctor: "Dr. Gustavo"          │
+│    ├─ date: "14/10/2024"             │
+│    └─ time: "14:00"                  │
+│                                      │
+│ 2. Criar mensagem formatada:         │
+│    base_message = """                │
+│    Olá, gostaria de confirmar meu    │
+│    pré-agendamento:                  │
+│                                      │
+│    👤 Paciente: João Silva Santos    │
+│    👨‍⚕️ Médico: Dr. Gustavo          │
+│    📅 Data: 14/10/2024               │
+│    🕐 Horário: 14:00                 │
+│    """                               │
+│                                      │
+│ 3. URL encode:                       │
+│    encoded = urllib.parse.quote(     │
+│      base_message                    │
+│    )                                 │
+│                                      │
+│ 4. Gerar link WhatsApp:              │
+│    link = f"https://wa.me/           │
+│      5573988221003?text={encoded}"   │
+│                                      │
+│ 5. Resultado:                        │
+│    "https://wa.me/5573988221003?     │
+│     text=Ol%C3%A1%2C%20gostaria%..." │
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│ BANCO DE DADOS (Final)               │
+├──────────────────────────────────────┤
+│ ConversationSession #1:              │
+│ ├─ state: confirming                 │
+│ ├─ patient_name: "João Silva Santos" │
+│ ├─ selected_doctor: "Dr. Gustavo"    │
+│ ├─ preferred_date: 2024-10-14        │
+│ ├─ preferred_time: 14:00:00          │
+│ ├─ created_at: 2024-10-09 14:30      │
+│ ├─ updated_at: 2024-10-09 14:35      │
+│ └─ last_activity: 2024-10-09 14:35   │
+│                                      │
+│ Total Mensagens: 12                  │
+│ (6 do usuário + 6 do bot)            │
+└──────────────────────────────────────┘
+
+🤖 BOT: "✅ Perfeito! Vamos confirmar seu pré-agendamento:
+
+        📋 RESUMO:
+        👤 Paciente: João Silva Santos
+        👨‍⚕️ Médico: Dr. Gustavo
+        📅 Data: Segunda-feira, 14/10/2024
+        🕐 Horário: 14:00
+        
+        🔄 Para CONFIRMAR definitivamente:
+        👩‍💼 Nossa secretária validará a disponibilidade e 
+        confirmará seu agendamento.
+        
+        📞 Clique no link abaixo para falar diretamente com 
+        nossa equipe:
+        https://wa.me/5573988221003?text=Ol%C3%A1%2C%20gostaria..."
+
+═══════════════════════════════════════════════════════════════════════
+
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ RESULTADO FINAL: PACIENTE CLICA NO LINK                             │
+└─────────────────────────────────────────────────────────────────────┘
+
+📱 Paciente clica no link de handoff
+
+   ↓
+
+🌐 WhatsApp abre conversa com secretária
+
+   ↓
+
+👩‍💼 Secretária recebe mensagem pré-formatada:
+
+"Olá, gostaria de confirmar meu pré-agendamento:
+
+👤 Paciente: João Silva Santos
+👨‍⚕️ Médico: Dr. Gustavo
+📅 Data: 14/10/2024
+🕐 Horário: 14:00"
+
+   ↓
+
+✅ Secretária valida disponibilidade no sistema
+
+   ↓
+
+✅ Secretária confirma agendamento com paciente
+
+   ↓
+
+📅 Agendamento inserido no Google Calendar
+
+═══════════════════════════════════════════════════════════════════════
+```
+
+---
+
+## 📊 Persistência e Sincronização
+
+### Diagrama de Sincronização Cache + Banco de Dados
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│ ESTRATÉGIA DE PERSISTÊNCIA DUAL                                      │
+└──────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────┐         ┌─────────────────────────┐
+│   💨 CACHE (Django)     │◄───────►│   💾 BANCO DE DADOS     │
+│   django.core.cache     │  Sync   │   SQLite3               │
+├─────────────────────────┤         ├─────────────────────────┤
+│                         │         │                         │
+│ Chave: gemini_session_  │         │ ConversationSession:    │
+│        5573988221003    │         │ ├─ id: 1                │
+│                         │         │ ├─ phone: 5573988221003 │
+│ Valor: {                │         │ ├─ patient_name: "João" │
+│   phone: "557398...",   │         │ ├─ selected_doctor: ... │
+│   current_state: "...", │         │ ├─ preferred_date: ...  │
+│   patient_name: "...",  │         │ ├─ preferred_time: ...  │
+│   ...                   │         │ └─ ...                  │
+│ }                       │         │                         │
+│                         │         │ ConversationMessage:    │
+│ Timeout: 15-60 min      │         │ ├─ id: 1-12             │
+│ (Baseado em uso tokens) │         │ ├─ session_id: 1        │
+│                         │         │ ├─ message_type: ...    │
+│ Chave: gemini_clinic_   │         │ ├─ content: ...         │
+│        data             │         │ └─ ...                  │
+│                         │         │                         │
+│ Valor: {                │         │ Persistente             │
+│   clinica_info: {...},  │         │ Histórico completo      │
+│   medicos: [...],       │         │ Auditoria               │
+│   ...                   │         │                         │
+│ }                       │         │                         │
+│                         │         │                         │
+│ Timeout: 15-60 min      │         │                         │
+│ (Baseado em uso tokens) │         │                         │
+│                         │         │                         │
+│ Chave: gemini_tokens_   │         │                         │
+│        2024-10-09       │         │                         │
+│                         │         │                         │
+│ Valor: 125678           │         │                         │
+│ (Total tokens usado)    │         │                         │
+│                         │         │                         │
+│ Timeout: 24h            │         │                         │
+└─────────────────────────┘         └─────────────────────────┘
+
+       ⬆️                                    ⬆️
+       │                                     │
+       │                                     │
+┌──────┴──────────┐              ┌──────────┴──────┐
+│  LEITURA RÁPIDA │              │ PERSISTÊNCIA     │
+│  - Sessions     │              │ - Histórico      │
+│  - Clinic Data  │              │ - Auditoria      │
+│  - Tokens       │              │ - Backup         │
+└─────────────────┘              └──────────────────┘
+
+
+FLUXO DE ATUALIZAÇÃO:
+═══════════════════════════════════════════════════════════════════════
+
+1️⃣ Nova Mensagem Chega
+   ↓
+2️⃣ Buscar Sessão:
+   ├─ Primeiro: Tenta cache ← RÁPIDO (ms)
+   └─ Se não existe: Busca banco → Cache ← LENTO (50ms)
+   ↓
+3️⃣ Processar com Gemini
+   ↓
+4️⃣ Atualizar Sessão:
+   ├─ Atualiza cache ← INSTANTÂNEO
+   └─ Sincroniza banco ← ASSÍNCRONO
+   ↓
+5️⃣ Salvar Mensagens:
+   └─ Grava banco diretamente ← PERSISTENTE
+
+BENEFÍCIOS:
+═══════════════════════════════════════════════════════════════════════
+✅ Performance: Cache primeiro (< 1ms)
+✅ Persistência: Banco sempre sincronizado
+✅ Recuperação: Se cache limpo, reconstrói do banco
+✅ Escalabilidade: Cache compartilhado (Redis futuro)
+✅ Auditoria: Histórico completo no banco
+```
+
+---
+
+## 📈 Monitoramento e Logs
+
+### Sistema de Logs Estruturados
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│ EXEMPLO DE LOGS EM PRODUÇÃO (Processamento de 1 Mensagem)           │
+└──────────────────────────────────────────────────────────────────────┘
+
+[2024-10-09 14:30:15] INFO 📱 Webhook recebido de 5573988221003
+[2024-10-09 14:30:15] DEBUG 🔍 Mensagem: "Olá, gostaria de agendar uma consulta"
+[2024-10-09 14:30:15] INFO 🤖 Iniciando processamento com GeminiChatbotService
+
+[2024-10-09 14:30:15] INFO ✅ Sessão obtida - Estado: idle, Nome: None
+[2024-10-09 14:30:15] DEBUG 📋 Dados da clínica obtidos (cache: não)
+[2024-10-09 14:30:15] DEBUG 📜 Histórico obtido: 0 mensagens
+
+[2024-10-09 14:30:16] INFO 🔍 Análise de intenção iniciada
+[2024-10-09 14:30:16] INFO 📊 TOKENS - ANÁLISE: Input=1,245, Output=156, Total=1,401
+[2024-10-09 14:30:16] INFO 📊 SESSÃO 5573988221003: Total=1,401, Acumulado=1,401
+[2024-10-09 14:30:16] INFO 📊 DIA: Total=125,678, Limite=1,500,000, Uso=8.4%
+[2024-10-09 14:30:16] INFO 🔍 Intenção detectada: agendar_consulta (0.95)
+
+[2024-10-09 14:30:17] INFO 💬 Geração de resposta iniciada
+[2024-10-09 14:30:18] INFO 📊 TOKENS - RESPOSTA: Input=2,134, Output=287, Total=2,421
+[2024-10-09 14:30:18] INFO 📊 SESSÃO 5573988221003: Total=2,421, Acumulado=3,822
+[2024-10-09 14:30:18] INFO 📊 DIA: Total=128,099, Limite=1,500,000, Uso=8.5%
+
+[2024-10-09 14:30:18] INFO ✅ Sessão atualizada - Estado: collecting_patient_info
+[2024-10-09 14:30:18] INFO 💾 Sessão sincronizada com banco - ID: 1
+[2024-10-09 14:30:18] INFO 💾 Mensagem usuário salva - ID: 1
+[2024-10-09 14:30:18] INFO 💾 Mensagem bot salva - ID: 2
+
+[2024-10-09 14:30:19] INFO ✅ Mensagem enviada para WhatsApp
+[2024-10-09 14:30:19] INFO 🎯 Processamento completo em 3.2s
+
+═══════════════════════════════════════════════════════════════════════
+
+LOGS DE MONITORAMENTO DE TOKENS:
+═══════════════════════════════════════════════════════════════════════
+
+[2024-10-09 08:00:00] INFO 📊 Tokens hoje: 0 / 1,500,000 (0.0%)
+[2024-10-09 12:30:45] INFO 📊 Tokens hoje: 654,321 / 1,500,000 (43.6%)
+[2024-10-09 18:45:12] WARNING ⚠️ AVISO: Uso de tokens em 82.3% do limite diário
+[2024-10-09 21:30:00] ERROR ⚠️ ALERTA: Uso de tokens em 91.5% do limite diário
+[2024-10-09 23:15:30] CRITICAL 🚨 CRÍTICO: Uso de tokens em 96.1%!
+[2024-10-09 23:15:30] WARNING 🔄 Ativando modo econômico
+[2024-10-09 23:15:30] INFO ✅ Modo econômico ativado - tokens preservados
+
+═══════════════════════════════════════════════════════════════════════
+
+LOGS DE ERRO (Exemplos):
+═══════════════════════════════════════════════════════════════════════
+
+[2024-10-09 14:30:20] ERROR ❌ Gemini API error: Rate limit exceeded
+[2024-10-09 14:30:20] INFO 🔄 Tentando novamente em 5s... (tentativa 1/3)
+
+[2024-10-09 14:30:25] ERROR ❌ Erro ao consultar Google Calendar: 503
+[2024-10-09 14:30:25] WARNING ⚠️ Retornando horários do cache
+
+[2024-10-09 14:30:30] ERROR ❌ Banco de dados não acessível
+[2024-10-09 14:30:30] INFO 💾 Sessão mantida apenas em cache
+
+═══════════════════════════════════════════════════════════════════════
+```
+
+---
+
+## 🔧 Configuração e Deploy
+
+### Arquivo .env (Template)
+
+```bash
+# ═══════════════════════════════════════════════════════════════════
+# IMPORTANTE: Este arquivo contém informações sensíveis
+# - NÃO commitar no git
+# - Usar valores diferentes em dev/produção
+# - Rotacionar chaves periodicamente
+# ═══════════════════════════════════════════════════════════════════
+
+# ───────────────────────────────────────────────────────────────────
+# GEMINI AI (Google)
+# ───────────────────────────────────────────────────────────────────
+GEMINI_API_KEY=AIzaSy...  # Obter em https://makersuite.google.com/app/apikey
+GEMINI_MODEL=gemini-2.0-flash
+GEMINI_ENABLED=True
+GEMINI_TOKEN_MONITORING=True
+GEMINI_DAILY_TOKEN_LIMIT=1500000
+
+# ───────────────────────────────────────────────────────────────────
+# WHATSAPP BUSINESS API (Meta)
+# ───────────────────────────────────────────────────────────────────
+WHATSAPP_ACCESS_TOKEN=EAAJZBp...  # Token de acesso do app
+WHATSAPP_PHONE_NUMBER_ID=123456789  # ID do número de telefone
+WHATSAPP_VERIFY_TOKEN=meu_token_secreto_123  # Token personalizado
+WHATSAPP_API_URL=https://graph.facebook.com/v17.0
+
+# ───────────────────────────────────────────────────────────────────
+# GOOGLE CALENDAR API
+# ───────────────────────────────────────────────────────────────────
+GOOGLE_CALENDAR_ENABLED=True
+GOOGLE_SERVICE_ACCOUNT_FILE=service-account-key.json
+CLINIC_CALENDAR_ID=primary
+
+# ───────────────────────────────────────────────────────────────────
+# CLÍNICA (Dados de Negócio)
+# ───────────────────────────────────────────────────────────────────
+CLINIC_NAME=Clínica PneumoSono
+CLINIC_DOMAIN=https://clinica.exemplo.com
+CLINIC_WHATSAPP_NUMBER=5573988221003  # Número da secretária
+
+# ───────────────────────────────────────────────────────────────────
+# DJANGO (Configurações Gerais)
+# ───────────────────────────────────────────────────────────────────
+DEBUG=False  # NUNCA True em produção!
+SECRET_KEY=django-insecure-...  # Gerar com: python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+ALLOWED_HOSTS=localhost,127.0.0.1,seu-dominio.com
+
+# ───────────────────────────────────────────────────────────────────
+# BANCO DE DADOS
+# ───────────────────────────────────────────────────────────────────
+DATABASE_URL=sqlite:///db.sqlite3  # Prod: postgresql://user:pass@host:port/db
+
+# ───────────────────────────────────────────────────────────────────
+# CACHE (Opcional - usar Redis em produção)
+# ───────────────────────────────────────────────────────────────────
+REDIS_URL=redis://localhost:6379/0  # Se usar Redis
+```
+
+### Processo de Deploy Completo
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│ DEPLOY PASSO A PASSO                                                 │
+└──────────────────────────────────────────────────────────────────────┘
+
+ETAPA 1: PREPARAÇÃO DO AMBIENTE
+═══════════════════════════════════════════════════════════════════════
+
+$ git clone https://github.com/seu-usuario/chatbot_ClinicaMedica.git
+$ cd chatbot_ClinicaMedica
+
+$ python -m venv venv
+$ source venv/bin/activate  # Linux/Mac
+$ venv\Scripts\activate     # Windows
+
+$ pip install -r requirements.txt
+
+Dependências instaladas:
+✓ Django==5.0
+✓ djangorestframework==3.14.0
+✓ google-generativeai==0.3.0
+✓ google-auth==2.25.0
+✓ google-api-python-client==2.110.0
+✓ requests==2.31.0
+
+
+ETAPA 2: CONFIGURAÇÃO DE VARIÁVEIS
+═══════════════════════════════════════════════════════════════════════
+
+$ cp .env.example .env
+$ nano .env  # ou seu editor favorito
+
+Configurar:
+✓ GEMINI_API_KEY (obrigatório)
+✓ WHATSAPP_ACCESS_TOKEN (obrigatório)
+✓ WHATSAPP_PHONE_NUMBER_ID (obrigatório)
+✓ WHATSAPP_VERIFY_TOKEN (criar personalizado)
+✓ GOOGLE_SERVICE_ACCOUNT_FILE (se usar Calendar)
+✓ SECRET_KEY (gerar novo)
+
+
+ETAPA 3: SETUP DO BANCO DE DADOS
+═══════════════════════════════════════════════════════════════════════
+
+$ python manage.py migrate
+
+Operações:
+  ✓ Applying contenttypes.0001_initial... OK
+  ✓ Applying auth.0001_initial... OK
+  ✓ Applying admin.0001_initial... OK
+  ✓ Applying rag_agent.0001_initial... OK
+  ✓ Applying rag_agent.0002_clinicainfo_whatsapp... OK
+  ✓ Applying rag_agent.0003_medico_crm... OK
+  ✓ Applying api_gateway.0001_initial... OK
+  ✓ Applying api_gateway.0002_alter_session_state... OK
+  ✓ Applying api_gateway.0003_session_name_confirmed... OK
+
+$ python manage.py createsuperuser
+
+Username: admin
+Email: admin@clinica.com
+Password: ******
+Superuser created successfully.
+
+$ python scripts/criar_dados_pneumosono.py
+
+Dados criados:
+✓ Clínica PneumoSono
+✓ 2 Médicos (Dr. Gustavo, Dr. Gleyton Porto)
+✓ 4 Especialidades
+✓ 3 Convênios
+✓ 2 Exames
+
+
+ETAPA 4: CONFIGURAÇÃO DO GOOGLE CALENDAR (Opcional)
+═══════════════════════════════════════════════════════════════════════
+
+$ python scripts/setup_calendar_dev.py
+
+Configurando Google Calendar:
+✓ Service account autenticada
+✓ Calendar API ativada
+✓ Permissões configuradas
+✓ Teste de conexão: OK
+
+
+ETAPA 5: TESTES DE INTEGRAÇÃO
+═══════════════════════════════════════════════════════════════════════
+
+$ python manage.py runserver
+
+Development server running at: http://127.0.0.1:8000/
+
+Testando endpoints:
+✓ GET /test-gemini-connection/
+  Response: {"status": "success", "model": "gemini-2.0-flash"}
+
+✓ POST /test-chatbot-service/
+  Request: {"phone_number": "5511999999999", "message": "Olá"}
+  Response: {"response": "Olá! Como posso ajudar?", "intent": "saudacao"}
+
+✓ GET /admin/
+  Admin interface: OK
+
+
+ETAPA 6: CONFIGURAÇÃO DO WEBHOOK (WhatsApp)
+═══════════════════════════════════════════════════════════════════════
+
+Meta Developer Console:
+1. Acessar: https://developers.facebook.com/apps
+2. Configurar Webhook:
+   URL: https://seu-dominio.com/webhook/
+   Verify Token: [seu WHATSAPP_VERIFY_TOKEN]
+3. Subscrever eventos:
+   ✓ messages
+   ✓ message_status
+
+Teste:
+$ curl -X POST https://seu-dominio.com/webhook/ \
+  -H "Content-Type: application/json" \
+  -d '{"entry":[{"changes":[{"value":{"messages":[{"from":"5511999999999","text":{"body":"Teste"}}]}}]}]}'
+
+Response: {"status": "ok"}
+
+
+ETAPA 7: DEPLOY EM PRODUÇÃO
+═══════════════════════════════════════════════════════════════════════
+
+Opção A: Heroku
+───────────────
+$ heroku create chatbot-clinica
+$ git push heroku main
+$ heroku config:set GEMINI_API_KEY=...
+$ heroku config:set WHATSAPP_ACCESS_TOKEN=...
+$ heroku run python manage.py migrate
+$ heroku run python scripts/criar_dados_pneumosono.py
+
+Opção B: Railway
+────────────────
+$ railway login
+$ railway init
+$ railway up
+# Configurar variáveis no dashboard
+
+Opção C: VPS (Ubuntu)
+──────────────────────
+$ sudo apt update
+$ sudo apt install python3-pip python3-venv nginx
+$ # ... configurar gunicorn, nginx, etc
+
+
+ETAPA 8: MONITORAMENTO PÓS-DEPLOY
+═══════════════════════════════════════════════════════════════════════
+
+Verificar logs:
+$ tail -f logs/django.log
+$ tail -f logs/gemini.log
+
+Monitorar tokens:
+$ curl https://seu-dominio.com/token-usage-stats/
+
+Testar webhook:
+$ curl https://seu-dominio.com/webhook/?hub.mode=subscribe&hub.verify_token=...
+
+═══════════════════════════════════════════════════════════════════════
+✅ DEPLOY COMPLETO!
+═══════════════════════════════════════════════════════════════════════
+```
+
+---
+
+## 🎯 Métricas e Performance
+
+### Dashboard de Métricas
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│ DASHBOARD DE PERFORMANCE                                             │
+└──────────────────────────────────────────────────────────────────────┘
+
+TEMPO DE RESPOSTA (Médias em ms)
+═══════════════════════════════════════════════════════════════════════
+┌────────────────────────────────┬──────────┬──────────┬──────────────┐
+│ Operação                       │ Mínimo   │ Médio    │ Máximo       │
+├────────────────────────────────┼──────────┼──────────┼──────────────┤
+│ Recepção Webhook               │   5 ms   │  12 ms   │   45 ms      │
+│ Busca Sessão (cache hit)       │   1 ms   │   3 ms   │   10 ms      │
+│ Busca Sessão (cache miss)      │  30 ms   │  50 ms   │  120 ms      │
+│ Análise Intenção (Gemini)      │ 200 ms   │ 450 ms   │  800 ms      │
+│ Geração Resposta (Gemini)      │ 350 ms   │ 750 ms   │ 1500 ms      │
+│ Consulta Google Calendar        │ 400 ms   │ 950 ms   │ 2200 ms      │
+│ Salvar Banco de Dados           │  10 ms   │  25 ms   │   80 ms      │
+│ Envio WhatsApp API              │  80 ms   │ 150 ms   │  300 ms      │
+├────────────────────────────────┼──────────┼──────────┼──────────────┤
+│ TOTAL (por mensagem)            │ 1.2s     │ 2.4s     │ 5.0s         │
+└────────────────────────────────┴──────────┴──────────┴──────────────┘
+
+
+USO DE TOKENS (Últimas 24h)
+═══════════════════════════════════════════════════════════════════════
+Tokens Usados:     654,321  ███████████████░░░░░░  43.6%
+Limite Diário:   1,500,000
+Tokens Restantes:  845,679
+
+Por Operação:
+├─ Análises (300 tokens/msg):     195,000  ██████░░░░░░░░░░░░  29.8%
+├─ Respostas (600 tokens/msg):    390,000  ████████████░░░░░░  59.6%
+└─ Cache hits (economizados):      69,321  ███░░░░░░░░░░░░░░░  10.6%
+
+Modo Econômico: ❌ Desativado (uso < 80%)
+
+
+SESSÕES E MENSAGENS
+═══════════════════════════════════════════════════════════════════════
+┌────────────────────────────────┬──────────────────────────────────┐
+│ Sessões Ativas (últimas 24h)   │ 127                              │
+│ Mensagens Processadas           │ 1,543                            │
+│ Agendamentos Iniciados          │ 89                               │
+│ Agendamentos Completos (Handoff)│ 52                               │
+│ Taxa de Conversão               │ 58.4%                            │
+└────────────────────────────────┴──────────────────────────────────┘
+
+
+INTENÇÕES MAIS COMUNS
+═══════════════════════════════════════════════════════════════════════
+┌────────────────────────┬──────────┬───────────────────────────────┐
+│ Intenção               │ Qtd      │ Gráfico                       │
+├────────────────────────┼──────────┼───────────────────────────────┤
+│ agendar_consulta       │  412     │ ████████████████████░░  53.3% │
+│ buscar_info            │  215     │ ███████████░░░░░░░░░░  27.8% │
+│ buscar_medico          │   98     │ █████░░░░░░░░░░░░░░░░  12.7% │
+│ buscar_horarios        │   47     │ ██░░░░░░░░░░░░░░░░░░░   6.1% │
+└────────────────────────┴──────────┴───────────────────────────────┘
+
+
+SAÚDE DO SISTEMA
+═══════════════════════════════════════════════════════════════════════
+┌────────────────────────┬──────────┬───────────────────────────────┐
+│ Métrica                │ Status   │ Valor                         │
+├────────────────────────┼──────────┼───────────────────────────────┤
+│ Uptime                 │ ✅ OK    │ 99.97% (última semana)        │
+│ Erros (última hora)    │ ✅ OK    │ 2 (0.13%)                     │
+│ Latência Média         │ ✅ OK    │ 2.4s (< 3s)                   │
+│ Uso CPU                │ ✅ OK    │ 34% (< 70%)                   │
+│ Uso Memória            │ ⚠️ WARN  │ 78% (< 90%)                   │
+│ Conexões BD            │ ✅ OK    │ 12/100                        │
+│ Cache Hit Rate         │ ✅ OK    │ 87%                           │
+└────────────────────────┴──────────┴───────────────────────────────┘
+```
+
+---
+
+**📅 Última Atualização:** Outubro 2024  
+**📝 Versão:** 2.0 (Completa e Visual)  
+**👨‍💻 Desenvolvido com:** Django + Gemini AI + Google Calendar + WhatsApp Business API
