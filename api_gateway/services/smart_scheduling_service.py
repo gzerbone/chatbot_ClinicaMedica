@@ -96,8 +96,17 @@ class SmartSchedulingService:
         
         # Extrair horário mencionado
         time_patterns = [
-            r'(\d{1,2})h(\d{2})?',
+            r'(as|às)\s+(\d{1,2})h(\d{2})?',
+            r'(as|às)\s+(\d{1,2})hr(\d{2})?',
+            r'(\d{1,2})horas(\d{2})?',
+            r'(as|às)\s+(\d{1,2})',
+            r'(as|às)\s+(\d{1,2})horas(\d{2})?',
+            r'(as|às)\s+(\d{1,2}):(\d{2})',
+            r'(as|às)\s+(\d{1,2})\s+hr\s+(\d{2})?',
+            r'(as|às)\s+(\d{1,2})\s+horas\s+(\d{2})?',
             r'(\d{1,2}):(\d{2})',
+            r'(\d{1,2})\s+horas\s+(\d{2})?',
+            r'(\d{1,2})hr(\d{2})?',
             r'(\d{1,2})\s+da\s+(manhã|tarde|noite)',
             r'de\s+manhã|da\s+tarde|à\s+noite'
         ]
