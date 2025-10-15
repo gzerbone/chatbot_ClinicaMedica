@@ -247,45 +247,6 @@ class ConversationService:
                     setattr(session, field, value)
                 session.save()
     
-    def check_required_info(self, phone_number: str) -> Dict[str, Any]:
-        """
-        Verifica se as informações essenciais do paciente estão completas
-        
-        Returns:
-            Dict com status das informações e próximos passos
-        """
-        try:
-            session = self.get_or_create_session(phone_number)
-            
-            missing_info = []
-            has_name = bool(session.patient_name and len(session.patient_name.split()) >= 2)
-            has_phone = bool(phone_number and len(phone_number) >= 10)
-            
-            if not has_name:
-                missing_info.append('nome_completo')
-            
-            if not has_phone:
-                missing_info.append('telefone')
-            
-            return {
-                'is_complete': len(missing_info) == 0,
-                'missing_info': missing_info,
-                'has_name': has_name,
-                'has_phone': has_phone,
-                'current_state': session.current_state,
-                'next_action': self._get_next_action(session, missing_info)
-            }
-            
-        except Exception as e:
-            logger.error(f"Erro ao verificar informações: {e}")
-            return {
-                'is_complete': False,
-                'missing_info': ['nome_completo', 'telefone'],
-                'has_name': False,
-                'has_phone': False,
-                'current_state': 'idle',
-                'next_action': 'ask_name'
-            }
     
     def _get_next_action(self, session: ConversationSession, missing_info: List[str]) -> str:
         """
