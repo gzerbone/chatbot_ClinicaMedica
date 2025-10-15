@@ -132,7 +132,6 @@ O sistema detecta automaticamente as seguintes intenções:
 - **buscar_info_clinica**: Informações gerais da clínica
 - **agendar_consulta**: Processo de agendamento
 - **confirmar_agendamento**: Confirmação de agendamentos
-- **cancelar_agendamento**: Cancelamento de consultas
 - **horarios_disponiveis**: Consulta de horários
 - **despedida**: Despedidas e agradecimentos
 - **ajuda**: Solicitações de ajuda

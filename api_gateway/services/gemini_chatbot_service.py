@@ -282,10 +282,9 @@ EXEMPLOS DE EXTRAÇÃO DE ENTIDADES:
 
 1. INTENÇÃO PRINCIPAL (uma das opções abaixo):
    - saudacao: Cumprimentos, oi, olá, bom dia
-   - buscar_info: Perguntas sobre clínica, médicos, exames, preços, endereço
-   - agendar_consulta: Quero agendar, marcar consulta, agendamento
-   - confirmar_agendamento: Confirmar dados, sim, está correto
-   - cancelar_agendamento: Cancelar, desmarcar, não posso mais
+   - buscar_info: Perguntas sobre clínica, médicos, exames, preços, endereço, planos de saúde (convênios)
+   - agendar_consulta: Quero agendar, marcar consulta, agendamento, agendar, consulta, médico, especialidade, data, horário
+   - confirmar_agendamento: Confirmar dados, sim, está correto, confirmar, dados, correto, confirmado
    - buscar_medico: Quais médicos, médico específico, especialidade
    - buscar_exame: Exames disponíveis, procedimentos
    - buscar_horarios: Horários disponíveis, quando atende
@@ -310,7 +309,7 @@ EXEMPLOS DE EXTRAÇÃO DE ENTIDADES:
    - horario: Horário em formato HH:MM ou texto (ex: "14:30", "2h30", "2 da tarde")
    - exame: Nome do exame mencionado (ex: "hemograma", "raio-x", "ultrassom")
 
-IMPORTANTE: Se a mensagem contém informações como nome, médico, data ou horário, EXTRAIA essas informações mesmo que já estejam na sessão anterior. O paciente pode estar corrigindo ou confirmando dados.
+IMPORTANTE: Se a mensagem contém informações como nome do paciente, médico, especialidade, data ou horário, pergunte ao paciente se essas informações estão corretas e, caso estejam, EXTRAIA essas informações mesmo que já estejam na sessão anterior. O paciente pode estar corrigindo ou confirmando dados.
 
 4. CONFIANÇA: Nível de confiança na análise (0.0 a 1.0)
 
@@ -477,10 +476,11 @@ Gere uma resposta apropriada para a intenção "{intent}" considerando o context
             'agendar_consulta': """
             - Guie o paciente através do processo de agendamento passo a passo
             - ETAPA 1: Se não tiver o nome, solicite o nome completo primeiro
-            - ETAPA 2: Se tiver o nome, solicite qual médico/especialidade deseja
-            - ETAPA 3: Se tiver médico, solicite a data desejada
-            - ETAPA 4: Se tiver data, solicite o horário preferido
-            - ETAPA 5: Só confirme quando tiver TODAS as informações (nome, médico, data, horário)
+            - ETAPA 2: Se tiver o nome, solicite qual especialidade deseja
+            - ETAPA 3: Se tiver o nome e especialidade, solicite qual médico especializado nessa especialidade deseja
+            - ETAPA 4: Se tiver médico solicite a data desejada
+            - ETAPA 5: Se tiver data, solicite o horário preferido
+            - ETAPA 6: Só confirme quando tiver TODAS as informações (nome, especialidade, médico, data, horário)
             - Seja claro sobre as etapas necessárias
             - Mantenha o processo organizado e sequencial
             - NÃO pule etapas - colete uma informação por vez
@@ -489,7 +489,8 @@ Gere uma resposta apropriada para a intenção "{intent}" considerando o context
             'confirmar_agendamento': """
             - ANTES de confirmar, verifique se tem TODAS as informações:
               * Nome completo do paciente
-              * Médico/especialidade escolhida
+              * Médico escolhido
+              * Especialidade escolhida
               * Data da consulta
               * Horário da consulta
             - Se FALTAR alguma informação, solicite a informação faltante
@@ -499,7 +500,8 @@ Gere uma resposta apropriada para a intenção "{intent}" considerando o context
             """,
             
             'buscar_medico': """
-            - Apresente os médicos disponíveis com informações completas
+            - Se quiser consulta com um médico específico, pergunte qual especialidade deseja e mude intenção para 'agendar_consulta'
+            - Se perguntar sobre médicos, apresente os médicos disponíveis com informações completas
             - Para cada médico, informe: nome, CRM, especialidades, convênios aceitos e preço particular
             - Se o paciente mencionar uma especialidade específica, filtre os médicos dessa especialidade
             - Se houver mais de um médico, pergunte qual deseja agendar
@@ -525,12 +527,6 @@ Gere uma resposta apropriada para a intenção "{intent}" considerando o context
             - Facilite a escolha do horário
             """,
             
-            'cancelar_agendamento': """
-            - Seja compreensivo e acolhedor
-            - Facilite o processo de cancelamento
-            - Sugira reagendamento se apropriado
-            - Mantenha a porta aberta para futuras consultas
-            """,
             
             'despedida': """
             - Despeça-se cordialmente
@@ -1158,7 +1154,7 @@ EXAMES DISPONÍVEIS:
             'quando', 'que horas', 'que hora',
             'manhã', 'manha', 'tarde', 'noite',
             'segunda', 'terça', 'quarta', 'quinta', 'sexta',
-            'sábado', 'sabado', 'domingo',
+            'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira',
             'amanhã', 'amanha', 'hoje', 'depois'
         ]
         
@@ -1229,8 +1225,7 @@ EXAMES DISPONÍVEIS:
         missing_info = []
         for info_key, info_config in required_info.items():
             has_info = bool(
-                entities.get(info_config['entity_key']) or 
-                session.get(info_config['session_key'])
+                entities.get(info_config['entity_key']) or session.get(info_config['session_key'])
             )
             if not has_info:
                 missing_info.append(info_key)

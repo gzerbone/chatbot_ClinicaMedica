@@ -69,7 +69,6 @@ Analise a mensagem e determine:
    - buscar_info: Perguntas sobre clínica, médicos, exames, preços, endereço
    - agendar_consulta: Quero agendar, marcar consulta, agendamento
    - confirmar_agendamento: Confirmar dados, sim, está correto
-   - cancelar_agendamento: Cancelar, desmarcar, não posso mais
    - buscar_medico: Quais médicos, médico específico, especialidade
    - buscar_exame: Exames disponíveis, procedimentos
    - buscar_horarios: Horários disponíveis, quando atende

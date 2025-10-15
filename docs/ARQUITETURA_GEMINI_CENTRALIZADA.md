@@ -95,7 +95,6 @@ Mensagem do WhatsApp → Gemini Chatbot Service → Análise + Resposta → What
 - **buscar_medico**: Informações sobre médicos
 - **buscar_exame**: Informações sobre exames
 - **buscar_horarios**: Horários disponíveis
-- **cancelar_agendamento**: Cancelamento
 - **despedida**: Encerramento de conversa
 - **duvida**: Quando não entende a mensagem
 

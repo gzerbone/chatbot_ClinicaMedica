@@ -189,7 +189,7 @@ class SmartSchedulingService:
         confirmation_keywords = [
             'sim', 'confirmo', 'confirma', 'está correto', 'está certo',
             'perfeito', 'ótimo', 'ok', 'beleza', 'pode ser',
-            'quero esse horário', 'aceito', 'concordo'
+            'quero esse horário', 'aceito', 'concordo', 'isso está correto','isso','confirmado','correto'
         ]
         
         return any(keyword in message for keyword in confirmation_keywords)
