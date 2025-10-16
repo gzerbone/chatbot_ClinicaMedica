@@ -132,6 +132,16 @@ class ResponseGenerator:
         # Obter especialidades disponíveis
         specialties_list = ', '.join([esp.get('nome', '') for esp in especialidades[:5]]) if especialidades else 'diversas especialidades'
         
+        # Obter médicos disponíveis
+        medicos_list = []
+        if medicos:
+            for medico in medicos:
+                nome = medico.get('nome', '')
+                especialidades_medico = medico.get('especialidades_display', '')
+                medicos_list.append(f"• {nome} ({especialidades_medico})")
+        
+        medicos_text = '\n'.join(medicos_list) if medicos_list else 'Nenhum médico cadastrado'
+        
         # Verificar se temos informações de disponibilidade real
         scheduling_info = analysis_result.get('scheduling_info', {})
         availability_context = ""
@@ -200,6 +210,9 @@ ENTIDADES EXTRAÍDAS AGORA:
 
 ESPECIALIDADES DISPONÍVEIS: {specialties_list}
 
+MÉDICOS DISPONÍVEIS:
+{medicos_text}
+
 INSTRUÇÕES:
 1. Responda de forma natural, educada e profissional
 2. NÃO repita perguntas sobre informações já coletadas (veja acima)
@@ -210,9 +223,25 @@ INSTRUÇÕES:
 7. Não mencione que você é uma IA
 
 REGRAS IMPORTANTES:
+- Se intent = "saudacao" E não tiver nome: SEMPRE pergunte o nome primeiro ("Olá! Para começar, qual é o seu nome?")
 - Se já tiver nome, especialidade, médico, data e horário: pergunte se deseja confirmar
 - Se faltar apenas UMA informação: pergunte essa informação
 - NÃO solicite informações que já estão na lista "INFORMAÇÕES JÁ COLETADAS"
+
+ORDEM DE COLETA DE INFORMAÇÕES (SEMPRE SEGUIR ESTA ORDEM):
+1. Nome do paciente (já coletado se chegou aqui)
+2. Especialidade desejada
+3. Médico específico (após escolher especialidade)
+4. Data preferida
+5. Horário preferido
+6. Confirmação final
+
+NÃO pule etapas! Se faltar especialidade, pergunte APENAS a especialidade. Se faltar médico, pergunte APENAS o médico.
+
+REGRAS CRÍTICAS:
+- NUNCA invente nomes de médicos! Use APENAS os médicos listados em "MÉDICOS DISPONÍVEIS"
+- Se o usuário perguntar sobre médicos, liste APENAS os médicos reais do banco de dados
+- Se não houver médicos para uma especialidade, informe que não há médicos disponíveis
 
 DISTINÇÃO ENTRE DÚVIDAS E AGENDAMENTO:
 - Se intent = "buscar_info": Forneça APENAS a informação solicitada, NÃO inicie processo de agendamento

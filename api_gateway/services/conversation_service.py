@@ -606,7 +606,30 @@ class ConversationService:
             return None
             
         try:
-            from datetime import datetime
+            from datetime import datetime, timedelta
+
+            from django.utils import timezone
+
+            date_lower = date_str.lower().strip()
+            
+            # Tratar palavras especiais primeiro
+            today = timezone.now().date()
+            
+            if 'hoje' in date_lower:
+                return today.strftime('%Y-%m-%d')
+            elif 'amanhã' in date_lower or 'amanha' in date_lower:
+                tomorrow = today + timedelta(days=1)
+                return tomorrow.strftime('%Y-%m-%d')
+            elif 'depois de amanhã' in date_lower or 'depois de amanha' in date_lower:
+                day_after = today + timedelta(days=2)
+                return day_after.strftime('%Y-%m-%d')
+            elif any(day in date_lower for day in ['segunda', 'terça', 'quarta', 'quinta', 'sexta', 'sábado', 'domingo']):
+                # Para dias da semana, usar a lógica do smart_scheduling_service
+                from .smart_scheduling_service import SmartSchedulingService
+                smart_service = SmartSchedulingService()
+                normalized_date = smart_service._normalize_date(date_str)
+                if normalized_date:
+                    return normalized_date.strftime('%Y-%m-%d')
 
             # Tentar diferentes formatos de data
             date_formats = [

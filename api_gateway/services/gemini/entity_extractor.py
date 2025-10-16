@@ -64,21 +64,40 @@ class EntityExtractor:
         """
         name_patterns = [
             r'meu\s+nome\s+é\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)',
-            r'sou\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)',
+            r'(?:eu\s+)?sou\s+(?:o\s+|a\s+)?([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)',
             r'chamo-me\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)',
             r'nome\s+é\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)',
-            r'me\s+chamo\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)',
-            r'^([A-Za-zÀ-ÿ]+\s+[A-Za-zÀ-ÿ]+)(?:\s|,|$)'
+            r'me\s+chamo\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)'
+        ]
+        
+        # Lista de palavras que não são nomes
+        invalid_names = [
+            'gostaria', 'queria', 'preciso', 'quero', 'desejo', 'solicito',
+            'consulta', 'agendamento', 'marcar', 'agendar', 'uma', 'de',
+            'para', 'com', 'em', 'no', 'na', 'do', 'da', 'por', 'pelo'
         ]
         
         for pattern in name_patterns:
             match = re.search(pattern, message, re.IGNORECASE)
             if match:
                 name = match.group(1).strip()
+                
+                # Verificar se não é uma palavra inválida (palavras completas)
+                name_words = name.lower().split()
+                if any(word in invalid_names for word in name_words):
+                    continue
+                
                 # Limitar a 3 palavras (nome + sobrenome + sobrenome)
                 name_parts = name.split()[:3]
                 if len(name_parts) >= 2:  # Pelo menos nome e sobrenome
-                    return ' '.join(name_parts).title()
+                    # Verificar se as partes não são palavras inválidas
+                    valid_parts = []
+                    for part in name_parts:
+                        if part.lower() not in invalid_names:
+                            valid_parts.append(part)
+                    
+                    if len(valid_parts) >= 2:
+                        return ' '.join(valid_parts).title()
         
         return None
     
