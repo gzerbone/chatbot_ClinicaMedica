@@ -1,7 +1,6 @@
 """
 Serviço para integração com WhatsApp Business API
 """
-import json
 import logging
 from typing import Any, Dict, Optional
 

@@ -171,12 +171,9 @@ class GoogleCalendarService:
     
     def _generate_doctor_keywords(self, doctor_name: str) -> List[str]:
         """
-        Gera keywords para identificar eventos do médico no calendário
+        Gera keywords simples para identificar eventos do médico no calendário
         
-        PRIORIDADE:
-        1. Padrões configurados manualmente (DOCTOR_EVENT_PATTERNS no settings.py)
-        2. Padrões gerados automaticamente do banco de dados
-        3. Padrões gerados do nome fornecido
+        Baseado no padrão: "Dr./Dra. Nome - Tipo"
         
         Args:
             doctor_name: Nome do médico
@@ -185,82 +182,32 @@ class GoogleCalendarService:
             Lista de keywords para buscar eventos
         """
         keywords = []
-        normalized_doctor_name = doctor_name.lower().replace('dr. ', '').replace('dra. ', '')
         
-        # 1. Tentar padrões configurados manualmente (FALLBACK para casos especiais)
-        doctor_patterns = getattr(settings, 'DOCTOR_EVENT_PATTERNS', {})
-        for pattern_key, pattern_list in doctor_patterns.items():
-            if normalized_doctor_name in pattern_key or pattern_key in normalized_doctor_name:
-                keywords.extend(pattern_list)
-                logger.debug(f"✅ Usando padrões manuais configurados para {doctor_name}")
-                return keywords
+        # Normalizar nome
+        normalized_name = ' '.join(doctor_name.lower().split())
+        clean_name = normalized_name.replace('dr. ', '').replace('dra. ', '')
         
-        # 2. Tentar gerar padrões do banco de dados (RECOMENDADO)
-        try:
-            from rag_agent.models import Medico
-
-            # Buscar médico no banco
-            medico = Medico.objects.filter(nome__icontains=normalized_doctor_name).first()
-            
-            if medico:
-                # Gerar variações do nome do médico
-                nome_completo = medico.nome.lower()
-                partes_nome = nome_completo.split()
-                
-                keywords = [
-                    nome_completo,                    # "joão carvalho"
-                    f"dr. {nome_completo}",          # "dr. joão carvalho"
-                    f"dra. {nome_completo}",         # "dra. joão carvalho"
-                    f"dr {nome_completo}",           # "dr joão carvalho" (sem ponto)
-                    f"dra {nome_completo}",          # "dra joão carvalho" (sem ponto)
-                ]
-                
-                # Adicionar primeiro nome
-                if len(partes_nome) > 0:
-                    primeiro_nome = partes_nome[0]
-                    keywords.extend([
-                        primeiro_nome,
-                        f"dr. {primeiro_nome}",
-                        f"dra. {primeiro_nome}",
-                        f"dr {primeiro_nome}",
-                        f"dra {primeiro_nome}",
-                    ])
-                
-                # Adicionar último sobrenome
-                if len(partes_nome) > 1:
-                    ultimo_sobrenome = partes_nome[-1]
-                    keywords.extend([
-                        ultimo_sobrenome,
-                        f"dr. {ultimo_sobrenome}",
-                        f"dra. {ultimo_sobrenome}",
-                    ])
-                
-                logger.debug(f"✅ Keywords geradas automaticamente do banco para {doctor_name}: {len(keywords)} variações")
-                return list(set(keywords))  # Remover duplicatas
-                
-        except Exception as e:
-            logger.warning(f"⚠️ Não foi possível buscar médico no banco: {e}")
+        # Keywords principais
+        keywords.extend([
+            normalized_name,           # "dr. gustavo magno"
+            clean_name,               # "gustavo magno"
+            f"dr. {clean_name}",      # "dr. gustavo magno"
+            f"dra. {clean_name}",     # "dra. gustavo magno"
+        ])
         
-        # 3. Padrões gerados do nome fornecido (FALLBACK final)
-        partes_nome = normalized_doctor_name.split()
+        # Adicionar partes do nome para busca flexível
+        name_parts = clean_name.split()
+        if len(name_parts) >= 2:
+            keywords.extend([
+                name_parts[0],        # "gustavo"
+                name_parts[-1],       # "magno"
+            ])
         
-        keywords = [
-            doctor_name.lower(),
-            normalized_doctor_name,
-        ]
+        # Remover duplicatas
+        keywords = list(set(keywords))
         
-        # Adicionar primeiro nome
-        if len(partes_nome) > 0:
-            keywords.append(partes_nome[0])
-            keywords.append(f"dr. {partes_nome[0]}")
-            keywords.append(f"dra. {partes_nome[0]}")
-        
-        # Adicionar último nome
-        if len(partes_nome) > 1:
-            keywords.append(partes_nome[-1])
-        
-        logger.debug(f"⚠️ Usando keywords genéricas para {doctor_name}")
-        return list(set(keywords))  # Remover duplicatas
+        logger.debug(f"✅ Keywords geradas para {doctor_name}: {keywords}")
+        return keywords
     
     def _process_availability(self, doctor_name: str, events: List[Dict], start_date: datetime, days_ahead: int) -> Dict[str, Any]:
         """
@@ -470,6 +417,85 @@ class GoogleCalendarService:
             logger.error(f"Erro ao buscar disponibilidade de todos os médicos: {e}")
             return {'error': 'Erro ao consultar disponibilidade'}
     
+    def get_doctor_availability(self, doctor_name: str, days_ahead: int = 7) -> Dict[str, Any]:
+        """
+        Obtém disponibilidade de um médico específico
+        
+        Args:
+            doctor_name: Nome do médico
+            days_ahead: Quantos dias à frente consultar
+            
+        Returns:
+            Dict com disponibilidade do médico
+        """
+        try:
+            # Calcular período de busca - APENAS EVENTOS FUTUROS
+            start_date = datetime.now()
+            end_date = start_date + timedelta(days=days_ahead)
+            
+            # Buscar todos os eventos do período
+            all_events = self.get_events_for_date_range(
+                start_date.strftime('%Y-%m-%d'),
+                end_date.strftime('%Y-%m-%d')
+            )
+            
+            # Filtrar eventos do médico específico
+            doctor_events = self._filter_doctor_events(all_events, doctor_name)
+            
+            # Processar disponibilidade
+            availability = self._process_availability(doctor_name, doctor_events, start_date, days_ahead)
+            
+            return availability
+            
+        except Exception as e:
+            logger.error(f"Erro ao obter disponibilidade do {doctor_name}: {e}")
+            return self._get_mock_availability(doctor_name, days_ahead)
+
+    def get_events_for_date_range(self, start_date: str, end_date: str) -> List[Dict[str, Any]]:
+        """
+        Obtém eventos do Google Calendar em um período específico
+        
+        Args:
+            start_date: Data de início no formato 'YYYY-MM-DD'
+            end_date: Data de fim no formato 'YYYY-MM-DD'
+            
+        Returns:
+            Lista de eventos do calendário
+        """
+        if not self.enabled or not self.service:
+            logger.warning("Google Calendar não está habilitado ou configurado")
+            return []
+        
+        try:
+            # Converter datas para formato ISO
+            start_datetime = datetime.strptime(start_date, '%Y-%m-%d').isoformat() + 'Z'
+            end_datetime = datetime.strptime(end_date, '%Y-%m-%d').isoformat() + 'Z'
+            
+            # Obter ID do calendário da clínica
+            clinic_calendar_id = self._get_clinic_calendar_id()
+            
+            # Buscar eventos no período
+            events_result = self.service.events().list(
+                calendarId=clinic_calendar_id,
+                timeMin=start_datetime,
+                timeMax=end_datetime,
+                maxResults=1000,  # Máximo de eventos
+                singleEvents=True,
+                orderBy='startTime'
+            ).execute()
+            
+            events = events_result.get('items', [])
+            logger.info(f"Encontrados {len(events)} eventos no período {start_date} a {end_date}")
+            
+            return events
+            
+        except HttpError as e:
+            logger.error(f"Erro HTTP ao buscar eventos: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"Erro ao buscar eventos no período: {e}")
+            return []
+
     def test_connection(self) -> bool:
         """
         Testa conexão com Google Calendar API e acesso ao calendário da clínica

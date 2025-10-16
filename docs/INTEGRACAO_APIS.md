@@ -187,7 +187,7 @@ def build_contextual_prompt(self, message, session, rag_data):
     ESTADO ATUAL DA CONVERSA:
     - Paciente: {session.patient_name or 'Não informado'}
     - Estado: {session.current_state}
-    - Especialidade de interesse: {session.specialty_interest or 'Não definida'}
+    - Especialidade de interesse: {session.selected_specialty or 'Não definida'}
     
     MENSAGEM DO PACIENTE: {message}
     

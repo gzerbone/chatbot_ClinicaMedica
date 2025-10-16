@@ -274,9 +274,67 @@ chatbot_ClinicaMedica/
 - `collecting_patient_info` → Coletando dados básicos
 - `confirming_name` → Confirmando nome do paciente
 - `collecting_info` → Identificando necessidade
+- `answering_questions` → Respondendo dúvidas do paciente
 - `selecting_doctor` → Escolhendo médico
+- `selecting_specialty` → Escolhendo especialidade médica
 - `choosing_schedule` → Selecionando horário
 - `confirming` → Confirmando agendamento
+
+### 🔄 Gerenciamento Dinâmico do Fluxo
+
+O sistema conta com funções inteligentes no `conversation_service` para facilitar a dinâmica do chat:
+
+```python
+from api_gateway.services.conversation_service import conversation_service
+
+# Verificar informações faltantes
+missing_info = conversation_service.get_missing_appointment_info(phone_number)
+# Retorna: {'missing_info': ['patient_name', 'selected_doctor'], 
+#           'next_action': 'ask_name', 
+#           'is_complete': False}
+
+# Obter próxima pergunta automaticamente
+next_question = conversation_service.get_next_question(phone_number)
+# Retorna: "Para começar o agendamento, preciso saber seu nome completo. Qual é seu nome?"
+```
+
+**Fluxo Sequencial Inteligente:**
+1. `ask_name` → Solicita nome do paciente
+2. `ask_specialty` → Solicita especialidade desejada
+3. `ask_doctor` → Solicita médico preferido
+4. `ask_date` → Solicita data da consulta
+5. `ask_time` → Solicita horário da consulta
+6. `generate_handoff` → Gera link de confirmação
+
+### 💡 Sistema de Pausar/Retomar para Dúvidas
+
+O chatbot permite que o usuário tire dúvidas a qualquer momento, incluindo durante um agendamento:
+
+```python
+# Pausar agendamento para responder dúvida
+conversation_service.pause_for_question(phone_number)
+# Estado atual é salvo em previous_state
+
+# Verificar se há agendamento pausado
+has_paused = conversation_service.has_paused_appointment(phone_number)
+
+# Retomar agendamento de onde parou
+resume_result = conversation_service.resume_appointment(phone_number)
+# Restaura o estado anterior e continua o fluxo
+```
+
+**Cenários de Uso:**
+1. 👤 **Apenas Dúvidas**: Usuário tira dúvidas sem iniciar agendamento
+2. 🔄 **Dúvidas Antes**: Usuário tira dúvidas e depois inicia agendamento
+3. ⏸️ **Pausar Agendamento**: Usuário pausa agendamento para tirar dúvidas e depois retoma
+
+**Palavras-chave para Retomar:**
+- "continuar"
+- "voltar"
+- "retomar"
+- "prosseguir"
+- "seguir"
+- "agendamento"
 
 ## 🛠️ Tecnologias Utilizadas
 
@@ -570,8 +628,8 @@ Armazena sessões completas de conversa com estado persistente:
 - name_confirmed (Boolean) - Status de confirmação do nome
 - current_state (CharField) - Estado atual do fluxo
   • idle, collecting_patient_info, confirming_name,
-  • collecting_info, selecting_doctor, choosing_schedule, confirming
-- specialty_interest (CharField) - Especialidade de interesse
+  • collecting_info, selected_specialty, choosing_schedule, confirming
+- selected_specialty (CharField) - Especialidade de interesse
 - insurance_type (CharField) - Tipo de convênio
 - preferred_date (DateField) - Data preferida
 - preferred_time (TimeField) - Horário preferido

@@ -78,7 +78,7 @@ Armazena o estado da conversa de cada paciente.
       • choosing_schedule: Escolhendo horário
       • confirming: Confirmando agendamento
 
-- specialty_interest: CharField(max_length=100, blank=True, null=True)
+- selected_specialty: CharField(max_length=100, blank=True, null=True)
   └─ Especialidade de interesse do paciente
 
 - insurance_type: CharField(max_length=50, blank=True, null=True)

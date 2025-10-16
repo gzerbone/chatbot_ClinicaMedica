@@ -93,7 +93,7 @@ def test_conversation_persistence():
     print(f"📋 Sessão: {session}")
     print(f"🔄 Estado: {session.current_state}")
     print(f"👤 Nome: {session.patient_name}")
-    print(f"🩺 Especialidade: {session.specialty_interest}")
+    print(f"🩺 Especialidade: {session.selected_specialty}")
     print(f"💼 Convênio: {session.insurance_type}")
     
     # Mensagens

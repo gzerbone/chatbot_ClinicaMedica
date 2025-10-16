@@ -50,7 +50,12 @@ class SmartSchedulingService:
 
     def _extract_scheduling_info(self, message: str, session: Dict) -> Dict[str, Any]:
         """
-        Extrai informações de agendamento da mensagem
+        Extrai informações de agendamento da mensagem e complementa com dados da sessão
+        
+        Estratégia:
+        1. Tenta extrair informações da mensagem atual (usando regex)
+        2. Se não encontrar na mensagem, busca na sessão (informações de mensagens anteriores)
+        3. Retorna informações combinadas para manter contexto da conversa
         """
         import re
         
@@ -64,7 +69,7 @@ class SmartSchedulingService:
         
         message_lower = message.lower()
         
-        # Extrair médico mencionado
+        # Extrair médico mencionado da mensagem
         doctor_patterns = [
             r'dr\.?\s+([a-záêãõç\s]+)',
             r'dra\.?\s+([a-záêãõç\s]+)',
@@ -80,7 +85,12 @@ class SmartSchedulingService:
                 info['doctor_mentioned'] = doctor_name
                 break
         
-        # Extrair data mencionada
+        # Se não encontrou médico na mensagem, buscar na sessão
+        if not info['doctor_mentioned'] and session.get('selected_doctor'):
+            info['doctor_mentioned'] = session.get('selected_doctor')
+            logger.info(f"🔄 Médico recuperado da sessão: {info['doctor_mentioned']}")
+        
+        # Extrair data mencionada da mensagem
         date_patterns = [
             r'(amanhã|hoje|depois de amanhã)',
             r'(segunda|terça|quarta|quinta|sexta|sábado|domingo)',
@@ -94,7 +104,12 @@ class SmartSchedulingService:
                 info['date_mentioned'] = match.group(0).strip()
                 break
         
-        # Extrair horário mencionado
+        # Se não encontrou data na mensagem, buscar na sessão
+        if not info['date_mentioned'] and session.get('preferred_date'):
+            info['date_mentioned'] = session.get('preferred_date')
+            logger.info(f"🔄 Data recuperada da sessão: {info['date_mentioned']}")
+        
+        # Extrair horário mencionado da mensagem
         time_patterns = [
             r'(as|às)\s+(\d{1,2})h(\d{2})?',
             r'(as|às)\s+(\d{1,2})hr(\d{2})?',
@@ -117,14 +132,21 @@ class SmartSchedulingService:
                 info['time_mentioned'] = match.group(0).strip()
                 break
         
+        # Se não encontrou horário na mensagem, buscar na sessão
+        if not info['time_mentioned'] and session.get('preferred_time'):
+            info['time_mentioned'] = session.get('preferred_time')
+            logger.info(f"🔄 Horário recuperado da sessão: {info['time_mentioned']}")
+        
         # Extrair tipo de consulta
-        if any(word in message_lower for word in ['consulta', 'retorno', 'exame']):
+        if any(word in message_lower for word in ['consulta', 'retorno']):
             if 'retorno' in message_lower:
                 info['appointment_type'] = 'retorno'
-            elif 'exame' in message_lower:
-                info['appointment_type'] = 'exame'
             else:
                 info['appointment_type'] = 'consulta'
+        
+        # Log das informações extraídas
+        logger.info(f"📋 Informações extraídas - Médico: {info['doctor_mentioned']}, "
+                   f"Data: {info['date_mentioned']}, Horário: {info['time_mentioned']}")
         
         return info
 
@@ -202,6 +224,7 @@ class SmartSchedulingService:
             # Obter informações da sessão
             patient_name = session.get('patient_name', 'Paciente')
             doctor_name = extracted_info.get('doctor_mentioned', 'Médico')
+            specialty = session.get('selected_specialty', 'Especialidade a definir')
             date_mentioned = extracted_info.get('date_mentioned', 'Data a definir')
             time_mentioned = extracted_info.get('time_mentioned', 'Horário a definir')
             
@@ -211,6 +234,7 @@ class SmartSchedulingService:
             handoff_link = handoff_service.generate_appointment_handoff_link(
                 patient_name=patient_name,
                 doctor_name=doctor_name,
+                specialty=specialty,
                 date=date_mentioned,
                 time=time_mentioned,
                 appointment_type=extracted_info.get('appointment_type', 'Consulta')
@@ -222,6 +246,7 @@ class SmartSchedulingService:
 📋 **RESUMO:**
 👤 Paciente: {patient_name}
 👨‍⚕️ Médico: {doctor_name}
+🧠 Especialidade: {specialty}
 📅 Data: {date_mentioned}
 🕐 Horário: {time_mentioned}
 
@@ -307,10 +332,13 @@ class SmartSchedulingService:
                                    if datetime.strptime(day['date'], '%d/%m/%Y').date() == target_date]
                     days_info = filtered_days
             
+            # Verificar se há horários disponíveis
+            has_availability = any(len(day.get('available_times', [])) > 0 for day in days_info)
+            
             return {
-                'available': len(days_info) > 0,
+                'available': has_availability,
                 'doctor': doctor_name,
-                'days': days_info,
+                'days_info': days_info,  # Usar days_info para compatibilidade
                 'total_days': len(days_info)
             }
             
@@ -537,8 +565,8 @@ Para consultar horários, digite o nome do médico desejado."""
                         message += f"**{weekday} ({date_str}):** {', '.join(available_times[:4])}\n"
                 
                 message += f"""
-📞 **Para agendar:**
-(73) 3613-5380 | (73) 98822-1003"""
+📞 **Se quiser pode agendar ligando para:**
+(73) 3613-5380"""
                 
                 return message
             else:
@@ -548,9 +576,9 @@ Para consultar horários, digite o nome do médico desejado."""
 
 ❌ Não há horários disponíveis no momento.
 
-Entre em contato conosco para mais informações:
+Entre em contato conosco para mais informações ligando para:
 📞 (73) 3613-5380
-📱 (73) 98822-1003"""
+"""
 
         days_info = availability.get('days', [])
         
@@ -558,7 +586,7 @@ Entre em contato conosco para mais informações:
 🩺 {specialties}
 💰 Consulta particular: R$ {price}
 
-📅 **Horários disponíveis:**"""
+📅 *Horários disponíveis:*"""
 
         for day in days_info[:5]:  # Mostrar até 5 dias
             date_str = day.get('date', '')
@@ -567,7 +595,7 @@ Entre em contato conosco para mais informações:
             occupied_times = day.get('occupied_times', [])
             
             if available_times:
-                message += f"\n\n**{weekday} ({date_str}):**"
+                message += f"\n\n*{weekday} ({date_str}):*"
                 message += f"\n✅ Disponíveis: {', '.join(available_times[:6])}"  # Até 6 horários
                 if len(available_times) > 6:
                     message += f" (+{len(available_times) - 6} outros)"
@@ -575,12 +603,68 @@ Entre em contato conosco para mais informações:
         if len(days_info) > 5:
             message += f"\n\n📅 *E mais {len(days_info) - 5} dias com horários disponíveis*"
         
-        message += f"""
-
-📞 **Para agendar:**
-(73) 3613-5380 | (73) 98822-1003"""
-        
         return message
+
+    def get_doctor_availability(self, doctor_name: str, days_ahead: int = 7) -> Dict[str, Any]:
+        """
+        Método público para consultar disponibilidade de um médico
+        
+        Baseado no GUIA_SECRETARIA_CALENDAR.md:
+        - Consulta Google Calendar em tempo real
+        - Filtra eventos por padrão "Dr. Nome - Tipo"
+        - Calcula horários livres nos próximos dias
+        
+        Args:
+            doctor_name: Nome do médico (ex: "Dr. João Carvalho")
+            days_ahead: Quantos dias à frente consultar (padrão: 7)
+            
+        Returns:
+            Dict com informações de disponibilidade
+        """
+        try:
+            logger.info(f"🗓️ Consultando disponibilidade para {doctor_name} - próximos {days_ahead} dias")
+            
+            # Usar o método privado existente
+            availability = self._get_doctor_availability(doctor_name, None)
+            
+            if availability and availability.get('days_info'):
+                # Limitar aos dias solicitados
+                days_info = availability['days_info'][:days_ahead]
+                
+                # Contar slots disponíveis
+                total_slots = sum(len(day.get('available_times', [])) for day in days_info)
+                
+                return {
+                    'success': True,
+                    'doctor_name': doctor_name,
+                    'days_ahead': days_ahead,
+                    'days_info': days_info,
+                    'available_slots': total_slots,
+                    'has_availability': total_slots > 0
+                }
+            else:
+                logger.warning(f"⚠️ Nenhuma disponibilidade encontrada para {doctor_name}")
+                return {
+                    'success': False,
+                    'doctor_name': doctor_name,
+                    'days_ahead': days_ahead,
+                    'days_info': [],
+                    'available_slots': 0,
+                    'has_availability': False,
+                    'error': 'Nenhum horário disponível encontrado'
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Erro ao consultar disponibilidade para {doctor_name}: {e}")
+            return {
+                'success': False,
+                'doctor_name': doctor_name,
+                'days_ahead': days_ahead,
+                'days_info': [],
+                'available_slots': 0,
+                'has_availability': False,
+                'error': str(e)
+            }
 
     def _get_fallback_analysis(self) -> Dict[str, Any]:
         return {

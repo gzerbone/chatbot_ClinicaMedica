@@ -321,3 +321,29 @@ class RAGService:
             'exames': RAGService.get_exames(),
             'disponibilidade_medicos': RAGService.get_all_doctors_availability(7)
         }
+    
+    # Métodos de compatibilidade para o Gemini modularizado
+    @staticmethod
+    def get_clinica_info() -> Dict[str, Any]:
+        """Alias para get_clinic_info para compatibilidade"""
+        return RAGService.get_clinic_info()
+    
+    @staticmethod
+    def get_telefone() -> str:
+        """
+        Obtém telefone da clínica
+        
+        Returns:
+            String com telefone da clínica ou telefone padrão
+        """
+        try:
+            clinica_info = RAGService.get_clinic_info()
+            if clinica_info and 'telefone' in clinica_info and clinica_info['telefone']:
+                return clinica_info['telefone']
+            # Telefone padrão se não encontrar
+            return "(11) 99999-9999"
+        except Exception as e:
+            logger.error(f"Erro ao obter telefone da clínica: {e}")
+            return "(11) 99999-9999"
+    
+    # Remover métodos duplicados que causam recursão infinita

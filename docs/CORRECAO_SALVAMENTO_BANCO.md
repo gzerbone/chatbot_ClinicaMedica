@@ -40,7 +40,7 @@ db_session, created = ConversationSession.objects.get_or_create(
         'selected_doctor': session.get('selected_doctor'),        # ✅ Adicionado
         'preferred_date': session.get('preferred_date'),          # ✅ Adicionado
         'preferred_time': session.get('preferred_time'),          # ✅ Adicionado
-        'specialty_interest': session.get('specialty_interest'),  # ✅ Adicionado
+        'selected_specialty': session.get('selected_specialty'),  # ✅ Adicionado
         'additional_notes': session.get('additional_notes'),      # ✅ Adicionado
     }
 )
@@ -129,7 +129,7 @@ if entities.get('horario') and entities['horario'] != 'null':
 | `selected_doctor` | CharField | Médico selecionado | ✅ Adicionado |
 | `preferred_date` | DateField | Data preferida | ✅ Adicionado |
 | `preferred_time` | TimeField | Horário preferido | ✅ Adicionado |
-| `specialty_interest` | CharField | Especialidade de interesse | ✅ Adicionado |
+| `selected_specialty` | CharField | Especialidade de interesse | ✅ Adicionado |
 | `additional_notes` | TextField | Observações adicionais | ✅ Adicionado |
 
 ### **Campos Já Existentes:**

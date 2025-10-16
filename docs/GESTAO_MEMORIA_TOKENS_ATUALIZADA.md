@@ -51,7 +51,7 @@ class ConversationSession(models.Model):
     current_state = models.CharField(max_length=50, default='idle')
     
     # Informações estruturadas (não precisa reenviar histórico)
-    specialty_interest = models.CharField(max_length=100, blank=True, null=True)
+    selected_specialty = models.CharField(max_length=100, blank=True, null=True)
     insurance_type = models.CharField(max_length=50, blank=True, null=True)
     preferred_date = models.DateField(blank=True, null=True)
     preferred_time = models.TimeField(blank=True, null=True)

@@ -16,8 +16,11 @@ from rest_framework.response import Response
 
 from .services.conversation_service import (conversation_logger,
                                             conversation_service)
-from .services.gemini_chatbot_service import gemini_chatbot_service
-from .services.whatsapp_service import WhatsAppService  
+from .services.gemini import GeminiChatbotService
+from .services.whatsapp_service import WhatsAppService
+
+# Instância global do serviço Gemini (versão modular)
+gemini_chatbot_service = GeminiChatbotService()
 
 logger = logging.getLogger(__name__)
 
@@ -28,9 +31,6 @@ def get_clinic_data():
     """Obtém dados atualizados da clínica"""
     from .services.rag_service import RAGService
     return RAGService.get_all_clinic_data()
-
-
-
 
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
@@ -523,7 +523,7 @@ def test_handoff_generation(request):
         
         # Gerar mensagem de confirmação
         confirmation_message = handoff_service.create_confirmation_message(
-            doctor_name, date, time, {
+            doctor_name, specialty, date, time, {
                 'patient_name': patient_name,
                 'appointment_type': appointment_type
             }

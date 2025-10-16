@@ -19,18 +19,26 @@ class ConversationSession(models.Model):
             ('idle', 'Ocioso'),
             ('collecting_patient_info', 'Coletando Dados do Paciente'),
             ('collecting_info', 'Coletando Informações'),
+            ('answering_questions', 'Respondendo Dúvidas'),
             ('confirming_name', 'Confirmando Nome do Paciente'),
             ('selecting_doctor', 'Selecionando Médico'),
+            ('selecting_specialty', 'Selecionando Especialidade'),
             ('choosing_schedule', 'Escolhendo Horário'),
             ('confirming', 'Confirmando')
         ],
         default='idle'
     )
-    specialty_interest = models.CharField(max_length=100, blank=True, null=True)
+    previous_state = models.CharField(
+        max_length=50, 
+        blank=True, 
+        null=True,
+        help_text="Estado anterior antes de pausar para dúvidas"
+    )
     insurance_type = models.CharField(max_length=50, blank=True, null=True)
     preferred_date = models.DateField(blank=True, null=True)
     preferred_time = models.TimeField(blank=True, null=True)
     selected_doctor = models.CharField(max_length=100, blank=True, null=True)
+    selected_specialty = models.CharField(max_length=100, blank=True, null=True)
     additional_notes = models.TextField(blank=True, null=True)
     
     created_at = models.DateTimeField(auto_now_add=True)

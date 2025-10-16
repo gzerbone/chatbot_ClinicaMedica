@@ -165,61 +165,39 @@ class TokenMonitor:
             logger.error(f"Erro ao obter estatísticas de tokens: {e}")
             return {}
     
-    def reset_daily_token_usage(self):
-        """
-        Reseta o contador de tokens do dia (usar com cuidado!)
-        """
-        try:
-            self.token_usage_today = 0
-            self.session_token_usage = {}
-            self.economy_mode = False
-            
-            today = date.today().isoformat()
-            cache_key = f"gemini_tokens_{today}"
-            cache.set(cache_key, 0, 86400)
-            
-            logger.info("🔄 Contador de tokens resetado")
-            
-        except Exception as e:
-            logger.error(f"Erro ao resetar contador de tokens: {e}")
-    
     def is_economy_mode_active(self) -> bool:
-        """
-        Verifica se o modo econômico está ativo
-        """
+        """Verifica se o modo econômico está ativo"""
         return self.economy_mode
     
     def get_economy_config(self) -> Dict[str, Any]:
-        """
-        Retorna configurações para modo econômico
-        """
-        if not self.economy_mode:
-            return {}
-        
-        return {
-            'max_output_tokens': 512,
-            'temperature': 0.7,  # Reduzir criatividade para economizar
-            'top_p': 0.8,  # Reduzir diversidade
-            'top_k': 20  # Reduzir opções
-        }
-    
-    def should_use_cache(self) -> bool:
-        """
-        Verifica se deve usar cache agressivamente (modo econômico)
-        """
-        return self.economy_mode or (self.token_usage_today / self.daily_token_limit) > 0.8
+        """Retorna configurações de modo econômico"""
+        if self.economy_mode:
+            return {
+                "temperature": 0.5,
+                "max_output_tokens": 512
+            }
+        return {}
     
     def get_cache_timeout(self) -> int:
-        """
-        Retorna timeout do cache baseado no modo econômico
-        """
-        if self.economy_mode:
-            return 3600  # 1 hora em modo econômico
-        elif (self.token_usage_today / self.daily_token_limit) > 0.8:
-            return 1800  # 30 minutos quando próximo do limite
-        else:
-            return 900  # 15 minutos normal
+        """Retorna timeout do cache (em segundos)"""
+        return 3600  # 1 hora
 
 
-# Instância global do monitor
-token_monitor = TokenMonitor()
+# Criar instância global usando lazy initialization
+_token_monitor_instance = None
+
+def get_token_monitor():
+    """Retorna a instância do TokenMonitor (lazy loading)"""
+    global _token_monitor_instance
+    if _token_monitor_instance is None:
+        _token_monitor_instance = TokenMonitor()
+    return _token_monitor_instance
+
+# Para compatibilidade, criar instância somente quando Django estiver configurado
+try:
+    token_monitor = TokenMonitor()
+except Exception:
+    # Fallback para lazy loading
+    token_monitor = type('TokenMonitor', (), {
+        '__getattr__': lambda self, name: getattr(get_token_monitor(), name)
+    })()

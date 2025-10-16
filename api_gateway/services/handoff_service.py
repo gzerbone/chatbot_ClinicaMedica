@@ -32,11 +32,11 @@ class HandoffService:
         
         Args:
             patient_name: Nome do paciente
-            doctor_name: Nome do médico
-            specialty: Especialidade médica
-            appointment_type: Tipo de consulta (Particular, Convênio, etc.)
-            date: Data da consulta (formato: DD/MM/YYYY)
-            time: Horário da consulta (formato: HH:mm)
+            selected_doctor: Nome do médico
+            selected_specialty: Especialidade médica
+            insurance_type: Tipo de consulta (Particular, Convênio, etc.)
+            preferred_date: Data da consulta (formato: DD/MM/YYYY)
+            preferred_time: Horário da consulta (formato: HH:mm)
             
         Returns:
             URL do WhatsApp com mensagem pré-formatada
@@ -102,6 +102,7 @@ class HandoffService:
             simple_message = f"""Agendamento via Chatbot:
 Nome: {patient_name}
 Médico: {clean_doctor_name}
+Especialidade: {final_specialty}
 Tipo de Consulta: {final_appointment_type}
 Data/Hora: {final_date} às {final_time}"""
             
@@ -207,11 +208,19 @@ Data/Hora: {final_date} às {final_time}"""
     
     def create_confirmation_message(self, 
                                   doctor_name: str,
+                                  specialty: str,
                                   date: str,
                                   time: str,
                                   patient_info: Dict) -> str:
         """
         Cria mensagem de confirmação para o paciente
+        
+        Args:
+            doctor_name: Nome do médico
+            specialty: Especialidade do médico escolhida pelo paciente
+            date: Data da consulta
+            time: Horário da consulta
+            patient_info: Informações do paciente
         
         Returns:
             Mensagem formatada para confirmação
@@ -223,6 +232,7 @@ Data/Hora: {final_date} às {final_time}"""
 📋 *RESUMO:*
 👤 Paciente: {patient_info.get('patient_name', 'Não informado')}
 👨‍⚕️ Médico: {doctor_name}
+🧠 Especialidade: {specialty}
 📅 Data: {date}
 🕐 Horário: {time}
 💼 Tipo: {appointment_type}
