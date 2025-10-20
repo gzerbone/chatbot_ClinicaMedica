@@ -19,12 +19,13 @@ def _has_all_appointment_info(self, session: Dict, analysis_result: Dict) -> boo
     
     # Verificar informações obrigatórias
     has_patient_name = bool(entities.get('nome_paciente') or session.get('patient_name'))
+    has_specialty = bool(entities.get('especialidade') or session.get('selected_specialty'))
     has_doctor = bool(entities.get('medico') or session.get('selected_doctor'))
     has_date = bool(entities.get('data') or session.get('preferred_date'))
     has_time = bool(entities.get('horario') or session.get('preferred_time'))
     
     # Todas as informações devem estar presentes
-    return has_patient_name and has_doctor and has_date and has_time
+    return has_patient_name and has_specialty and has_doctor and has_date and has_time
 ```
 
 ### **2. Identificação de Informações Faltantes**
@@ -42,6 +43,9 @@ def _get_missing_appointment_info(self, session: Dict, analysis_result: Dict) ->
     # Verificar cada informação
     if not (entities.get('nome_paciente') or session.get('patient_name')):
         missing.append('nome_paciente')
+    
+    if not (entities.get('especialidade') or session.get('selected_specialty')):
+        missing.append('especialidade')
     
     if not (entities.get('medico') or session.get('selected_doctor')):
         missing.append('medico')
@@ -99,15 +103,17 @@ def _request_missing_info(self, missing_info: List[str], session: Dict) -> str:
 1. Paciente: "Quero agendar"
 2. Bot: "Qual seu nome completo?"
 3. Paciente: "João Silva"
-4. Bot: "Perfeito, João! Com qual médico gostaria de agendar?"
-5. Paciente: "Dr. Carlos"
-6. Bot: "Ótimo! Qual data seria melhor?"
-7. Paciente: "Segunda-feira"
-8. Bot: "Perfeito! E qual horário?"
-9. Paciente: "14h"
-10. Bot: "Confirma: João Silva, Dr. Carlos, Segunda 14h?"
-11. Paciente: "Sim"
-12. Bot: [GERA HANDOFF COM TODAS AS INFORMAÇÕES] ✅
+4. Bot: "Perfeito, João! Qual especialidade médica você precisa?"
+5. Paciente: "Pneumologia"
+6. Bot: "Ótimo! Com qual médico de Pneumologia gostaria de agendar?"
+7. Paciente: "Dr. Carlos"
+8. Bot: "Perfeito! Qual data seria melhor?"
+9. Paciente: "Segunda-feira"
+10. Bot: "E qual horário?"
+11. Paciente: "14h"
+12. Bot: "Confirma: João Silva, Pneumologia, Dr. Carlos, Segunda 14h?"
+13. Paciente: "Sim"
+14. Bot: [GERA HANDOFF COM TODAS AS INFORMAÇÕES] ✅
 ```
 
 ## 📋 Informações Obrigatórias
@@ -117,17 +123,22 @@ def _request_missing_info(self, missing_info: List[str], session: Dict) -> str:
 - **Validação**: Nome completo (nome + sobrenome)
 - **Armazenado em**: `session['patient_name']`
 
-### **2. Médico/Especialidade**
+### **2. Especialidade Médica**
 - **Coletado em**: Após confirmação do nome
-- **Opções**: Médico específico ou especialidade
+- **Validação**: Especialidade deve existir na base de dados
+- **Armazenado em**: `session['selected_specialty']`
+
+### **3. Médico (Filtrado por Especialidade)**
+- **Coletado em**: Após seleção da especialidade
+- **Validação**: Médico deve existir e ter a especialidade selecionada
 - **Armazenado em**: `session['selected_doctor']`
 
-### **3. Data da Consulta**
+### **4. Data da Consulta**
 - **Coletado em**: Após seleção do médico
 - **Formato**: Flexível (segunda-feira, 15/10, amanhã)
 - **Armazenado em**: `session['preferred_date']`
 
-### **4. Horário da Consulta**
+### **5. Horário da Consulta**
 - **Coletado em**: Após definição da data
 - **Formato**: Flexível (14h, 2 da tarde, 14:30)
 - **Armazenado em**: `session['preferred_time']`

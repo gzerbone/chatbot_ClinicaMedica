@@ -41,12 +41,16 @@ chatbot_ClinicaMedica/
 ├── core/                        # Configurações Django
 │   ├── settings.py              # Configurações principais (com python-decouple)
 │   └── urls.py                  # Roteamento global
-├── docs/                        # 📚 Documentação completa
-│   ├── CONFIGURACAO_ENV.md      # Guia de configuração de variáveis
-│   ├── FLUXO_COMPLETO_PROJETO.md # Fluxo detalhado do sistema
-│   ├── ARQUITETURA_ATUAL.md     # Arquitetura do projeto
-│   ├── GESTAO_MEMORIA_OTIMIZACAO_TOKENS.md # Otimização de tokens
-│   └── ... (20+ guias técnicos)
+├── docs/                        # 📚 Documentação completa organizada
+│   ├── README.md                # Índice geral da documentação
+│   ├── 01_arquitetura/          # Documentos de arquitetura
+│   ├── 02_setup_configuracao/   # Guias de instalação e configuração
+│   ├── 03_desenvolvimento/      # Guias e dicas para desenvolvimento
+│   ├── 04_fluxos_processos/     # Documentação de fluxos de negócio
+│   ├── 05_otimizacoes/          # Gestão de recursos e performance
+│   ├── 06_modularizacao/        # Refatoração e organização do código
+│   ├── 07_correcoes/            # Histórico de correções implementadas
+│   └── _obsoletos/              # Documentos obsoletos
 ├── scripts/                     # Scripts utilitários e testes
 │   ├── criar_dados_pneumosono.py # Popula dados iniciais
 │   ├── verificar_banco_dados.py  # Verifica estado do banco
@@ -415,7 +419,7 @@ pip install -r requirements.txt
 
 ⚠️ **CRÍTICO - Segurança**: Todas as configurações sensíveis **DEVEM** estar no arquivo `.env` na raiz do projeto.
 
-**📖 Documentação completa:** [`docs/CONFIGURACAO_ENV.md`](docs/CONFIGURACAO_ENV.md)
+**📖 Documentação completa:** [`docs/02_setup_configuracao/CONFIGURACAO_ENV.md`](docs/02_setup_configuracao/CONFIGURACAO_ENV.md)
 
 #### Variáveis Necessárias
 
@@ -528,7 +532,7 @@ O sistema suporta **um único calendário** compartilhado por todos os médicos:
 - "Consulta Cardiologia - João Carvalho"
 - "Dr Gustavo - Retorno"
 
-📖 **Documentação completa:** [`docs/GOOGLE_CALENDAR_SETUP.md`](docs/GOOGLE_CALENDAR_SETUP.md)
+📖 **Documentação completa:** [`docs/02_setup_configuracao/GOOGLE_CALENDAR_SETUP.md`](docs/02_setup_configuracao/GOOGLE_CALENDAR_SETUP.md)
 
 ## 🧪 Testes
 
@@ -850,54 +854,56 @@ Seguimos a convenção [Conventional Commits](https://www.conventionalcommits.or
 A pasta `docs/` contém mais de 20 guias técnicos detalhados. Principais documentos:
 
 ### 🎯 Essenciais (Comece por aqui!)
-- **[Configuração do .env](docs/CONFIGURACAO_ENV.md)** - ⚠️ **IMPORTANTE**: Configure suas variáveis de ambiente
-- **[Guia de Desenvolvimento](docs/GUIA_DESENVOLVIMENTO.md)** - Como desenvolver no projeto
-- **[Fluxo Completo do Projeto](docs/FLUXO_COMPLETO_PROJETO.md)** - Entenda o fluxo completo
+- **[Configuração do .env](docs/02_setup_configuracao/CONFIGURACAO_ENV.md)** - ⚠️ **IMPORTANTE**: Configure suas variáveis de ambiente
+- **[Guia de Desenvolvimento](docs/03_desenvolvimento/GUIA_DESENVOLVIMENTO.md)** - Como desenvolver no projeto
+- **[Fluxo Completo do Projeto](docs/04_fluxos_processos/FLUXO_COMPLETO_PROJETO.md)** - Entenda o fluxo completo
 
 ### 🏗️ Arquitetura
-- **[Arquitetura Atual](docs/ARQUITETURA_ATUAL.md)** - Visão geral da arquitetura
-- **[Arquitetura Gemini Centralizada](docs/ARQUITETURA_GEMINI_CENTRALIZADA.md)** - Como o Gemini orquestra tudo
+- **[Arquitetura Atual](docs/01_arquitetura/ARQUITETURA_ATUAL.md)** - Visão geral da arquitetura
+- **[Arquitetura Gemini Centralizada](docs/01_arquitetura/ARQUITETURA_GEMINI_CENTRALIZADA.md)** - Como o Gemini orquestra tudo
 
 ### 🔄 Fluxos e Lógica
-- **[Lógica de Pré-agendamento](docs/LOGICA_PRE_AGENDAMENTO.md)** - Detalhes do agendamento
-- **[Fluxo Pré-agendamento Corrigido](docs/FLUXO_PRE_AGENDAMENTO_CORRIGIDO.md)** - Versão otimizada
-- **[Análise de Estados de Conversação](docs/ANALISE_ESTADOS_CONVERSACAO.md)** - Estados e transições
+- **[Lógica de Pré-agendamento](docs/04_fluxos_processos/LOGICA_PRE_AGENDAMENTO_ATUALIZADA.md)** - Detalhes do agendamento
+- **[Fluxo Pré-agendamento Corrigido](docs/04_fluxos_processos/FLUXO_PRE_AGENDAMENTO_CORRIGIDO.md)** - Versão otimizada
+- **[Análise de Estados de Conversação](docs/04_fluxos_processos/ANALISE_ESTADOS_CONVERSACAO.md)** - Estados e transições
 
 ### 🔌 Integrações
-- **[Integração de APIs](docs/INTEGRACAO_APIS.md)** - Como as APIs se conectam
-- **[Setup WhatsApp Webhook](docs/SETUP_WEBHOOK_WHATSAPP.md)** - Configure webhooks do WhatsApp
-- **[WhatsApp Setup](docs/WHATSAPP_SETUP.md)** - Configuração completa do WhatsApp
-- **[Google Calendar Setup](docs/GOOGLE_CALENDAR_SETUP.md)** - Configure o Google Calendar
-- **[Setup Calendar Desenvolvimento](docs/SETUP_CALENDAR_DESENVOLVIMENTO.md)** - Calendar para dev
-- **[Guia Secretaria Calendar](docs/GUIA_SECRETARIA_CALENDAR.md)** - Como a secretaria usa o Calendar
+- **[Integração de APIs](docs/02_setup_configuracao/INTEGRACAO_APIS.md)** - Como as APIs se conectam
+- **[Setup WhatsApp Webhook](docs/02_setup_configuracao/SETUP_WEBHOOK_WHATSAPP.md)** - Configure webhooks do WhatsApp
+- **[WhatsApp Setup](docs/02_setup_configuracao/WHATSAPP_SETUP.md)** - Configuração completa do WhatsApp
+- **[Google Calendar Setup](docs/02_setup_configuracao/GOOGLE_CALENDAR_SETUP.md)** - Configure o Google Calendar
+- **[Setup Calendar Desenvolvimento](docs/02_setup_configuracao/SETUP_CALENDAR_DESENVOLVIMENTO.md)** - Calendar para dev
+- **[Guia Secretaria Calendar](docs/02_setup_configuracao/GUIA_SECRETARIA_CALENDAR.md)** - Como a secretaria usa o Calendar
 
 ### ⚡ Otimizações e Performance
-- **[Gestão de Memória e Otimização de Tokens](docs/GESTAO_MEMORIA_OTIMIZACAO_TOKENS.md)** - Reduza custos!
-- **[Análise de Tokens Gemini](docs/ANALISE_TOKENS_GEMINI.md)** - Entenda o consumo
-- **[Monitoramento de Tokens](docs/MONITORAMENTO_TOKENS_GEMINI.md)** - Como monitorar
-- **[Refatoração Token Monitor](docs/REFATORACAO_TOKEN_MONITOR.md)** - Melhorias implementadas
-- **[Otimização Validação de Agendamento](docs/OTIMIZACAO_VALIDACAO_AGENDAMENTO.md)** - Validações otimizadas
+- **[Gestão de Memória e Otimização de Tokens](docs/05_otimizacoes/GESTAO_MEMORIA_TOKENS_ATUALIZADA.md)** - Reduza custos!
+- **[Análise de Tokens Gemini](docs/05_otimizacoes/ANALISE_TOKENS_GEMINI.md)** - Entenda o consumo
+- **[Monitoramento de Tokens](docs/05_otimizacoes/MONITORAMENTO_TOKENS_GEMINI.md)** - Como monitorar
+- **[Refatoração Token Monitor](docs/05_otimizacoes/REFATORACAO_TOKEN_MONITOR.md)** - Melhorias implementadas
+- **[Otimização Validação de Agendamento](docs/05_otimizacoes/OTIMIZACAO_VALIDACAO_AGENDAMENTO.md)** - Validações otimizadas
 
 ### 🐛 Correções e Debugging
-- **[Correção de Erros nos Logs](docs/CORRECAO_ERROS_LOGS.md)** - Problemas comuns
-- **[Correção Salvamento no Banco](docs/CORRECAO_SALVAMENTO_BANCO.md)** - Issues de persistência
-- **[Validação de Formato de Mensagem](docs/VALIDACAO_FORMATO_MENSAGEM.md)** - Mensagens WhatsApp
+- **[Correção de Erros nos Logs](docs/07_correcoes/CORRECAO_ERROS_LOGS.md)** - Problemas comuns
+- **[Correção Salvamento no Banco](docs/07_correcoes/CORRECAO_SALVAMENTO_BANCO.md)** - Issues de persistência
+- **[Validação de Formato de Mensagem](docs/04_fluxos_processos/VALIDACAO_FORMATO_MENSAGEM.md)** - Mensagens WhatsApp
+- **[Plano Refatoração Entidades](docs/07_correcoes/PLANO_REFATORACAO_ENTIDADES.md)** - Correção da duplicação de responsabilidades entre `IntentDetector` e `EntityExtractor`
+
 
 ### 📖 Como Usar a Documentação
 
 ```bash
 # Leia os documentos essenciais primeiro
-1. docs/CONFIGURACAO_ENV.md
-2. docs/ARQUITETURA_ATUAL.md
-3. docs/FLUXO_COMPLETO_PROJETO.md
+1. docs/02_setup_configuracao/CONFIGURACAO_ENV.md
+2. docs/01_arquitetura/ARQUITETURA_ATUAL.md
+3. docs/04_fluxos_processos/FLUXO_COMPLETO_PROJETO.md
 
 # Para desenvolvimento
-4. docs/GUIA_DESENVOLVIMENTO.md
-5. docs/SETUP_WEBHOOK_WHATSAPP.md
-6. docs/GOOGLE_CALENDAR_SETUP.md
+4. docs/03_desenvolvimento/GUIA_DESENVOLVIMENTO.md
+5. docs/02_setup_configuracao/SETUP_WEBHOOK_WHATSAPP.md
+6. docs/02_setup_configuracao/GOOGLE_CALENDAR_SETUP.md
 
 # Para otimização
-7. docs/GESTAO_MEMORIA_OTIMIZACAO_TOKENS.md
+7. docs/05_otimizacoes/GESTAO_MEMORIA_TOKENS_ATUALIZADA.md
 ```
 
 ## 📞 Suporte e Recursos
@@ -1003,11 +1009,11 @@ ngrok http 8000
 
 - **Versão**: 1.0.0
 - **Status**: ✅ Desenvolvimento Ativo
-- **Última Atualização**: 09 de Outubro de 2025
+- **Última Atualização**: 17 de Outubro de 2025
 - **Python**: 3.8+ (recomendado 3.10+)
 - **Django**: 5.2.6
 - **Gemini AI**: 2.0 Flash
-- **Arquitetura**: Gemini AI Centralizada com Sistema RAG
+- **Arquitetura**: Multi-Componentes com Sistema RAG e Gemini AI distribuído
 
 ---
 
@@ -1036,7 +1042,7 @@ GEMINI_API_KEY=AIzaSy...valor_real...
 - ✅ Fácil trocar entre dev/produção
 - ✅ Centralizado em `settings.py`
 
-📖 **Leia mais:** [`docs/CONFIGURACAO_ENV.md`](docs/CONFIGURACAO_ENV.md)
+📖 **Leia mais:** [`docs/02_setup_configuracao/CONFIGURACAO_ENV.md`](docs/02_setup_configuracao/CONFIGURACAO_ENV.md)
 </details>
 
 <details>
@@ -1068,7 +1074,7 @@ DOCTOR_EVENT_PATTERNS = {}  # Sistema gera automaticamente
 GEMINI_API_KEY=AIzaSy...sua_chave_aqui
 ```
 
-📖 **Guia completo:** [`docs/CONFIGURACAO_ENV.md`](docs/CONFIGURACAO_ENV.md)
+📖 **Guia completo:** [`docs/02_setup_configuracao/CONFIGURACAO_ENV.md`](docs/02_setup_configuracao/CONFIGURACAO_ENV.md)
 </details>
 
 <details>
@@ -1104,7 +1110,7 @@ ngrok http 8000
 # 4. Envie mensagem no WhatsApp
 ```
 
-📖 **Guia completo:** [`docs/SETUP_WEBHOOK_WHATSAPP.md`](docs/SETUP_WEBHOOK_WHATSAPP.md)
+📖 **Guia completo:** [`docs/02_setup_configuracao/SETUP_WEBHOOK_WHATSAPP.md`](docs/02_setup_configuracao/SETUP_WEBHOOK_WHATSAPP.md)
 </details>
 
 <details>
@@ -1134,7 +1140,7 @@ python scripts/verificar_sessao_cache.py
 6. ✅ Configure backup automático
 7. ✅ Monitore uso de tokens Gemini
 
-📖 **Documentação:** [`docs/FLUXO_COMPLETO_PROJETO.md`](docs/FLUXO_COMPLETO_PROJETO.md)
+📖 **Documentação:** [`docs/04_fluxos_processos/FLUXO_COMPLETO_PROJETO.md`](docs/04_fluxos_processos/FLUXO_COMPLETO_PROJETO.md)
 </details>
 
 ---

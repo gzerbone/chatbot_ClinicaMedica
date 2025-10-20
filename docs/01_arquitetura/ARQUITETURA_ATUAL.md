@@ -1,8 +1,8 @@
-# 🏗️ Arquitetura Atual do Sistema - Chatbot Clínica Médica - Atualizada 05/10 (mais recente)
+# 🏗️ Arquitetura Atual do Sistema - Chatbot Clínica Médica - Atualizada 20/10 (mais recente)
 
 ## 📐 Visão Geral da Arquitetura
 
-O sistema foi completamente refatorado para uma arquitetura **centralizada no Google Gemini AI**, eliminando a fragmentação anterior e simplificando drasticamente o fluxo de dados.
+O sistema foi completamente refatorado para uma arquitetura **modularizada no Google Gemini AI**, com delegação de responsabilidades para módulos especializados, mantendo a centralização da inteligência mas organizando melhor o código.
 
 ## 🎯 Princípios Arquiteturais
 
@@ -11,9 +11,10 @@ O sistema foi completamente refatorado para uma arquitetura **centralizada no Go
 - **Inteligência centralizada** para todas as decisões
 - **Eliminação** de múltiplos serviços redundantes
 
-### 2. **Arquitetura Simplificada**
-- **8 serviços essenciais** (antes: 10+ serviços)
-- **Fluxo linear** e previsível
+### 2. **Arquitetura Modularizada**
+- **5 módulos especializados** do Gemini Service
+- **Delegação de responsabilidades** bem definida
+- **Fluxo orquestrado** pelo Core Service
 - **Manutenibilidade** aprimorada
 - **Monitoramento** de tokens integrado
 
@@ -61,10 +62,13 @@ O sistema foi completamente refatorado para uma arquitetura **centralizada no Go
 │ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ │
 │ │ GEMINI CHATBOT  │ │ CONVERSATION     │ │ WHATSAPP        │ │
 │ │ SERVICE         │ │ SERVICE          │ │ SERVICE         │ │
-│ │                 │ │                  │ │                 │ │
-│ │ • Análise IA    │ │ • Persistência   │ │ • Webhook       │ │
-│ │ • Geração       │ │ • Sessões        │ │ • Mensagens     │ │
-│ │ • Coordenação   │ │ • Estados        │ │ • Mídias        │ │
+│ │ (MODULARIZADO)  │ │                  │ │                 │ │
+│ │                 │ │ • Persistência   │ │ • Webhook       │ │
+│ │ • Core Service  │ │ • Sessões        │ │ • Mensagens     │ │
+│ │ • Intent Detector│ │ • Estados        │ │ • Mídias        │ │
+│ │ • Entity Extractor│ │ • Histórico      │ │                 │ │
+│ │ • Response Gen. │ │                  │ │                 │ │
+│ │ • Session Mgr.  │ │                  │ │                 │ │
 │ └─────────────────┘ └─────────────────┘ └─────────────────┘ │
 │                                                               │
 │ ┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐ │
@@ -100,17 +104,77 @@ O sistema foi completamente refatorado para uma arquitetura **centralizada no Go
 
 #### **Services** (`services/`)
 
-##### **Gemini Chatbot Service** (Protagonista Principal)
+##### **Gemini Chatbot Service** (Modularizado)
 ```python
-# Arquivo: gemini_chatbot_service.py
+# Arquivo: api_gateway/services/gemini/core_service.py
 class GeminiChatbotService:
     """
-    Motor principal do chatbot
+    Orquestrador principal do chatbot modularizado
     Responsabilidades:
-    - Análise de intenções
-    - Geração de respostas
-    - Coordenação de fluxo
-    - Integração com RAG
+    - Coordenação de todos os módulos
+    - Fluxo principal de processamento
+    - Integração com serviços externos
+    - Sistema de pausar/retomar para dúvidas
+    """
+
+# Módulos especializados:
+# - IntentDetector: Análise de intenções
+# - EntityExtractor: Extração de entidades
+# - ResponseGenerator: Geração de respostas
+# - SessionManager: Gerenciamento de sessões
+```
+
+##### **Módulos Especializados do Gemini Service**
+
+**IntentDetector** (`intent_detector.py`)
+```python
+class IntentDetector:
+    """
+    Detecção de intenções do usuário
+    Responsabilidades:
+    - Análise de mensagens com Gemini AI
+    - Determinação do próximo estado
+    - Fallback com palavras-chave
+    - Temperature: 0.7 (determinístico)
+    """
+```
+
+**EntityExtractor** (`entity_extractor.py`)
+```python
+class EntityExtractor:
+    """
+    Extração de entidades das mensagens
+    Responsabilidades:
+    - Extração com Gemini como método primário
+    - Regex como fallback
+    - Validação de especialidades contra banco
+    - Métodos: extract_patient_name(), extract_doctor(), extract_specialty()
+    """
+```
+
+**ResponseGenerator** (`response_generator.py`)
+```python
+class ResponseGenerator:
+    """
+    Geração de respostas contextualizadas
+    Responsabilidades:
+    - Geração com Gemini baseada em contexto
+    - Modo econômico automático via TokenMonitor
+    - Prompts estruturados por intenção
+    - Filtragem de médicos por especialidade
+    """
+```
+
+**SessionManager** (`session_manager.py`)
+```python
+class SessionManager:
+    """
+    Gerenciamento de sessões de conversa
+    Responsabilidades:
+    - Cache + Banco de dados dual
+    - Sincronização automática
+    - Processamento de datas e horários
+    - Histórico de conversas
     """
 ```
 
@@ -240,22 +304,22 @@ INSTALLED_APPS = [
 
 ### 1. **Recepção de Mensagem**
 ```
-WhatsApp → Webhook → Django → Gemini Chatbot Service
+WhatsApp → Webhook → Django → GeminiChatbotService (Core)
 ```
 
-### 2. **Processamento Inteligente**
+### 2. **Processamento Modularizado**
 ```
-Gemini AI → Análise → RAG Service → Base de Conhecimento
+Core Service → SessionManager → IntentDetector → EntityExtractor
 ```
 
 ### 3. **Geração de Resposta**
 ```
-Gemini AI → Resposta → Conversation Service → Persistência
+ResponseGenerator → RAG Service → Base de Conhecimento → Resposta
 ```
 
-### 4. **Envio de Resposta**
+### 4. **Persistência e Envio**
 ```
-Django → WhatsApp Service → WhatsApp Business API → Paciente
+SessionManager → Conversation Service → WhatsApp Service → Paciente
 ```
 
 ## 📊 Estados do Sistema
@@ -266,11 +330,12 @@ STATES = [
     'idle',                    # Ocioso
     'collecting_patient_info', # Coletando dados do paciente
     'collecting_info',         # Coletando informações
+    'answering_questions',     # Respondendo dúvidas do paciente
     'confirming_name',         # Confirmando nome
+    'selecting_specialty',     # Selecionando especialidade médica
     'selecting_doctor',        # Selecionando médico
     'choosing_schedule',       # Escolhendo horário
-    'confirming',              # Confirmando
-    'fornecendo_info'          # Fornecendo informações
+    'confirming'               # Confirmando agendamento
 ]
 ```
 
@@ -281,6 +346,17 @@ MESSAGE_TYPES = [
     'bot',     # Bot
     'system'   # Sistema
 ]
+```
+
+### **Sistema de Pausar/Retomar**
+```python
+# Campo adicional no modelo ConversationSession
+previous_state = models.CharField(max_length=50, blank=True, null=True)
+
+# Estados que trabalham juntos:
+# - answering_questions: Estado atual quando respondendo dúvidas
+# - previous_state: Estado anterior antes de pausar para dúvidas
+# - Palavras-chave para retomar: "continuar", "retomar", "voltar"
 ```
 
 ## 🗄️ Persistência de Dados

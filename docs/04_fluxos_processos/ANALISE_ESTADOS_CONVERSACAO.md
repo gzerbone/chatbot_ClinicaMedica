@@ -12,7 +12,9 @@ choices=[
     ('idle', 'Ocioso'),
     ('collecting_patient_info', 'Coletando Dados do Paciente'),
     ('collecting_info', 'Coletando Informações'),
+    ('answering_questions', 'Respondendo Dúvidas'),        # ✅ NOVO
     ('confirming_name', 'Confirmando Nome do Paciente'),
+    ('selecting_specialty', 'Selecionando Especialidade'), # ✅ NOVO
     ('selecting_doctor', 'Selecionando Médico'),
     ('choosing_schedule', 'Escolhendo Horário'),
     ('confirming', 'Confirmando'),
@@ -27,11 +29,12 @@ choices=[
 - `idle` - Estado inicial
 - `collecting_patient_info` - Coletando dados do paciente
 - `collecting_info` - Coletando informações gerais
+- `answering_questions` - Respondendo dúvidas do paciente (NOVO)
 - `confirming_name` - Confirmando nome do paciente
+- `selecting_specialty` - Selecionando especialidade médica (NOVO)
 - `selecting_doctor` - Selecionando médico
 - `choosing_schedule` - Escolhendo horário
 - `confirming` - Confirmando agendamento
-- `confirmando_agendamento` - Estado usado no código (não no modelo)
 
 #### **❌ Estados Ócios:**
 - `completed` - **NUNCA é definido no código**
@@ -41,15 +44,56 @@ choices=[
 
 ### **Estados Utilizados:**
 ```
-idle → collecting_patient_info → collecting_info → 
-selecting_doctor → choosing_schedule → confirming → 
-confirmando_agendamento → (handoff gerado)
+idle → collecting_patient_info → confirming_name → 
+selecting_specialty → selecting_doctor → choosing_schedule → 
+confirming → (handoff gerado)
+
+# Fluxo alternativo para dúvidas:
+qualquer_estado → answering_questions → (retomar com "continuar")
 ```
 
 ### **Estados Não Utilizados:**
 ```
 completed ❌ (nunca alcançado)
 cancelled ❌ (nunca alcançado)
+```
+
+## 🔄 Sistema de Pausar/Retomar para Dúvidas
+
+### **Campo `previous_state`**
+```python
+# No modelo ConversationSession
+previous_state = models.CharField(
+    max_length=50, 
+    blank=True, 
+    null=True,
+    help_text="Estado anterior antes de pausar para dúvidas"
+)
+```
+
+### **Como Funciona:**
+1. **Pausar**: Quando usuário faz pergunta durante agendamento
+   - Estado atual → `answering_questions`
+   - Estado anterior → salvo em `previous_state`
+
+2. **Retomar**: Quando usuário diz "continuar", "retomar", "voltar"
+   - Estado atual → `previous_state` (restaurado)
+   - `previous_state` → limpo
+
+### **Exemplo de Uso:**
+```python
+# Durante agendamento (estado: selecting_doctor)
+# Usuário pergunta: "Quais especialidades vocês têm?"
+# Sistema:
+# - previous_state = "selecting_doctor"
+# - current_state = "answering_questions"
+# - Responde sobre especialidades
+
+# Usuário diz: "Continuar"
+# Sistema:
+# - current_state = "selecting_doctor" (restaurado)
+# - previous_state = null
+# - Continua agendamento de onde parou
 ```
 
 ## 🎯 Quando os Estados Deveriam Ser Usados
@@ -174,7 +218,9 @@ current_state = models.CharField(
         ('idle', 'Ocioso'),
         ('collecting_patient_info', 'Coletando Dados do Paciente'),
         ('collecting_info', 'Coletando Informações'),
+        ('answering_questions', 'Respondendo Dúvidas'),        # ✅ ADICIONADO
         ('confirming_name', 'Confirmando Nome do Paciente'),
+        ('selecting_specialty', 'Selecionando Especialidade'), # ✅ ADICIONADO
         ('selecting_doctor', 'Selecionando Médico'),
         ('choosing_schedule', 'Escolhendo Horário'),
         ('confirming', 'Confirmando'),
@@ -182,6 +228,14 @@ current_state = models.CharField(
         # ❌ Remover: ('cancelled', 'Cancelado')
     ],
     default='idle'
+)
+
+# Campo adicional para sistema de pausar/retomar
+previous_state = models.CharField(
+    max_length=50, 
+    blank=True, 
+    null=True,
+    help_text="Estado anterior antes de pausar para dúvidas"
 )
 ```
 

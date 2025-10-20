@@ -77,6 +77,9 @@ class IntentDetector:
 - ✅ **Instruções melhoradas**: Orienta o Gemini a usar o contexto para entender referências
 - ✅ **Detecção de correções**: Identifica quando usuário está modificando informações
 - ✅ **Análise mais precisa**: Intent detection com visão completa da conversa
+- ✅ **Simplificação de intenções**: Removidas intenções `buscar_medico` e `buscar_especialidade` para evitar confusão
+- ✅ **Distinção clara**: `buscar_info` para dúvidas vs `agendar_consulta` para agendamentos
+- ✅ **Fallback melhorado**: Análise de palavras-chave mais robusta
 
 **Exemplo de Uso**:
 ```python
@@ -113,6 +116,13 @@ class EntityExtractor:
     def validate_entities(entities) -> Dict
 ```
 
+**Melhorias na Extração de Nomes**:
+- ✅ **Regex aprimorado**: Novos padrões para capturar mais variações de nomes
+- ✅ **Filtro de palavras inválidas**: Lista de palavras que não são nomes (ex: "gostaria", "consulta", "agendamento")
+- ✅ **Validação inteligente**: Verifica se as partes do nome não são palavras inválidas
+- ✅ **Múltiplos padrões**: Suporta "eu sou", "meu nome é", "chamo-me", etc.
+- ✅ **Limpeza automática**: Remove palavras inválidas automaticamente
+
 **Exemplo de Uso**:
 ```python
 from api_gateway.services.gemini.entity_extractor import EntityExtractor
@@ -141,6 +151,13 @@ class ResponseGenerator:
     def _apply_economy_config()
     def _get_fallback_response(message) -> Dict
 ```
+
+**Melhorias na Geração de Respostas**:
+- ✅ **Lista de médicos dinâmica**: Inclui médicos disponíveis com suas especialidades no prompt
+- ✅ **Regras críticas**: "NUNCA invente nomes de médicos! Use APENAS os médicos listados"
+- ✅ **Validação de dados reais**: Só lista médicos que existem no banco de dados
+- ✅ **Contexto de especialidades**: Lista especialidades disponíveis para orientar o Gemini
+- ✅ **Prevenção de alucinações**: Instruções claras para não inventar informações
 
 **Exemplo de Uso**:
 ```python
@@ -326,7 +343,7 @@ from api_gateway.services.gemini_chatbot_service import GeminiChatbotService
 
 ## 🔧 Melhorias Pós-Modularização
 
-### Correção do Contexto Incompleto no Intent Detector
+### 1. Correção do Contexto Incompleto no Intent Detector
 
 **Problema Identificado**: O prompt do `intent_detector.py` estava incompleto - apenas incluía `selected_doctor` e `patient_name`, mas faltavam campos importantes da sessão.
 
@@ -340,6 +357,54 @@ from api_gateway.services.gemini_chatbot_service import GeminiChatbotService
 - ✅ **Melhor detecção**: Entende referências como "na data que falei"
 - ✅ **Menos repetições**: Não pergunta dados já coletados
 - ✅ **Análise mais precisa**: Intent detection mais inteligente
+
+### 2. Simplificação do Sistema de Intenções
+
+**Problema Identificado**: Múltiplas intenções similares (`buscar_medico`, `buscar_especialidade`, `buscar_info`) causavam confusão no fluxo.
+
+**Solução Implementada**:
+- ✅ **Removidas intenções**: `buscar_medico` e `buscar_especialidade` eliminadas
+- ✅ **Consolidação**: Tudo consolidado em `buscar_info` para dúvidas
+- ✅ **Distinção clara**: `buscar_info` vs `agendar_consulta` bem definidas
+- ✅ **Instruções específicas**: Prompt orienta quando usar cada intenção
+
+**Benefícios**:
+- ✅ **Fluxo mais claro**: Menos confusão entre intenções
+- ✅ **Manutenção simplificada**: Menos casos para tratar
+- ✅ **Melhor UX**: Usuário tem experiência mais consistente
+
+### 3. Melhoria na Extração de Nomes com Regex
+
+**Problema Identificado**: Regex de extração de nomes capturava palavras inválidas como "gostaria", "consulta", etc.
+
+**Solução Implementada**:
+- ✅ **Lista de palavras inválidas**: Filtro para palavras que não são nomes
+- ✅ **Validação inteligente**: Verifica cada parte do nome extraído
+- ✅ **Regex aprimorado**: Novos padrões para capturar mais variações
+- ✅ **Limpeza automática**: Remove palavras inválidas automaticamente
+
+**Exemplo de Melhoria**:
+```python
+# ANTES: "Meu nome é gostaria de agendar" → capturava "gostaria de agendar"
+# DEPOIS: "Meu nome é gostaria de agendar" → retorna None (palavra inválida)
+# ANTES: "Eu sou João Silva" → não capturava
+# DEPOIS: "Eu sou João Silva" → captura "João Silva" ✅
+```
+
+### 4. Prevenção de Alucinações na Geração de Respostas
+
+**Problema Identificado**: Gemini às vezes inventava nomes de médicos que não existiam.
+
+**Solução Implementada**:
+- ✅ **Lista dinâmica de médicos**: Prompt inclui médicos reais do banco
+- ✅ **Regras críticas**: "NUNCA invente nomes de médicos!"
+- ✅ **Validação de dados**: Só lista médicos que existem
+- ✅ **Contexto de especialidades**: Lista especialidades disponíveis
+
+**Benefícios**:
+- ✅ **Dados precisos**: Só menciona médicos reais
+- ✅ **Credibilidade**: Evita informações falsas
+- ✅ **Melhor UX**: Usuário recebe informações corretas
 
 ---
 
@@ -433,6 +498,9 @@ python scripts/test_modular_import.py
 | **Responsabilidades** | Todas misturadas | Uma por módulo |
 | **Testabilidade** | Difícil | Fácil |
 | **Importação** | Monolítico | Modular direta |
+| **Intenções** | 8 intenções | 6 intenções (simplificado) |
+| **Extração de nomes** | Básica | Avançada com filtros |
+| **Prevenção de alucinações** | Não | Sim (regras críticas) |
 
 ---
 
@@ -444,7 +512,11 @@ A modularização do Gemini foi concluída com sucesso:
 - **Arquivo monolítico removido** (não há wrapper)
 - **Importação direta** da versão modular
 - **Base sólida** para futuras funcionalidades
-- **Melhorias contínuas** implementadas (contexto completo)
+- **Melhorias contínuas** implementadas:
+  - ✅ Contexto completo no intent detection
+  - ✅ Simplificação do sistema de intenções
+  - ✅ Extração de nomes aprimorada com filtros
+  - ✅ Prevenção de alucinações na geração de respostas
 - **Código limpo** sem redundâncias
 
 **Status**: ✅ **IMPLEMENTADO E PRONTO PARA USO**
@@ -471,7 +543,33 @@ A modularização do Gemini foi concluída com sucesso:
 ---
 
 **Data**: 16/10/2025  
-**Versão**: 2.0 (Atualizada - Sem Wrapper)  
+**Versão**: 3.0 (Atualizada - Melhorias Implementadas)  
 **Prioridade**: 🟢 **COMPLETO E VALIDADO**
+
+---
+
+## 📋 Resumo das Melhorias Implementadas
+
+### ✅ **Melhorias no Intent Detector**
+- **Simplificação de intenções**: Removidas `buscar_medico` e `buscar_especialidade`
+- **Distinção clara**: `buscar_info` vs `agendar_consulta` bem definidas
+- **Fallback melhorado**: Análise de palavras-chave mais robusta
+
+### ✅ **Melhorias no Entity Extractor**
+- **Regex aprimorado**: Novos padrões para capturar mais variações de nomes
+- **Filtro de palavras inválidas**: Lista para evitar capturar "gostaria", "consulta", etc.
+- **Validação inteligente**: Verifica se as partes do nome são válidas
+- **Limpeza automática**: Remove palavras inválidas automaticamente
+
+### ✅ **Melhorias no Response Generator**
+- **Lista dinâmica de médicos**: Inclui médicos reais do banco no prompt
+- **Regras críticas**: "NUNCA invente nomes de médicos!"
+- **Prevenção de alucinações**: Instruções claras para usar apenas dados reais
+- **Contexto de especialidades**: Lista especialidades disponíveis
+
+### ✅ **Melhorias Gerais**
+- **Contexto completo**: Todos os campos da sessão incluídos no prompt
+- **Detecção de correções**: Identifica quando usuário está modificando informações
+- **Análise mais precisa**: Intent detection com visão completa da conversa
 
 
