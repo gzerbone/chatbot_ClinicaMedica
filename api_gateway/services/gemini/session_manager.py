@@ -102,6 +102,17 @@ class SessionManager:
                 session['current_state'] = analysis_result['next_state']
             session['last_activity'] = timezone.now().isoformat()
             
+            # CORREÇÃO: Armazenar informações da resposta gerada
+            if response_result:
+                session['last_response'] = response_result.get('response', '')
+                session['last_intent'] = response_result.get('intent', analysis_result.get('intent', ''))
+                session['last_confidence'] = response_result.get('confidence', analysis_result.get('confidence', 0.0))
+                
+                # Armazenar link de handoff se disponível
+                if response_result.get('handoff_link'):
+                    session['handoff_link'] = response_result['handoff_link']
+                    logger.info(f"🔗 Link de handoff armazenado na sessão")
+            
             # Atualizar entidades extraídas
             entities = analysis_result['entities']
             
@@ -141,6 +152,12 @@ class SessionManager:
                 'horario': bool(session.get('preferred_time'))
             }
             logger.info(f"📋 Status das informações: {info_status}")
+            
+            # CORREÇÃO: Mudar estado para 'confirming' quando todas as informações estão completas
+            all_info_complete = all(info_status.values())
+            if all_info_complete and session.get('current_state') != 'confirming':
+                logger.info("🎯 Todas as informações completas - mudando estado para 'confirming'")
+                session['current_state'] = 'confirming'
             
             # Salvar sessão no cache
             cache_key = f"gemini_session_{phone_number}"

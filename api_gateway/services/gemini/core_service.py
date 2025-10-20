@@ -92,28 +92,35 @@ class GeminiChatbotService:
             conversation_history = self.session_manager.get_conversation_history(phone_number)
             clinic_data = self._get_clinic_data_optimized()
             
-            # 4. Análise da mensagem (Intent Detection) -> Chamar Gemini (mas Django decide o que fazer com o resultado)
-            analysis_result = self.intent_detector.analyze_message(
+            # 4. Detectar intenção (sem entidades)
+            intent_result = self.intent_detector.analyze_message(
                 message, session, conversation_history, clinic_data
             )
             
-            logger.info(f"🔍 Intent detectado: {analysis_result['intent']}, Confiança: {analysis_result['confidence']}")
-            logger.info(f"📦 Entidades extraídas: {analysis_result.get('entities', {})}")
+            logger.info(f"🔍 Intent detectado: {intent_result['intent']}, Confiança: {intent_result['confidence']}")
             
-            # 5. Extração adicional com regex se necessário
-            if not analysis_result.get('entities') or not any(analysis_result['entities'].values()):
-                logger.info("🔄 Tentando extração com regex...")
-                regex_entities = self.entity_extractor.extract_entities_with_regex(message)
-                if regex_entities:
-                    analysis_result['entities'].update(regex_entities)
-                    logger.info(f"✅ Entidades extraídas via regex: {regex_entities}")
+            # 5. Extrair entidades (método principal - Gemini + Regex fallback)
+            entities_result = self.entity_extractor.extract_entities(
+                message, session, conversation_history, clinic_data
+            )
             
-            # 6. Detectar se usuário quer tirar dúvidas durante agendamento
+            logger.info(f"📦 Entidades extraídas: {entities_result}")
+            
+            # 6. Combinar resultados
+            analysis_result = {
+                'intent': intent_result['intent'],
+                'next_state': intent_result['next_state'],
+                'confidence': intent_result['confidence'],
+                'entities': entities_result,
+                'reasoning': intent_result.get('reasoning', '')
+            }
+            
+            # 7. Detectar se usuário quer tirar dúvidas durante agendamento
             if analysis_result['intent'] in ['buscar_info', 'duvida']:
                 if session['current_state'] not in ['idle', 'answering_questions']:
                     conversation_service.pause_for_question(phone_number)
             
-            # 6.5. Verificar disponibilidade real se for solicitação de agendamento
+            # 7.5. Verificar disponibilidade real se for solicitação de agendamento
             if analysis_result['intent'] == 'agendar_consulta':
                 scheduling_analysis = self._handle_scheduling_request(
                     message, session, analysis_result
@@ -122,12 +129,12 @@ class GeminiChatbotService:
                     # Se temos informações de disponibilidade, usar na resposta
                     analysis_result['scheduling_info'] = scheduling_analysis
             
-            # 7. Atualizar sessão ANTES de verificar informações faltantes
+            # 8. Atualizar sessão ANTES de verificar informações faltantes
             self.session_manager.update_session(
                 phone_number, session, analysis_result, {'response': ''}
             )
-            
-            # 8. Verificar se é confirmação de agendamento e gerar handoff
+
+            # 9. Verificar se é confirmação de agendamento e gerar handoff
             response_result = {}
             if analysis_result['intent'] == 'confirmar_agendamento':
                 # Verificar informações necessárias APÓS atualizar sessão
@@ -158,7 +165,7 @@ class GeminiChatbotService:
                     analysis_result['intent'] = 'agendar_consulta'
                     analysis_result['missing_info'] = missing_info_result['missing_info']
             
-            # 9. Gerar resposta se ainda não foi gerada
+            # 10. Gerar resposta se ainda não foi gerada
             if not response_result.get('response'):
                 response_result = self.response_generator.generate_response(
                     message, analysis_result, session, conversation_history, clinic_data
@@ -169,7 +176,7 @@ class GeminiChatbotService:
                     phone_number, session, analysis_result, response_result
                 )
             
-            # 10. Salvar mensagens no histórico
+            # 11. Salvar mensagens no histórico
             self.session_manager.save_messages(
                 phone_number, message, response_result['response'], analysis_result
             )

@@ -44,7 +44,6 @@ class IntentDetector:
         do usuário e usa o modelo Gemini para determinar:
         - Qual a intenção do usuário (agendar, buscar info, etc.)
         - Qual deve ser o próximo estado da conversa
-        - Quais entidades foram extraídas (nome, médico, data, etc.)
         - O nível de confiança na análise
         
         Args:
@@ -57,7 +56,6 @@ class IntentDetector:
             Dict contendo:
                 - intent: Intenção detectada (ex: 'agendar_consulta', 'buscar_info')
                 - next_state: Próximo estado da conversa (ex: 'collecting_patient_info')
-                - entities: Entidades extraídas (nome, médico, data, horário)
                 - confidence: Nível de confiança da análise (0.0 a 1.0)
                 - reasoning: Explicação da análise (opcional)
         """
@@ -127,7 +125,7 @@ class IntentDetector:
         history_text = ""
         if conversation_history:
             history_text = "Histórico da conversa:\n"
-            for msg in conversation_history[-6:]:  # Últimas 6 mensagens
+            for msg in conversation_history[-4:]:  # Últimas 4 mensagens
                 role = "Paciente" if msg['is_user'] else "Assistente"
                 history_text += f"- {role}: {msg['content']}\n"
         
@@ -151,19 +149,18 @@ ANÁLISE NECESSÁRIA:
 Analise a mensagem e determine:
 
 1. INTENÇÃO PRINCIPAL (uma das opções abaixo):
-   - saudacao: Cumprimentos, oi, olá, bom dia
-   - buscar_info: Perguntas sobre clínica, médicos, exames, preços, endereço, planos de saúde (convênios), especialidades e os especialistas na clínica - APENAS PARA TIRAR DÚVIDAS
-   - agendar_consulta: Quero agendar, marcar consulta, agendamento, agendar, consulta, com médico, especialidade, data, horário
-   - confirmar_agendamento: Confirmar dados, sim, está correto, confirmar, dados, correto, confirmado
+   - saudacao: Cumprimentos, oi, olá, bom dia, boa tarde, boa noite, tudo bem?, tudo bem
+   - buscar_info: Perguntas sobre clínica, médicos, exames, preços, endereço, convênios, planos de saúde, especialidades - APENAS DÚVIDAS
+   - agendar_consulta: Quero agendar, marcar consulta, agendamento
+   - confirmar_agendamento: Confirmar dados, sim, está correto, confirmado
    - despedida: Tchau, obrigado, até logo
    - duvida: Não entendi, pode repetir, ajuda
 
 IMPORTANTE - DISTINÇÃO ENTRE DÚVIDAS E AGENDAMENTO:
-- Use "buscar_info" quando o usuário quer APENAS informações (ex: "Quais médicos vocês têm?", "Que especialidades atendem?", "Quem é o Dr. João?")
-- Use "agendar_consulta" quando o usuário quer agendar E menciona médico/especialidade (ex: "Quero agendar com Dr. João", "Quero consulta de cardiologia", "Marcar consulta com Dr. Ana")
-- Palavras-chave para "buscar_info": "quais", "quem", "que", "tem", "atendem", "disponível"
-- Palavras-chave para "agendar_consulta": "quero", "agendar", "marcar", "consulta", "com", "para"
-- NÃO use intenções separadas para buscar_medico/buscar_especialidade - isso causa confusão no fluxo
+- Use "buscar_info" quando o usuário quer APENAS informações
+- Use "agendar_consulta" quando o usuário quer agendar E menciona médico/especialidade
+- Palavras-chave para "buscar_info": "quais", "quem", "que", "tem", "atendem"
+- Palavras-chave para "agendar_consulta": "quero", "agendar", "marcar", "consulta"
 
 2. PRÓXIMO ESTADO DA CONVERSA:
    - idle: Estado inicial
@@ -173,43 +170,15 @@ IMPORTANTE - DISTINÇÃO ENTRE DÚVIDAS E AGENDAMENTO:
    - selecting_specialty: Escolhendo especialidade médica
    - choosing_schedule: Escolhendo data/horário
    - confirming: Confirmando dados finais do agendamento
-   - collecting_info: Fornecendo informações solicitadas sobre clínica, médicos, exames
+   - collecting_info: Fornecendo informações solicitadas
    - answering_questions: Respondendo dúvidas do paciente
 
-3. ENTIDADES EXTRAÍDAS (EXTRAIA SEMPRE QUE POSSÍVEL):
-   - nome_paciente: Nome completo do paciente (ex: "João Silva", "Maria Santos")
-   - medico: Nome do médico mencionado (ex: "Dr. João", "Dra. Ana", "João Carvalho")
-   - especialidade: Especialidade médica (ex: "cardiologia", "dermatologia", "pediatria")
-   - data: Data em formato DD/MM/YYYY ou texto (ex: "15/09/2024", "segunda-feira", "amanhã")
-   - horario: Horário em formato HH:MM ou texto (ex: "14:30", "2h30", "2 da tarde")
-
-IMPORTANTE: 
-- Se o usuário quiser uma consulta com algum especialista como, por exemplo "Quero consulta com Pneumologista", coloque "especialidade" como "pneumologia" e pergunte o nome do médico.
-- Se a mensagem contém informações como nome do paciente, médico, especialidade, data ou horário, EXTRAIA essas informações mesmo que já estejam na sessão anterior. O paciente pode estar corrigindo ou confirmando dados.
-- Use o CONTEXTO ATUAL para entender referências como "na data que falei", "o médico que escolhi", "mudar o horário", etc.
-- Se o paciente mencionar "mudar", "alterar", "corrigir", considere que está modificando informações já coletadas.
-
-4. CONFIANÇA: Nível de confiança na análise (0.0 a 1.0)
-
-INSTRUÇÕES PARA EXTRAÇÃO DE ENTIDADES:
-- Se encontrar um nome (ex: "João Silva"), coloque em "nome_paciente"
-- Se encontrar médico (ex: "Dr. João"), coloque em "medico"  
-- Se encontrar data (ex: "15/09", "segunda"), coloque em "data"
-- Se encontrar horário (ex: "14h", "2 da tarde"), coloque em "horario"
-- Se encontrar especialidade (ex: "cardiologia"), coloque em "especialidade"
-- Se NÃO encontrar a informação, use null
+3. CONFIANÇA: Nível de confiança na análise (0.0 a 1.0)
 
 Responda APENAS com um JSON válido no formato:
 {{
     "intent": "intenção_detectada",
     "next_state": "próximo_estado",
-    "entities": {{
-        "nome_paciente": "nome_extraído_ou_null",
-        "medico": "médico_extraído_ou_null",
-        "especialidade": "especialidade_extraída_ou_null",
-        "data": "data_extraída_ou_null",
-        "horario": "horário_extraído_ou_null",
-    }},
     "confidence": 0.95,
     "reasoning": "Explicação breve da análise"
 }}"""
@@ -239,10 +208,6 @@ Responda APENAS com um JSON válido no formato:
             # Este estado deve ser definido apenas pelo core_service quando o handoff for gerado
             if analysis['next_state'] == 'confirming':
                 analysis['next_state'] = 'choosing_schedule'
-            
-            # Garantir que entities existe
-            if 'entities' not in analysis:
-                analysis['entities'] = {}
             
             # Garantir que confidence existe
             if 'confidence' not in analysis:
@@ -274,7 +239,6 @@ Responda APENAS com um JSON válido no formato:
         return {
             'intent': intent,
             'next_state': 'collecting_info',
-            'entities': {},
             'confidence': 0.3,
             'reasoning': 'Extração manual de fallback'
         }
@@ -318,7 +282,6 @@ Responda APENAS com um JSON válido no formato:
         return {
             'intent': intent,
             'next_state': next_state,
-            'entities': {},
             'confidence': 0.5,
             'reasoning': f'Análise de fallback baseada em palavras-chave (estado atual: {current_state})'
         }

@@ -106,6 +106,7 @@ class ResponseGenerator:
         clinic_info = clinic_data.get('clinica_info', {})
         medicos = clinic_data.get('medicos', [])
         especialidades = clinic_data.get('especialidades', [])
+
         
         # Informações já coletadas
         patient_name = session.get('patient_name')
@@ -117,30 +118,56 @@ class ResponseGenerator:
         # Criar lista de informações já coletadas
         collected_info = []
         if patient_name:
-            collected_info.append(f"✅ Nome do paciente: {patient_name}")
+            collected_info.append(f"Nome do paciente: {patient_name}")
         if selected_specialty:
-            collected_info.append(f"✅ Especialidade escolhida: {selected_specialty}")
+            collected_info.append(f"Especialidade escolhida: {selected_specialty}")
         if selected_doctor:
-            collected_info.append(f"✅ Médico escolhido: {selected_doctor}")
+            collected_info.append(f"Médico escolhido: {selected_doctor}")
         if preferred_date:
-            collected_info.append(f"✅ Data preferida: {preferred_date}")
+            collected_info.append(f"Data preferida: {preferred_date}")
         if preferred_time:
-            collected_info.append(f"✅ Horário preferido: {preferred_time}")
+            collected_info.append(f"Horário preferido: {preferred_time}")
         
-        collected_info_str = '\n'.join(collected_info) if collected_info else "Nenhuma informação coletada ainda."
+        # collected_info_str junta todas as infos já coletadas sobre o paciente, separando cada uma por uma linha. 
+        # Isso facilita mostrar para o usuário o que já foi informado até agora.
+        if collected_info:
+            collected_info_str = '\n'.join(collected_info)
+        else:
+            # Se ainda não existe nenhuma informação coletada, ele mostra a mensagem "Nenhuma informação coletada ainda."
+            collected_info_str = "Nenhuma informação coletada ainda."
         
         # Obter especialidades disponíveis
         specialties_list = ', '.join([esp.get('nome', '') for esp in especialidades[:5]]) if especialidades else 'diversas especialidades'
         
-        # Obter médicos disponíveis
+        # Obter médicos disponíveis (filtrar por especialidade se selecionada)
         medicos_list = []
-        if medicos:
+        medicos_to_show = medicos
+
+        # Se há especialidade selecionada, filtrar médicos
+        # Se existe uma especialidade selecionada e há médicos cadastrados
+        if selected_specialty and medicos:
+            medicos_to_show = []  # Inicializa lista para armazenar médicos filtrados
+
+            # Percorre todos os médicos cadastrados
             for medico in medicos:
+                # Obtém as especialidades do médico, convertendo para minúsculas para comparação
+                especialidades_medico = medico.get('especialidades_display', '').lower()
+                # Verifica se a especialidade selecionada está nas especialidades do médico
+                if selected_specialty.lower() in especialidades_medico:
+                    # Se for compatível, adiciona o médico à lista
+                    medicos_to_show.append(medico)
+
+        if medicos_to_show:
+            for medico in medicos_to_show:
                 nome = medico.get('nome', '')
                 especialidades_medico = medico.get('especialidades_display', '')
                 medicos_list.append(f"• {nome} ({especialidades_medico})")
-        
+
         medicos_text = '\n'.join(medicos_list) if medicos_list else 'Nenhum médico cadastrado'
+
+        # Adicionar contexto sobre filtragem
+        if selected_specialty:
+            medicos_text = f"'{selected_specialty}':\n{medicos_text}"
         
         # Verificar se temos informações de disponibilidade real
         scheduling_info = analysis_result.get('scheduling_info', {})
@@ -161,8 +188,23 @@ class ResponseGenerator:
             missing_list = [missing_names.get(info, info) for info in missing_info]
             missing_context = f"""
 INFORMAÇÕES AINDA NECESSÁRIAS:
-❌ Faltam: {', '.join(missing_list)}
-⚠️ IMPORTANTE: Pergunte APENAS a próxima informação faltante, não todas de uma vez!"""
+- Faltam: {', '.join(missing_list)}
+- IMPORTANTE: Pergunte APENAS a próxima informação faltante, não todas de uma vez!"""
+        
+        # Adicionar validação de Especialidade extraída (sempre definir)
+        specialty_validation_context = ""
+        especialidade_extraida = entities.get('especialidade')
+        
+        if especialidade_extraida:
+            # verificar se especialidade extraída existe no banco
+            nome_especialidade = [esp.get('nome', '').lower() for esp in especialidades]
+            if especialidade_extraida.lower() not in nome_especialidade:
+                specialty_validation_context = f"""
+- ESPECIALIDADE NÃO ENCONTRADA: "{especialidade_extraida}"
+- Esta especialidade NÃO está disponível na clínica
+- IMPORTANTE: Informe ao usuário que não temos esta especialidade
+- Liste TODAS as especialidades disponíveis: {specialties_list}
+"""
         
         if scheduling_info.get('has_availability_info'):
             calendar_availability = scheduling_info.get('calendar_availability', {})
@@ -191,8 +233,8 @@ DISPONIBILIDADE REAL DO GOOGLE CALENDAR:
                 doctor_name = calendar_availability.get('doctor_name', 'Médico')
                 availability_context = f"""
 DISPONIBILIDADE REAL DO GOOGLE CALENDAR:
-❌ {doctor_name} não tem horários disponíveis nos próximos 7 dias
-⚠️ Informe que o médico está sem agenda disponível e sugira outro médico ou que entre em contato."""
+-{doctor_name} não tem horários disponíveis nos próximos 7 dias
+-Informe que o médico está sem agenda disponível e sugira outro médico ou que entre em contato."""
         
         prompt = f"""Você é um assistente virtual da {clinic_info.get('nome', 'Clínica Médica')}.
 
@@ -204,19 +246,20 @@ INFORMAÇÕES JÁ COLETADAS (NÃO PERGUNTE NOVAMENTE):
 {collected_info_str}
 {availability_context}
 {missing_context}
+{specialty_validation_context}
 
 ENTIDADES EXTRAÍDAS AGORA:
 {entities}
 
 ESPECIALIDADES DISPONÍVEIS: {specialties_list}
 
-MÉDICOS DISPONÍVEIS:
+MÉDICOS DISPONÍVEIS PARA A ESPECIALIDADE '{selected_specialty}':
 {medicos_text}
 
 INSTRUÇÕES:
 1. Responda de forma natural, educada e profissional
 2. NÃO repita perguntas sobre informações já coletadas (veja acima)
-3. Se TODAS as informações estiverem coletadas, pergunte se deseja confirmar o pré-agendamento
+3. Apenas se TODAS as informações estiverem coletadas, pergunte se deseja confirmar o pré-agendamento
 4. Se faltar alguma informação, pergunte APENAS a informação faltante
 5. Use emojis moderadamente para deixar a conversa mais amigável
 6. Seja objetivo e direto
