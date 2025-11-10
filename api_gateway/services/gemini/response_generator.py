@@ -8,7 +8,7 @@ Responsável por:
 """
 
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import google.generativeai as genai
 from django.conf import settings
@@ -71,8 +71,8 @@ class ResponseGenerator:
             Dict com response, intent, confidence
         """
         try:
-            # Construir prompt de resposta
-            response_prompt = self._build_response_prompt(
+            # Construir prompt de resposta (retorna também metadados do contexto)
+            response_prompt, prompt_metadata = self._build_response_prompt(
                 message, analysis_result, session, conversation_history, clinic_data
             )
             
@@ -85,10 +85,15 @@ class ResponseGenerator:
             # Log do uso de tokens para resposta
             token_monitor.log_token_usage("RESPOSTA", response_prompt, response.text, session.get('phone_number'))
             
+            metadata = prompt_metadata or {}
+            
             return {
                 'response': response.text.strip(),
                 'intent': analysis_result['intent'],
-                'confidence': analysis_result['confidence']
+                'confidence': analysis_result['confidence'],
+                # Enviar lista de médicos sugeridos para que outros módulos possam usar o contexto
+                'suggested_doctors': metadata.get('suggested_doctors', []),
+                'primary_suggested_doctor': metadata.get('primary_suggested_doctor')
             }
             
         except Exception as e:
@@ -97,8 +102,10 @@ class ResponseGenerator:
     
     def _build_response_prompt(self, message: str, analysis_result: Dict,
                              session: Dict, conversation_history: List,
-                             clinic_data: Dict) -> str:
-        """Constrói prompt para geração de resposta com contexto otimizado"""
+                             clinic_data: Dict) -> Tuple[str, Dict[str, Any]]:
+        """Constrói prompt para geração de resposta com contexto otimizado.
+        Retorna o prompt e um dicionário de metadados (ex: médicos sugeridos).
+        """
         intent = analysis_result['intent']
         entities = analysis_result.get('entities', {})
         
@@ -107,6 +114,8 @@ class ResponseGenerator:
         medicos = clinic_data.get('medicos', [])
         especialidades = clinic_data.get('especialidades', [])
 
+        prompt_metadata: Dict[str, Any] = {}
+        
         
         # Informações já coletadas
         patient_name = session.get('patient_name')
@@ -141,27 +150,28 @@ class ResponseGenerator:
         
         # Obter médicos disponíveis (filtrar por especialidade se selecionada)
         medicos_list = []
-        medicos_to_show = medicos
+        medicos_to_show = []
 
-        # Se há especialidade selecionada, filtrar médicos
-        # Se existe uma especialidade selecionada e há médicos cadastrados
+        # Apenas sugerir médicos quando já temos uma especialidade selecionada (evita sugestão precoce)
         if selected_specialty and medicos:
-            medicos_to_show = []  # Inicializa lista para armazenar médicos filtrados
-
-            # Percorre todos os médicos cadastrados
             for medico in medicos:
-                # Obtém as especialidades do médico, convertendo para minúsculas para comparação
                 especialidades_medico = medico.get('especialidades_display', '').lower()
-                # Verifica se a especialidade selecionada está nas especialidades do médico
                 if selected_specialty.lower() in especialidades_medico:
-                    # Se for compatível, adiciona o médico à lista
                     medicos_to_show.append(medico)
-
+        
         if medicos_to_show:
             for medico in medicos_to_show:
                 nome = medico.get('nome', '')
                 especialidades_medico = medico.get('especialidades_display', '')
                 medicos_list.append(f"• {nome} ({especialidades_medico})")
+
+            # Guardar lista de médicos sugeridos para que possamos reconhecer confirmações por pronome
+            suggested_doctors = [medico.get('nome', '').strip() for medico in medicos_to_show if medico.get('nome')]
+            # Filtrar strings vazias
+            suggested_doctors = [doctor for doctor in suggested_doctors if doctor]
+            if suggested_doctors:
+                prompt_metadata['suggested_doctors'] = suggested_doctors
+                prompt_metadata['primary_suggested_doctor'] = suggested_doctors[0]
 
         medicos_text = '\n'.join(medicos_list) if medicos_list else 'Nenhum médico cadastrado'
 
@@ -269,6 +279,7 @@ REGRAS IMPORTANTES:
 - Se intent = "saudacao" E não tiver nome: SEMPRE pergunte o nome primeiro ("Olá! Para começar, qual é o seu nome?")
 - Se já tiver nome, especialidade, médico, data e horário: pergunte se deseja confirmar
 - Se faltar apenas UMA informação: pergunte essa informação
+- Se todas as entidades foram extraídas e confirmadas, então envie o handoff
 - NÃO solicite informações que já estão na lista "INFORMAÇÕES JÁ COLETADAS"
 
 ORDEM DE COLETA DE INFORMAÇÕES (SEMPRE SEGUIR ESTA ORDEM):
@@ -294,14 +305,16 @@ DISTINÇÃO ENTRE DÚVIDAS E AGENDAMENTO:
 
 Gere a resposta:"""
         
-        return prompt
+        return prompt, prompt_metadata
     
     def _get_fallback_response(self, message: str) -> Dict[str, Any]:
         """Resposta de fallback quando há erro"""
         return {
-            'response': "Desculpe, tive um problema temporário. Poderia reformular sua pergunta?",
-            'intent': 'duvida',
-            'confidence': 0.3
+            'response': f"Desculpe, estou com dificuldades para responder no momento. Você poderia reformular ou tentar novamente em instantes?",
+            'intent': 'error',
+            'confidence': 0.0,
+            'suggested_doctors': [],
+            'primary_suggested_doctor': None
         }
 
 

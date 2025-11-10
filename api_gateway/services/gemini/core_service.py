@@ -112,7 +112,8 @@ class GeminiChatbotService:
                 'next_state': intent_result['next_state'],
                 'confidence': intent_result['confidence'],
                 'entities': entities_result,
-                'reasoning': intent_result.get('reasoning', '')
+                'reasoning': intent_result.get('reasoning', ''),
+                'raw_message': message  # 🔍 Guarda mensagem original para análises posteriores (pronome etc.)
             }
             
             # 7. Detectar se usuário quer tirar dúvidas durante agendamento
@@ -134,34 +135,170 @@ class GeminiChatbotService:
                 phone_number, session, analysis_result, {'response': ''}
             )
 
-            # 9. Verificar se é confirmação de agendamento e gerar handoff
+            # ═══════════════════════════════════════════════════════════════════════════════
+            # 9. VERIFICAR SE É CONFIRMAÇÃO DE AGENDAMENTO E GERAR HANDOFF
+            # ═══════════════════════════════════════════════════════════════════════════════
+            # Este bloco é responsável por:
+            # 1. Detectar quando o usuário quer confirmar o agendamento
+            # 2. Verificar se todas as informações necessárias foram coletadas
+            # 3. Gerar o link de handoff para a secretaria (primeira confirmação)
+            # 4. Evitar gerar handoff duplicado se já foi confirmado
+            # ═══════════════════════════════════════════════════════════════════════════════
+            
             response_result = {}
             if analysis_result['intent'] == 'confirmar_agendamento':
-                # Verificar informações necessárias APÓS atualizar sessão
+                # Verificar quais informações ainda faltam para o agendamento completo
+                # (nome, médico, especialidade, data, horário)
                 missing_info_result = conversation_service.get_missing_appointment_info(phone_number)
                 
+                # Se todas as informações estão completas, podemos prosseguir
                 if missing_info_result['is_complete']:
-                    # Só processar se não estiver já confirmando
+                    
+                    # ─────────────────────────────────────────────────────────────────
+                    # VERIFICAR SE JÁ FOI CONFIRMADO ANTERIORMENTE
+                    # ─────────────────────────────────────────────────────────────────
+                    # O estado 'confirming' indica que o handoff já foi gerado
+                    # Se não estiver neste estado, é a PRIMEIRA confirmação
+                    # Se já estiver, é uma CONFIRMAÇÃO DUPLICADA (usuário repetiu)
+                    # ─────────────────────────────────────────────────────────────────
+                    
                     if session.get('current_state') != 'confirming':
+                        # ✅ PRIMEIRA CONFIRMAÇÃO - Processar normalmente
+                        logger.info(f"✅ Primeira confirmação detectada - gerando handoff para {phone_number}")
+                        
+                        # Gerar link de handoff para a secretaria
                         handoff_result = self._handle_appointment_confirmation(
                             phone_number, session, analysis_result
                         )
+                        
                         if handoff_result:
+                            # Armazenar a mensagem de confirmação e o link do handoff
                             response_result['response'] = handoff_result['message']
                             response_result['handoff_link'] = handoff_result['handoff_link']
+                            
+                            # Mudar o estado para 'confirming' para indicar que já foi confirmado
                             session['current_state'] = 'confirming'
-                            # Atualizar analysis_result para refletir o novo estado
                             analysis_result['next_state'] = 'confirming'
-                            # Atualizar sessão novamente com o estado de confirmação
+                            
+                            # Atualizar a sessão no banco de dados com o novo estado
                             self.session_manager.update_session(
                                 phone_number, session, analysis_result, response_result
                             )
+                            
+                            logger.info(f"🔗 Handoff gerado com sucesso para {phone_number}")
+                    
                     else:
-                        logger.warning(f"⚠️ Ignorando confirmação duplicada para {phone_number}")
-                        # Não gerar resposta, deixar o Gemini responder normalmente
+                        # ⚠️ CONFIRMAÇÃO DUPLICADA - Usuário já confirmou anteriormente
+                        # Não devemos gerar outro handoff, apenas informar que já foi confirmado
+                        logger.warning(f"⚠️ Confirmação duplicada detectada para {phone_number} - estado já é 'confirming'")
+                        
+                        # ─────────────────────────────────────────────────────────────────
+                        # BUSCAR DADOS DA SESSÃO PARA MOSTRAR RESUMO
+                        # ─────────────────────────────────────────────────────────────────
+                        # Como já foi confirmado, vamos buscar os dados confirmados
+                        # e mostrar um resumo amigável ao usuário
+                        # ─────────────────────────────────────────────────────────────────
+                        
+                        patient_name = session.get('patient_name', 'Paciente')
+                        doctor = session.get('selected_doctor', 'médico')
+                        specialty = session.get('selected_specialty', 'especialidade')
+                        date = session.get('preferred_date')
+                        time = session.get('preferred_time')
+                        
+                        # ─────────────────────────────────────────────────────────────────
+                        # FORMATAR DATA E HORA PARA EXIBIÇÃO AMIGÁVEL
+                        # ─────────────────────────────────────────────────────────────────
+                        # Os dados podem estar em formatos diferentes (string ou objeto)
+                        # Precisamos normalizar para mostrar ao usuário
+                        # ─────────────────────────────────────────────────────────────────
+                        
+                        if date:
+                            try:
+                                from datetime import datetime
+
+                                # Se for string, converter para datetime
+                                if isinstance(date, str):
+                                    date_obj = datetime.fromisoformat(date)
+                                    date_str = date_obj.strftime('%d/%m/%Y')
+                                else:
+                                    # Se já for objeto datetime
+                                    date_str = date.strftime('%d/%m/%Y')
+                            except Exception as e:
+                                logger.warning(f"Erro ao formatar data: {e}")
+                                date_str = str(date)
+                        else:
+                            date_str = 'data a definir'
+                        
+                        if time:
+                            try:
+                                # Extrair apenas HH:MM do horário
+                                if isinstance(time, str):
+                                    time_str = time[:5]  # Pega apenas "HH:MM"
+                                else:
+                                    time_str = time.strftime('%H:%M')
+                            except Exception as e:
+                                logger.warning(f"Erro ao formatar horário: {e}")
+                                time_str = str(time)
+                        else:
+                            time_str = 'horário a definir'
+                        
+                        # ─────────────────────────────────────────────────────────────────
+                        # BUSCAR LINK DE HANDOFF ANTERIOR (se existir)
+                        # ─────────────────────────────────────────────────────────────────
+                        # Se o handoff já foi gerado anteriormente, o link estará
+                        # armazenado na sessão. Vamos incluí-lo na resposta caso o
+                        # usuário queira vê-lo novamente.
+                        # ─────────────────────────────────────────────────────────────────
+                        
+                        handoff_link = session.get('handoff_link', '')
+                        
+                        # ─────────────────────────────────────────────────────────────────
+                        # GERAR RESPOSTA AMIGÁVEL INFORMANDO QUE JÁ FOI CONFIRMADO
+                        # ─────────────────────────────────────────────────────────────────
+                        # Esta resposta evita que o Gemini seja chamado e peça
+                        # as informações novamente (que era o problema original)
+                        # 
+                        # Inclui o link de handoff se estiver disponível, permitindo
+                        # que o usuário acesse novamente se necessário
+                        # ─────────────────────────────────────────────────────────────────
+                        
+                        response_text = f"""✅ Seu agendamento já foi confirmado anteriormente!
+
+📋 Dados do seu agendamento:
+👤 Paciente: {patient_name}
+🏥 Especialidade: {specialty}
+👨‍⚕️ Médico: Dr. {doctor}
+📅 Data: {date_str}
+⏰ Horário: {time_str}
+
+Nossa secretaria entrará em contato em breve para finalizar seu agendamento."""
+                        
+                        # Adicionar link de handoff se existir
+                        if handoff_link:
+                            response_text += f"\n\n🔗 Link de confirmação: {handoff_link}"
+                        
+                        response_text += "\n\nHá algo mais em que posso ajudar? 😊"
+                        
+                        response_result['response'] = response_text
+                        
+                        # Se o link existe, incluir no resultado também
+                        if handoff_link:
+                            response_result['handoff_link'] = handoff_link
+                        
+                        logger.info(f"📤 Resposta de confirmação duplicada gerada para {phone_number}")
+                
                 else:
+                    # ─────────────────────────────────────────────────────────────────
+                    # INFORMAÇÕES AINDA INCOMPLETAS
+                    # ─────────────────────────────────────────────────────────────────
+                    # Se o usuário tentou confirmar mas ainda faltam informações
+                    # (ex: falta médico, data, etc), mudamos o intent para continuar
+                    # coletando as informações faltantes
+                    # ─────────────────────────────────────────────────────────────────
+                    
                     logger.info(f"🔄 Informações faltantes para handoff: {missing_info_result['missing_info']}")
-                    # Mudar intent para continuar coletando informações
+                    
+                    # Mudar intent para 'agendar_consulta' para continuar coletando dados
                     analysis_result['intent'] = 'agendar_consulta'
                     analysis_result['missing_info'] = missing_info_result['missing_info']
             

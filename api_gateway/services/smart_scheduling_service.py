@@ -3,13 +3,30 @@ Serviço de Consulta de Horários
 Consulta disponibilidade no Google Calendar e informa horários ao usuário
 """
 import logging
+import re
 from datetime import date, datetime, timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from django.utils import timezone
 
 from .google_calendar_service import google_calendar_service
 from .rag_service import RAGService
+
+# Termos usados para reconhecer confirmações de médico por pronome
+PRONOUN_DOCTOR_TERMS = {
+    'ele', 'ela', 'ele mesmo', 'ela mesma', 'com ele', 'com ela', 'com ele mesmo', 'com ela mesma',
+    'ele sim', 'ela sim', 'com o mesmo', 'com a mesma', 'o mesmo', 'a mesma',
+    'nele', 'nela', 'ele msm', 'ela msm', 'com ele msm', 'com ela msm'
+}
+
+PRONOUN_DOCTOR_MESSAGE_TERMS = PRONOUN_DOCTOR_TERMS.union(
+    {f"quero {term}" for term in PRONOUN_DOCTOR_TERMS}.union(
+        {f"prefiro {term}" for term in PRONOUN_DOCTOR_TERMS},
+        {f"gostaria {term}" for term in PRONOUN_DOCTOR_TERMS}
+    )
+)
+
+PRONOUN_DOCTOR_REGEX = [r'\bele\b', r'\bela\b']
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +74,9 @@ class SmartSchedulingService:
         2. Se não encontrar na mensagem, busca na sessão (informações de mensagens anteriores)
         3. Retorna informações combinadas para manter contexto da conversa
         """
-        import re
         
         info = {
+            'message': message_lower,
             'doctor_mentioned': None,
             'specialty_mentioned': None,
             'date_mentioned': None,
@@ -81,9 +98,13 @@ class SmartSchedulingService:
         for pattern in doctor_patterns:
             match = re.search(pattern, message_lower)
             if match:
-                doctor_name = match.group(1).strip()
-                info['doctor_mentioned'] = doctor_name
-                break
+                doctor_reference = match.group(1).strip()
+                resolved_doctor = self._resolve_doctor_reference(doctor_reference, message_lower, session)
+                if resolved_doctor:
+                    info['doctor_mentioned'] = resolved_doctor
+                    logger.info(f"🤝 Referência ao médico interpretada como: {resolved_doctor}")
+                    break
+                # Caso a referência encontrada seja apenas um pronome sem contexto, continuar procurando
         
         # Se não encontrou médico na mensagem, buscar na sessão
         if not info['doctor_mentioned'] and session.get('selected_doctor'):
@@ -149,6 +170,52 @@ class SmartSchedulingService:
                    f"Data: {info['date_mentioned']}, Horário: {info['time_mentioned']}")
         
         return info
+
+    def _resolve_doctor_reference(self, doctor_reference: Optional[str], message_lower: str, session: Dict) -> Optional[str]:
+        """Resolve referência ao médico convertendo pronomes em nomes concretos."""
+        reference_clean = (doctor_reference or '').strip()
+        reference_lower = reference_clean.lower()
+
+        def _normalize_reference(text: str) -> str:
+            normalized = text.strip().lower()
+            normalized = re.sub(r'^(dr\.?|dra\.?|doutor(a)?)\s+', '', normalized)
+            if normalized.startswith('com '):
+                normalized = normalized[4:]
+            return normalized.strip()
+
+        normalized_reference = _normalize_reference(reference_lower) if reference_lower else ''
+
+        pronoun_detected = False
+        if normalized_reference in PRONOUN_DOCTOR_TERMS or reference_lower in PRONOUN_DOCTOR_TERMS:
+            pronoun_detected = True
+        elif normalized_reference and any(term in normalized_reference for term in PRONOUN_DOCTOR_TERMS):
+            pronoun_detected = True
+        elif reference_lower and any(term in reference_lower for term in PRONOUN_DOCTOR_TERMS):
+            pronoun_detected = True
+        elif message_lower:
+            simplified_message = message_lower.replace('  ', ' ')
+            if any(term in simplified_message for term in PRONOUN_DOCTOR_MESSAGE_TERMS):
+                pronoun_detected = True
+            else:
+                for regex_pattern in PRONOUN_DOCTOR_REGEX:
+                    if re.search(regex_pattern, simplified_message):
+                        pronoun_detected = True
+                        break
+
+        if pronoun_detected:
+            candidate = session.get('selected_doctor') or session.get('last_suggested_doctor')
+            if not candidate:
+                suggested_list = session.get('last_suggested_doctors') or []
+                if suggested_list:
+                    candidate = suggested_list[0]
+            return candidate
+
+        if reference_clean:
+            if reference_clean.lower().startswith('com '):
+                reference_clean = reference_clean[4:]
+            return reference_clean.strip().title()
+
+        return None
 
     def _determine_next_action(self, extracted_info: Dict, session: Dict) -> Dict[str, Any]:
         """
