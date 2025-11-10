@@ -12,7 +12,7 @@ O sistema foi completamente refatorado para uma arquitetura **modularizada no Go
 - **Eliminação** de múltiplos serviços redundantes
 
 ### 2. **Arquitetura Modularizada**
-- **5 módulos especializados** do Gemini Service
+- **4 módulos especializados** do Gemini Service (IntentDetector, EntityExtractor, ResponseGenerator e SessionManager)
 - **Delegação de responsabilidades** bem definida
 - **Fluxo orquestrado** pelo Core Service
 - **Manutenibilidade** aprimorada
