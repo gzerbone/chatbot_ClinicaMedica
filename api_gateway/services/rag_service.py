@@ -4,6 +4,8 @@ Serviço para acessar dados do RAG Agent
 import logging
 from typing import Any, Dict, List
 
+from django.core.cache import cache
+
 from rag_agent.models import (ClinicaInfo, Convenio, Especialidade, Exame,
                               Medico)
 from rag_agent.serializers import (ClinicaInfoSerializer, ConvenioSerializer,
@@ -12,6 +14,9 @@ from rag_agent.serializers import (ClinicaInfoSerializer, ConvenioSerializer,
 
 logger = logging.getLogger(__name__)
 
+# Timeout de cache para dados RAG (30 minutos = 1800 segundos)
+# Dados da clínica mudam raramente, então cache por mais tempo é eficiente
+RAG_CACHE_TIMEOUT = 1800
 
 class RAGService:
     """
@@ -21,15 +26,25 @@ class RAGService:
     @staticmethod
     def get_clinic_info() -> Dict[str, Any]:
         """
-        Obtém informações da clínica
+        Obtém informações da clínica (com cache)
         
         Returns:
             Dicionário com informações da clínica ou None se não encontrada
         """
+        cache_key = 'rag_clinic_info'
+        clinica_data = cache.get(cache_key)
+        
+        if clinica_data is not None:
+            logger.debug("🎯 Cache HIT: Informações da clínica")
+            return clinica_data
+        
         try:
+            logger.debug("💾 Cache MISS: Buscando informações da clínica no banco")
             clinica = ClinicaInfo.objects.first()
             if clinica:
-                return ClinicaInfoSerializer(clinica).data
+                clinica_data = ClinicaInfoSerializer(clinica).data
+                cache.set(cache_key, clinica_data, RAG_CACHE_TIMEOUT)
+                return clinica_data
             return None
         except Exception as e:
             logger.error(f"Erro ao obter informações da clínica: {e}")
@@ -38,14 +53,24 @@ class RAGService:
     @staticmethod
     def get_especialidades() -> List[Dict[str, Any]]:
         """
-        Obtém lista de especialidades ativas
+        Obtém lista de especialidades ativas (com cache)
         
         Returns:
             Lista de especialidades ou lista vazia se erro
         """
+        cache_key = 'rag_especialidades'
+        especialidades_data = cache.get(cache_key)
+        
+        if especialidades_data is not None:
+            logger.debug("🎯 Cache HIT: Especialidades")
+            return especialidades_data
+        
         try:
+            logger.debug("💾 Cache MISS: Buscando especialidades no banco")
             especialidades = Especialidade.objects.filter(ativa=True)
-            return EspecialidadeSerializer(especialidades, many=True).data
+            especialidades_data = EspecialidadeSerializer(especialidades, many=True).data
+            cache.set(cache_key, especialidades_data, RAG_CACHE_TIMEOUT)
+            return especialidades_data
         except Exception as e:
             logger.error(f"Erro ao obter especialidades: {e}")
             return []
@@ -53,14 +78,24 @@ class RAGService:
     @staticmethod
     def get_convenios() -> List[Dict[str, Any]]:
         """
-        Obtém lista de convênios disponíveis
+        Obtém lista de convênios disponíveis (com cache)
         
         Returns:
             Lista de convênios ou lista vazia se erro
         """
+        cache_key = 'rag_convenios'
+        convenios_data = cache.get(cache_key)
+        
+        if convenios_data is not None:
+            logger.debug("🎯 Cache HIT: Convênios")
+            return convenios_data
+        
         try:
+            logger.debug("💾 Cache MISS: Buscando convênios no banco")
             convenios = Convenio.objects.all()
-            return ConvenioSerializer(convenios, many=True).data
+            convenios_data = ConvenioSerializer(convenios, many=True).data
+            cache.set(cache_key, convenios_data, RAG_CACHE_TIMEOUT)
+            return convenios_data
         except Exception as e:
             logger.error(f"Erro ao obter convênios: {e}")
             return []
@@ -68,14 +103,24 @@ class RAGService:
     @staticmethod
     def get_medicos() -> List[Dict[str, Any]]:
         """
-        Obtém lista de médicos com suas especialidades
+        Obtém lista de médicos com suas especialidades (com cache)
         
         Returns:
             Lista de médicos ou lista vazia se erro
         """
+        cache_key = 'rag_medicos'
+        medicos_data = cache.get(cache_key)
+        
+        if medicos_data is not None:
+            logger.debug("🎯 Cache HIT: Médicos")
+            return medicos_data
+        
         try:
+            logger.debug("💾 Cache MISS: Buscando médicos no banco")
             medicos = Medico.objects.prefetch_related('especialidades', 'convenios')
-            return MedicoResumoSerializer(medicos, many=True).data
+            medicos_data = MedicoResumoSerializer(medicos, many=True).data
+            cache.set(cache_key, medicos_data, RAG_CACHE_TIMEOUT)
+            return medicos_data
         except Exception as e:
             logger.error(f"Erro ao obter médicos: {e}")
             return []
@@ -83,14 +128,24 @@ class RAGService:
     @staticmethod
     def get_exames() -> List[Dict[str, Any]]:
         """
-        Obtém lista de exames disponíveis
+        Obtém lista de exames disponíveis (com cache)
         
         Returns:
             Lista de exames ou lista vazia se erro
         """
+        cache_key = 'rag_exames'
+        exames_data = cache.get(cache_key)
+        
+        if exames_data is not None:
+            logger.debug("🎯 Cache HIT: Exames")
+            return exames_data
+        
         try:
+            logger.debug("💾 Cache MISS: Buscando exames no banco")
             exames = Exame.objects.all()
-            return ExameSerializer(exames, many=True).data
+            exames_data = ExameSerializer(exames, many=True).data
+            cache.set(cache_key, exames_data, RAG_CACHE_TIMEOUT)
+            return exames_data
         except Exception as e:
             logger.error(f"Erro ao obter exames: {e}")
             return []

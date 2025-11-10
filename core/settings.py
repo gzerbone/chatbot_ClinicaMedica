@@ -234,20 +234,7 @@ CLINIC_DOMAIN = config('CLINIC_DOMAIN', default='clinica.com')
 # Calendário único da clínica (controlado pela secretária)
 CLINIC_CALENDAR_ID = config('CLINIC_CALENDAR_ID', default='agenda@clinica.com')
 
-# Padrões de eventos para identificar médicos no calendário único
-# Formato esperado: "Dr. João - Consulta", "Dra. Maria - Exame", etc.
-# 
-# NOTA: Este dicionário é usado como FALLBACK quando o sistema não consegue
-# gerar padrões dinamicamente a partir do banco de dados.
-# 
-# ⚠️ RECOMENDAÇÃO: Em vez de hardcoded, o sistema deveria buscar médicos
-# do banco de dados e gerar esses padrões automaticamente.
-# Ver: api_gateway/services/google_calendar_service.py (linha 155)
-#
-DOCTOR_EVENT_PATTERNS = {
-    # Exemplo de configuração manual (apenas se necessário):
-    # 'dr. gustavo magno': ['dr. gustavo', 'dr gustavo', 'gustavo magno', 'magno'],
-}
+
 # Configurações de CORS para desenvolvimento
 CORS_ALLOW_ALL_ORIGINS = True  # Apenas para desenvolvimento
 CORS_ALLOWED_ORIGINS = [

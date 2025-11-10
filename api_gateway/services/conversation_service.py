@@ -529,68 +529,7 @@ class ConversationService:
                 'status': 'error',
                 'message': 'Ocorreu um erro ao processar seu nome. Tente novamente.'
             }
-    
-    def confirm_patient_name(self, phone_number: str, confirmation: str) -> Dict[str, Any]:
-        """
-        Confirma ou rejeita o nome do paciente
-        """
-        try:
-            session = self.get_or_create_session(phone_number)
-            
-            # Verificar se há nome pendente
-            if not session.pending_name:
-                return {
-                    'status': 'no_pending_name',
-                    'message': 'Não há nome pendente de confirmação.'
-                }
-            
-            # Verificar confirmação
-            confirmation_lower = confirmation.lower()
-            if any(word in confirmation_lower for word in ['sim', 's', 'yes', 'confirmo', 'correto', 'certo', 'isso']):
-                # Confirmar nome
-                session.patient_name = session.pending_name
-                session.name_confirmed = True
-                session.pending_name = None
-                session.save()
-                
-                return {
-                    'status': 'confirmed',
-                    'message': f'Perfeito, {session.patient_name}! Como posso ajudá-lo hoje?',
-                    'patient_name': session.patient_name
-                }
-            else:
-                # Rejeitar nome
-                session.pending_name = None
-                session.save()
-                
-                return {
-                    'status': 'rejected',
-                    'message': 'Entendi. Por favor, digite seu nome completo novamente.'
-                }
-                
-        except Exception as e:
-            logger.error(f"Erro ao confirmar nome do paciente: {e}")
-            return {
-                'status': 'error',
-                'message': 'Ocorreu um erro ao processar sua confirmação. Tente novamente.'
-            }
-    
-    def cleanup_old_sessions(self, days_old: int = 7):
-        """
-        Remove sessões antigas
-        """
-        try:
-            cutoff_date = timezone.now() - timedelta(days=days_old)
-            old_sessions = ConversationSession.objects.filter(last_activity__lt=cutoff_date)
-            count = old_sessions.count()
-            old_sessions.delete()
-            
-            logger.info(f"Removidas {count} sessões antigas")
-            return count
-            
-        except Exception as e:
-            logger.error(f"Erro ao limpar sessões antigas: {e}")
-            return 0
+
     
     def normalize_date_for_database(self, date_str: str) -> Optional[str]:
         """
