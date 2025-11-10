@@ -210,7 +210,7 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Configurações do Gemini AI
 GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
 GEMINI_ENABLED = config('GEMINI_ENABLED', default=True, cast=bool)
-GEMINI_MODEL = config('GEMINI_MODEL', default='gemini-2.0-flash')
+GEMINI_MODEL = config('GEMINI_MODEL', default='gemini-2.5-flash-lite')
 GEMINI_TEMPERATURE = config('GEMINI_TEMPERATURE', default=0.7, cast=float)
 GEMINI_MAX_TOKENS = config('GEMINI_MAX_TOKENS', default=1024, cast=int)
 GEMINI_TOKEN_MONITORING = True  # Habilitar monitoramento

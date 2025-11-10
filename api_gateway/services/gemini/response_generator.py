@@ -35,7 +35,7 @@ class ResponseGenerator:
         if self.api_key:
             try:
                 genai.configure(api_key=self.api_key)
-                model_name = getattr(settings, 'GEMINI_MODEL', 'gemini-2.0-flash')
+                model_name = getattr(settings, 'GEMINI_MODEL', 'gemini-2.5-flash-lite')
                 self.model = genai.GenerativeModel(model_name)
                 
                 # Aplicar configurações de modo econômico se necessário
