@@ -579,32 +579,93 @@ class SmartSchedulingService:
             return None
 
     # Métodos de mensagens
+    def _format_doctor_price(self, preco) -> str:
+        """
+        Formata preço para exibição em moeda brasileira
+        """
+        if preco is None:
+            return "Preço sob consulta"
+        
+        try:
+            # Converter para float (funciona com Decimal, string ou número)
+            preco_value = float(preco)
+            
+            # Formatar como R$ 150,00
+            return f"R$ {preco_value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        except (ValueError, TypeError):
+            return "Preço sob consulta"
+    
+    def _get_doctor_list_message(self, include_header: bool = True) -> str:
+        """
+        Obtém mensagem com lista de médicos do banco de dados
+        
+        Args:
+            include_header: Se True, inclui o cabeçalho "👨‍⚕️ **Nossos médicos disponíveis:**"
+        """
+        try:
+            medicos = self.rag_service.get_medicos()
+            
+            if not medicos:
+                header = "👨‍⚕️ **Nossos médicos disponíveis:**\n\n" if include_header else ""
+                return f"""{header}❌ Não há médicos cadastrados no momento.
+
+Entre em contato conosco para mais informações."""
+            
+            message = ""
+            if include_header:
+                message = "👨‍⚕️ **Nossos médicos disponíveis:**\n\n"
+            
+            for medico in medicos:
+                nome = medico.get('nome', 'Médico')
+                especialidades = medico.get('especialidades_display', 'Especialidade não informada')
+                preco = medico.get('preco_particular')
+                
+                message += f"**{nome}**\n"
+                message += f"🩺 {especialidades}\n"
+                message += f"💰 Consulta particular: {self._format_doctor_price(preco)}\n\n"
+            
+            if include_header:
+                message += "Para consultar horários, digite o nome do médico desejado."
+            
+            return message
+            
+        except Exception as e:
+            logger.error(f"Erro ao obter lista de médicos: {e}")
+            header = "👨‍⚕️ **Nossos médicos disponíveis:**\n\n" if include_header else ""
+            return f"""{header}❌ Erro ao carregar informações dos médicos.
+
+Entre em contato conosco para mais informações."""
+
     def _get_doctor_not_found_message(self, doctor_mentioned: str) -> str:
+        """
+        Obtém mensagem de médico não encontrado, incluindo lista de médicos disponíveis do banco de dados
+        """
+        doctor_list_message = self._get_doctor_list_message(include_header=True)
+        
         return f"""❌ Não encontrei o médico "{doctor_mentioned.title()}".
 
-Nossos médicos disponíveis são:
-• Dr. Gustavo (Medicina do Sono, Pneumologia)
-• Dr. Gleyton Porto (Endocrinologia)
+{doctor_list_message}
 
 Para qual médico gostaria de consultar os horários?"""
 
-    def _get_doctor_list_message(self) -> str:
-        return """👨‍⚕️ **Nossos médicos disponíveis:**
-
-**Dr. Gustavo**
-🩺 Medicina do Sono, Pneumologia
-💰 Consulta particular: R$ 150,00
-
-**Dr. Gleyton Porto**
-🩺 Endocrinologia  
-💰 Consulta particular: R$ 150,00
-
-Para consultar horários, digite o nome do médico desejado."""
-
     def _get_availability_info_message(self, doctor_info: Dict, availability: Dict, date_filter: str = None) -> str:
+        """
+        Formata mensagem com informações de disponibilidade do médico
+        
+        Args:
+            doctor_info: Dicionário com informações do médico (nome, especialidades, preço)
+            availability: Dicionário com informações de disponibilidade (days, available)
+            date_filter: Data filtrada (opcional) - usado para personalizar a mensagem
+        
+        Returns:
+            String formatada com mensagem de disponibilidade
+        """
         doctor_name = doctor_info.get('nome', 'Médico')
         specialties = doctor_info.get('especialidades_display', 'Especialidade não informada')
-        price = doctor_info.get('preco_particular', 'Preço não informado')
+        price = doctor_info.get('preco_particular')
+        
+        # Formatar preço usando função auxiliar (lida com None, Decimal, int, float, string)
+        price_formatted = self._format_doctor_price(price)
         
         if not availability.get('available'):
             # Se não há horários para o dia específico, consultar outros dias
@@ -612,11 +673,18 @@ Para consultar horários, digite o nome do médico desejado."""
             
             if general_availability.get('available'):
                 days_info = general_availability.get('days', [])
+                
+                # Personalizar mensagem com a data solicitada se houver filtro
+                date_message = ""
+                if date_filter:
+                    date_display = date_filter.title() if isinstance(date_filter, str) else str(date_filter)
+                    date_message = f" para {date_display}"
+                
                 message = f"""👨‍⚕️ **{doctor_name}**
 🩺 {specialties}
-💰 Consulta particular: R$ {price}
+💰 Consulta particular: {price_formatted}
 
-❌ Não há horários disponíveis para a data solicitada.
+❌ Não há horários disponíveis{date_message}.
 
 📅 **Mas temos horários disponíveis em outros dias:**
 
@@ -637,7 +705,7 @@ Para consultar horários, digite o nome do médico desejado."""
             else:
                 return f"""👨‍⚕️ **{doctor_name}**
 🩺 {specialties}
-💰 Consulta particular: R$ {price}
+💰 Consulta particular: {price_formatted}
 
 ❌ Não há horários disponíveis no momento.
 
@@ -647,17 +715,22 @@ Entre em contato conosco para mais informações ligando para:
 
         days_info = availability.get('days', [])
         
+        # Personalizar cabeçalho com data filtrada se houver
+        availability_header = "*Horários disponíveis:*"
+        if date_filter:
+            date_display = date_filter.title() if isinstance(date_filter, str) else str(date_filter)
+            availability_header = f"*Horários disponíveis para {date_display}:*"
+        
         message = f"""👨‍⚕️ **{doctor_name}**
 🩺 {specialties}
-💰 Consulta particular: R$ {price}
+💰 Consulta particular: {price_formatted}
 
-📅 *Horários disponíveis:*"""
+📅 {availability_header}"""
 
         for day in days_info[:5]:  # Mostrar até 5 dias
             date_str = day.get('date', '')
             weekday = day.get('weekday', '')
             available_times = day.get('available_times', [])
-            occupied_times = day.get('occupied_times', [])
             
             if available_times:
                 message += f"\n\n*{weekday} ({date_str}):*"

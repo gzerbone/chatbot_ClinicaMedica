@@ -115,83 +115,6 @@ class ConversationService:
             logger.error(f"Erro ao obter histórico: {e}")
             return []
     
-    def update_patient_info(self, phone_number: str, **kwargs) -> bool:
-        """
-        Atualiza informações do paciente na sessão
-        """
-        try:
-            session = self.get_or_create_session(phone_number)
-            
-            # Atualizar campos permitidos
-            allowed_fields = [
-                'patient_name', 'insurance_type','preferred_date', 
-                'preferred_time', 'selected_doctor','selected_specialty',
-                'additional_notes'
-            ]
-            
-            for field, value in kwargs.items():
-                if field in allowed_fields and value:
-                    setattr(session, field, value)
-            
-            session.save()
-            logger.info(f"Informações do paciente atualizadas para {phone_number}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Erro ao atualizar informações do paciente: {e}")
-            return False
-    
-    def get_patient_info(self, phone_number: str) -> Dict[str, Any]:
-        """
-        Obtém informações do paciente da sessão
-        """
-        try:
-            session = self.get_or_create_session(phone_number)
-            
-            return {
-                'patient_name': session.patient_name,
-                'selected_specialty': session.selected_specialty,
-                'insurance_type': session.insurance_type,
-                'preferred_date': session.preferred_date.isoformat() if session.preferred_date else None,
-                'preferred_time': session.preferred_time.isoformat() if session.preferred_time else None,
-                'selected_doctor': session.selected_doctor,
-                'additional_notes': session.additional_notes,
-                'current_state': session.current_state
-            }
-            
-        except Exception as e:
-            logger.error(f"Erro ao obter informações do paciente: {e}")
-            return {}
-    
-    def finalize_session(self, phone_number: str) -> bool:
-        """
-        Finaliza uma sessão e reseta o nome confirmado para permitir nova sessão
-        
-        Args:
-            phone_number: Número do telefone
-            
-        Returns:
-            True se finalizada com sucesso
-        """
-        try:
-            session = self.get_or_create_session(phone_number)
-            
-            # Resetar nome confirmado para permitir nova sessão
-            session.name_confirmed = False
-            session.pending_name = None
-            
-            # Atualizar estado da sessão
-            session.current_state = 'idle'
-            session.save()
-            
-            logger.info(f"Sessão finalizada para {phone_number}")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Erro ao finalizar sessão: {e}")
-            return False
-    
-    
     def _update_session_state(self, session: ConversationSession, intent: str, entities: Dict):
         """
         Atualiza estado da sessão baseado na intenção
@@ -576,22 +499,6 @@ class ConversationService:
                 'message': 'Ocorreu um erro ao processar sua confirmação. Tente novamente.'
             }
     
-    def cleanup_old_sessions(self, days_old: int = 7):
-        """
-        Remove sessões antigas
-        """
-        try:
-            cutoff_date = timezone.now() - timedelta(days=days_old)
-            old_sessions = ConversationSession.objects.filter(last_activity__lt=cutoff_date)
-            count = old_sessions.count()
-            old_sessions.delete()
-            
-            logger.info(f"Removidas {count} sessões antigas")
-            return count
-            
-        except Exception as e:
-            logger.error(f"Erro ao limpar sessões antigas: {e}")
-            return 0
     
     def normalize_date_for_database(self, date_str: str) -> Optional[str]:
         """
