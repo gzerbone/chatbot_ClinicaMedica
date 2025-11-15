@@ -165,9 +165,27 @@ def process_message(self, phone_number: str, message: str) -> Dict[str, Any]:
             'next_state': intent_result['next_state'],
             'confidence': intent_result['confidence'],
             'entities': entities_result,
-            'reasoning': intent_result.get('reasoning', '')
+            'reasoning': intent_result.get('reasoning', ''),
+            'raw_message': message
         }
-        
+
+        # 2.4. Fluxo dedicado para confirmação precoce do nome
+        manual_name_response = self._handle_patient_name_flow(
+            phone_number=phone_number,
+            session=session,
+            message=message,
+            analysis_result=analysis_result
+        )
+        if manual_name_response:
+            response_result = manual_name_response
+            self.session_manager.update_session(
+                phone_number, session, analysis_result, response_result
+            )
+            self.session_manager.save_messages(
+                phone_number, message, response_result['response'], analysis_result
+            )
+            return response_result
+
         # ═══════════════════════════════════════════════════════
         # ETAPA 3: DECISÃO DE ROTEAMENTO
         # ═══════════════════════════════════════════════════════
@@ -242,6 +260,14 @@ def process_message(self, phone_number: str, message: str) -> Dict[str, Any]:
         logger.error(f"❌ Erro ao processar mensagem: {e}")
         return self._get_fallback_response(message)
 ```
+
+Após combinar os resultados, o router executa um **fluxo especializado de confirmação do nome**:
+
+- Chama `_handle_patient_name_flow(...)`, responsável por interpretar respostas como “me chamo Gabriela” ou confirmações curtas (“sim”, “isso”) quando já existe um `pending_name`.
+- Esse fluxo utiliza o `ConversationService` para extrair e confirmar o nome (`process_patient_name` e `confirm_patient_name`), armazenando os campos `pending_name`, `patient_name` e `name_confirmed` na sessão e no banco.
+- Caso a confirmação seja concluída, o método retorna imediatamente uma resposta amigável e atualiza o estado para a próxima informação necessária (especialidade, médico, data ou horário). Assim, o LLM não segue adiante até que o nome esteja oficialmente confirmado.
+
+Somente quando o fluxo de nome não retorna uma resposta (ou seja, já temos um nome confirmado) o processamento continua para as etapas seguintes de roteamento.
 
 ---
 
@@ -457,6 +483,29 @@ def _handle_scheduling_request(
             'has_availability_info': False
         }
 ```
+
+#### Handler para Confirmação Antecipada do Nome
+
+```python
+def _handle_patient_name_flow(
+    self,
+    phone_number: str,
+    session: Dict,
+    message: str,
+    analysis_result: Dict
+) -> Optional[Dict[str, Any]]:
+    """Gerencia a extração e confirmação do nome antes de seguir o fluxo."""
+```
+
+**Responsabilidades principais:**
+
+- Detectar quando ainda não temos `patient_name` confirmado ou quando um `pending_name` precisa ser validado.
+- Reaproveitar o `ConversationService` para extrair e confirmar o nome (`process_patient_name` / `confirm_patient_name`).
+- Persistir `pending_name`, `patient_name` e `name_confirmed` na sessão e no banco (via `SessionManager`).
+- Construir respostas manuais (“Confirma se seu nome completo é…”) sem chamar o LLM, garantindo baixo consumo de tokens.
+- Após a confirmação, direcionar imediatamente para a próxima informação necessária (especialidade, médico, data ou horário), consultando `get_missing_appointment_info()` para definir o follow-up.
+
+> Esse handler é chamado antes das decisões de roteamento. Se ele devolver uma resposta, o método `process_message()` encerra ali mesmo, evitando que o Gemini formule prompts complexos enquanto o nome não estiver validado.
 
 #### Handler para Confirmação
 

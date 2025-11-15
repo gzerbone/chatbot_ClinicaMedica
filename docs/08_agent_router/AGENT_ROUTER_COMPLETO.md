@@ -315,14 +315,15 @@ Vamos entender cada passo:
 4. **Solicita análise**: Envia mensagem para o IntentDetector
 5. **Gemini AI analisa**: IA processa e identifica intenção = "agendar_consulta"
 6. **Retorna intent**: Intenção + confiança volta para o Router
-7. **Decisão de roteamento**: Router decide qual serviço chamar
-8. **Chama serviço específico**: No caso, SmartSchedulingService
-9. **Serviço processa**: Busca médicos, horários, etc.
-10. **Retorna resultado**: Dados processados voltam para o Router
-11. **Gera resposta**: ResponseGenerator monta mensagem amigável
-12. **Salva estado**: SessionManager persiste no banco de dados
-13. **Retorna para WhatsApp**: Resposta vai para a API do WhatsApp
-14. **Usuário recebe**: Mensagem chega no celular do usuário
+7. **Confirmação antecipada do nome**: Antes de rotear para outros serviços, o router chama `_handle_patient_name_flow()` para extrair/validar o nome usando o `ConversationService`. Se o nome ainda não estiver confirmado, o fluxo interrompe aqui para pedir confirmação (sem acionar o LLM novamente).
+8. **Decisão de roteamento**: Router decide qual serviço chamar
+9. **Chama serviço específico**: No caso, SmartSchedulingService
+10. **Serviço processa**: Busca médicos, horários, etc.
+11. **Retorna resultado**: Dados processados voltam para o Router
+12. **Gera resposta**: ResponseGenerator monta mensagem amigável
+13. **Salva estado**: SessionManager persiste no banco de dados
+14. **Retorna para WhatsApp**: Resposta vai para a API do WhatsApp
+15. **Usuário recebe**: Mensagem chega no celular do usuário
 
 ---
 
@@ -338,6 +339,7 @@ Vamos entender cada passo:
 - 🔄 Coordenar módulos especializados
 - 💾 Gerenciar estado da conversa
 - 🔗 Integrar com serviços externos
+- 🧾 Garantir que o nome do paciente seja coletado e confirmado antes de avançar para especialidade/médico
 
 **Código Simplificado:**
 ```python
@@ -351,6 +353,18 @@ class GeminiChatbotService:
         
         # 3. Extrair entidades
         entities = self.entity_extractor.extract_entities(message, session)
+
+        analysis_result = {
+            'intent': intent_result['intent'],
+            'entities': entities,
+            'next_state': intent_result['next_state'],
+            'confidence': intent_result['confidence']
+        }
+
+        # 3.1. Confirmar nome antes de roteamentos complexos
+        manual_name_response = self._handle_patient_name_flow(phone_number, session, message, analysis_result)
+        if manual_name_response:
+            return manual_name_response
         
         # 4. DECISÃO DE ROTEAMENTO
         if intent_result['intent'] == 'buscar_info':
@@ -467,6 +481,7 @@ class GeminiChatbotService:
 - 🔄 Sincronizar cache
 - 📚 Gerenciar histórico
 - 🕐 Controlar timeouts
+- 🧾 Guardar `pending_name`, `patient_name` e `name_confirmed` para o fluxo de confirmação antecipada
 
 ---
 
@@ -617,8 +632,8 @@ O sistema mantém um **estado** para cada conversa, controlando em que etapa do 
 | Estado | Descrição | Próximo Passo |
 |--------|-----------|---------------|
 | **idle** | Conversa iniciando | Identificar intenção |
-| **collecting_patient_info** | Coletando nome do paciente | Confirmar nome |
-| **confirming_name** | Confirmando nome extraído | Escolher especialidade |
+| **collecting_patient_info** | Perguntando e extraindo o nome completo (armazenando `pending_name`) | Confirmar nome |
+| **confirming_name** | Fluxo dedicado para validar `pending_name` com o paciente antes de seguir | Escolher especialidade |
 | **selecting_specialty** | Escolhendo especialidade | Escolher médico |
 | **selecting_doctor** | Escolhendo médico | Escolher data/hora |
 | **choosing_schedule** | Escolhendo data e horário | Confirmar agendamento |

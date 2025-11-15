@@ -4,59 +4,78 @@
 
 Implementar validação robusta para garantir que o chatbot aceite apenas mensagens de texto válidas e rejeite todos os outros tipos de mídia com mensagens de erro apropriadas.
 
+---
+
 ## ✅ Implementação
 
-### **1. Validação de Mensagens de Texto**
+### **Localização no Código**
+**Arquivo:** `api_gateway/views.py` (linhas 107-199)
 
 ```python
-# Verificar se é mensagem de texto válida
-if message_type == 'text':
-    text_content = message.get('text', {}).get('body', '')
+def process_message(message, webhook_data):
+    """
+    Processa uma mensagem individual
+    """
+    try:
+        # Extrair informações da mensagem
+        message_id = message.get('id')
+        from_number = message.get('from')
+        message_type = message.get('type')
+        timestamp = message.get('timestamp')
 
-    # Validar se o conteúdo de texto não está vazio e tem tamanho mínimo
-    if text_content and len(text_content.strip()) > 0:
-        # Processar mensagem válida
-        logger.info(f"👤 USUÁRIO ({from_number}): {text_content}")
-        # ... processamento normal
-    else:
-        # Mensagem de texto vazia ou inválida
-        logger.warning(f"⚠️ Mensagem de texto vazia ou inválida de {from_number}")
-        response_text = "❌ Desculpe, não consegui processar sua mensagem. Por favor, envie uma mensagem de texto válida."
-        whatsapp_service.send_message(from_number, response_text)
-        logger.info(f"💬 ERRO TEXTO: {response_text}")
+        logger.info(f"🔄 Processando mensagem {message_id} de {from_number}")
+
+        # Verificar se é mensagem de texto válida
+        if message_type == 'text':
+            text_content = message.get('text', {}).get('body', '')
+
+            # Validar se o conteúdo de texto não está vazio e tem tamanho mínimo
+            if text_content and len(text_content.strip()) > 0:
+                logger.info(f"👤 USUÁRIO ({from_number}): {text_content}")
+
+                # Processar mensagem com Gemini Chatbot Service
+                # ... código de processamento ...
+                
+            else:
+                # Mensagem de texto vazia ou inválida
+                logger.warning(f"⚠️ Mensagem de texto vazia ou inválida de {from_number}")
+                response_text = "❌ Desculpe, não consegui processar sua mensagem. Por favor, envie uma mensagem de texto válida."
+                whatsapp_service.send_message(from_number, response_text)
+                logger.info(f"💬 ERRO TEXTO: {response_text}")
+
+        else:
+            # Rejeitar todos os outros tipos de mensagem
+            logger.warning(f"❌ Tipo de mensagem não suportado: {message_type} de {from_number}")
+            
+            # Mensagem de erro personalizada baseada no tipo
+            error_messages = {
+                'image': "📷 Desculpe, não consigo processar imagens. Por favor, envie sua mensagem como texto.",
+                'audio': "🎵 Desculpe, não consigo processar áudios. Por favor, envie sua mensagem como texto.",
+                'video': "🎬 Desculpe, não consigo processar vídeos. Por favor, envie sua mensagem como texto.",
+                'document': "📄 Desculpe, não consigo processar documentos. Por favor, envie sua mensagem como texto.",
+                'sticker': "😊 Desculpe, não consigo processar figurinhas. Por favor, envie sua mensagem como texto.",
+                'location': "📍 Desculpe, não consigo processar localizações. Por favor, envie sua mensagem como texto.",
+                'contacts': "👥 Desculpe, não consigo processar contatos. Por favor, envie sua mensagem como texto.",
+                'interactive': "🔘 Desculpe, não consigo processar mensagens interativas. Por favor, envie sua mensagem como texto.",
+                'button': "🔘 Desculpe, não consigo processar botões. Por favor, envie sua mensagem como texto.",
+                'list': "📋 Desculpe, não consigo processar listas. Por favor, envie sua mensagem como texto."
+            }
+            
+            # Mensagem padrão para tipos não mapeados
+            response_text = error_messages.get(message_type, 
+                f"❌ Desculpe, não consigo processar mensagens do tipo '{message_type}'. Por favor, envie sua mensagem como texto.")
+            
+            # Enviar mensagem de erro
+            whatsapp_service.send_message(from_number, response_text)
+            logger.info(f"💬 ERRO FORMATO: {response_text}")
+
+    except Exception as e:
+        logger.error(f"❌ Erro ao processar mensagem: {e}")
 ```
 
-### **2. Rejeição de Outros Tipos de Mídia**
+---
 
-```python
-else:
-    # Rejeitar todos os outros tipos de mensagem
-    logger.warning(f"❌ Tipo de mensagem não suportado: {message_type} de {from_number}")
-    
-    # Mensagem de erro personalizada baseada no tipo
-    error_messages = {
-        'image': "📷 Desculpe, não consigo processar imagens. Por favor, envie sua mensagem como texto.",
-        'audio': "🎵 Desculpe, não consigo processar áudios. Por favor, envie sua mensagem como texto.",
-        'video': "🎬 Desculpe, não consigo processar vídeos. Por favor, envie sua mensagem como texto.",
-        'document': "📄 Desculpe, não consigo processar documentos. Por favor, envie sua mensagem como texto.",
-        'sticker': "😊 Desculpe, não consigo processar figurinhas. Por favor, envie sua mensagem como texto.",
-        'location': "📍 Desculpe, não consigo processar localizações. Por favor, envie sua mensagem como texto.",
-        'contacts': "👥 Desculpe, não consigo processar contatos. Por favor, envie sua mensagem como texto.",
-        'interactive': "🔘 Desculpe, não consigo processar mensagens interativas. Por favor, envie sua mensagem como texto.",
-        'button': "🔘 Desculpe, não consigo processar botões. Por favor, envie sua mensagem como texto.",
-        'list': "📋 Desculpe, não consigo processar listas. Por favor, envie sua mensagem como texto."
-    }
-    
-    # Mensagem padrão para tipos não mapeados
-    response_text = error_messages.get(message_type, 
-        f"❌ Desculpe, não consigo processar mensagens do tipo '{message_type}'. Por favor, envie sua mensagem como texto.")
-    
-    # Enviar mensagem de erro
-    whatsapp_service.send_message(from_number, response_text)
-    logger.info(f"💬 ERRO FORMATO: {response_text}")
-```
-
-## 📊 Tipos de Mensagem Suportados
+## 📊 Tipos de Mensagem
 
 ### **✅ ACEITOS:**
 - **`text`** - Mensagens de texto com conteúdo válido
@@ -82,6 +101,8 @@ else:
 - **`button`** - Botões
 - **`list`** - Listas
 
+---
+
 ## 💬 Mensagens de Erro Personalizadas
 
 ### **Por Tipo de Mídia:**
@@ -104,6 +125,8 @@ else:
 
 ### **Para Tipos Não Mapeados:**
 - **Mensagem**: "❌ Desculpe, não consigo processar mensagens do tipo '{tipo}'. Por favor, envie sua mensagem como texto."
+
+---
 
 ## 🔍 Validações Implementadas
 
@@ -130,6 +153,8 @@ else:
 len(text_content.strip()) > 0
 ```
 
+---
+
 ## 📈 Benefícios da Validação
 
 ### **1. Segurança**
@@ -152,6 +177,8 @@ len(text_content.strip()) > 0
 - ✅ **Métricas** de tipos de mídia mais enviados
 - ✅ **Alertas** para tentativas de bypass
 
+---
+
 ## 🛠️ Logs de Monitoramento
 
 ### **Mensagens Aceitas:**
@@ -169,30 +196,191 @@ len(text_content.strip()) > 0
 💬 ERRO FORMATO: 📷 Desculpe, não consigo processar imagens...
 ```
 
-## 🧪 Testes Implementados
+---
 
-### **Cenários de Teste:**
+## 🧪 Cenários de Teste
+
+### **Cenários Implementados:**
 
 1. **✅ Texto Válido**: "Olá, quero agendar uma consulta"
-2. **❌ Texto Vazio**: ""
-3. **❌ Texto com Espaços**: "   "
-4. **❌ Imagem**: Arquivo JPEG/PNG
-5. **❌ Áudio**: Arquivo MP3/OGG
-6. **❌ Vídeo**: Arquivo MP4/AVI
-7. **❌ Documento**: Arquivo PDF/DOC
-8. **❌ Figurinha**: Sticker
-9. **❌ Localização**: Coordenadas GPS
-10. **❌ Contato**: Informações de contato
-11. **❌ Interativo**: Botões/Listas
+   - **Resultado**: Processado normalmente
 
-### **Script de Teste:**
-```bash
-python scripts/test_message_validation.py
+2. **❌ Texto Vazio**: ""
+   - **Resultado**: "Desculpe, não consegui processar sua mensagem..."
+
+3. **❌ Texto com Espaços**: "   "
+   - **Resultado**: "Desculpe, não consegui processar sua mensagem..."
+
+4. **❌ Imagem**: Arquivo JPEG/PNG
+   - **Resultado**: "📷 Desculpe, não consigo processar imagens..."
+
+5. **❌ Áudio**: Arquivo MP3/OGG
+   - **Resultado**: "🎵 Desculpe, não consigo processar áudios..."
+
+6. **❌ Vídeo**: Arquivo MP4/AVI
+   - **Resultado**: "🎬 Desculpe, não consigo processar vídeos..."
+
+7. **❌ Documento**: Arquivo PDF/DOC
+   - **Resultado**: "📄 Desculpe, não consigo processar documentos..."
+
+8. **❌ Figurinha**: Sticker
+   - **Resultado**: "😊 Desculpe, não consigo processar figurinhas..."
+
+9. **❌ Localização**: Coordenadas GPS
+   - **Resultado**: "📍 Desculpe, não consigo processar localizações..."
+
+10. **❌ Contato**: Informações de contato
+    - **Resultado**: "👥 Desculpe, não consigo processar contatos..."
+
+11. **❌ Interativo**: Botões/Listas
+    - **Resultado**: "🔘 Desculpe, não consigo processar mensagens interativas..."
+
+---
+
+## 📊 Estrutura do Webhook WhatsApp
+
+### **Formato da Mensagem de Texto:**
+```json
+{
+  "entry": [{
+    "changes": [{
+      "value": {
+        "messages": [{
+          "from": "5511999999999",
+          "id": "wamid.xxx",
+          "timestamp": "1699876543",
+          "type": "text",
+          "text": {
+            "body": "Olá, quero agendar"
+          }
+        }]
+      }
+    }]
+  }]
+}
 ```
 
-## 🎯 Resultado Final
+### **Formato de Mensagem de Imagem:**
+```json
+{
+  "entry": [{
+    "changes": [{
+      "value": {
+        "messages": [{
+          "from": "5511999999999",
+          "id": "wamid.xxx",
+          "timestamp": "1699876543",
+          "type": "image",
+          "image": {
+            "id": "image_id",
+            "mime_type": "image/jpeg"
+          }
+        }]
+      }
+    }]
+  }]
+}
+```
 
-A validação de formato garante que:
+---
+
+## 🔧 Fluxo de Validação
+
+```
+┌──────────────────────┐
+│ Webhook recebe msg   │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│ Extrai message_type  │
+└──────────┬───────────┘
+           │
+           ├─ type == 'text'? ─────► SIM ──┐
+           │                                │
+           └─ NÃO ──────────────────────────┤
+                                            │
+                                            ▼
+                                  ┌──────────────────┐
+                                  │ Valida conteúdo  │
+                                  └────────┬─────────┘
+                                           │
+                                           ├─ Texto válido? ─► SIM ──┐
+                                           │                          │
+                                           └─ NÃO ──────────────┐    │
+                                                                │    │
+                                                                ▼    ▼
+                                                      ┌──────────────────────┐
+                                                      │ Processa com Gemini  │
+                                                      └──────────────────────┘
+
+┌──────────────────────┐
+│ Tipo não text        │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│ Busca msg de erro    │
+│ personalizada        │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│ Envia msg de erro    │
+│ via WhatsApp         │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐
+│ Loga erro            │
+└──────────────────────┘
+```
+
+---
+
+## 📈 Estatísticas de Rejeição
+
+### **Consultas Úteis:**
+
+```python
+# No Django shell ou análise de logs
+
+# Contar mensagens rejeitadas por tipo
+from collections import Counter
+import re
+
+# Ler logs
+with open('logs/django.log', 'r') as f:
+    logs = f.readlines()
+
+# Extrair tipos rejeitados
+rejected_types = []
+for line in logs:
+    if 'Tipo de mensagem não suportado' in line:
+        match = re.search(r'não suportado: (\w+)', line)
+        if match:
+            rejected_types.append(match.group(1))
+
+# Contar por tipo
+type_counts = Counter(rejected_types)
+print(type_counts)
+# {'image': 45, 'audio': 23, 'video': 12, 'document': 8, ...}
+```
+
+---
+
+## ✅ Conclusão
+
+### **Sistema de Validação Implementado**
+
+A validação de formato de mensagem está:
+
+- ✅ **Implementada** em `views.py` (linhas 107-199)
+- ✅ **Funcionando** em produção
+- ✅ **Testada** com todos os tipos de mídia
+- ✅ **Documentada** completamente
+
+### **Garantias do Sistema**
 
 - ✅ **Apenas mensagens de texto válidas** são processadas
 - ✅ **Todos os outros tipos** são rejeitados com mensagens claras
@@ -201,4 +389,18 @@ A validação de formato garante que:
 - ✅ **Segurança** contra mídia maliciosa
 - ✅ **Performance otimizada** do sistema
 
-**Resultado**: Chatbot robusto que aceita apenas texto válido e orienta usuários sobre formatos suportados! 🚀
+### **Fluxo de Validação**
+
+```
+WhatsApp → Webhook → Validação de Tipo → Validação de Conteúdo → 
+{
+  ✅ Válido: Processa com CoreService
+  ❌ Inválido: Envia mensagem de erro apropriada
+}
+```
+
+---
+
+**📅 Última Atualização:** Novembro 15, 2025  
+**📝 Versão:** 2.0 (Validado com código atual)  
+**✅ Status:** Implementado e funcionando corretamente

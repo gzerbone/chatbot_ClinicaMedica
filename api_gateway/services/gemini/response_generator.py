@@ -123,6 +123,8 @@ class ResponseGenerator:
         selected_specialty = session.get('selected_specialty')
         preferred_date = session.get('preferred_date')
         preferred_time = session.get('preferred_time')
+        has_greeted = bool(session.get('has_greeted'))
+        saudacao_status = 'Sim' if has_greeted else 'Não'
         
         # Criar lista de informações já coletadas
         collected_info = []
@@ -199,7 +201,10 @@ class ResponseGenerator:
             missing_context = f"""
 INFORMAÇÕES AINDA NECESSÁRIAS:
 - Faltam: {', '.join(missing_list)}
-- IMPORTANTE: Pergunte APENAS a próxima informação faltante, não todas de uma vez!"""
+- Siga SEMPRE a ordem dos itens listados acima (primeiro o que aparece primeiro).
+- Pergunte APENAS a próxima informação faltante e só avance quando ela for confirmada.
+- Se restar apenas um item (ex.: nome), solicite exatamente esse item sem reiniciar etapas anteriores.
+- Antes de perguntar algo novamente, confira se a sessão já marcou esse dado como coletado."""
         
         # Adicionar validação de Especialidade extraída (sempre definir)
         specialty_validation_context = ""
@@ -246,12 +251,31 @@ DISPONIBILIDADE REAL DO GOOGLE CALENDAR:
 -{doctor_name} não tem horários disponíveis nos próximos 7 dias
 -Informe que o médico está sem agenda disponível e sugira outro médico ou que entre em contato."""
         
+        # Informações da clínica para incluir no prompt
+        clinic_info_text = ""
+        if clinic_info:
+            clinic_name = clinic_info.get('nome', 'Clínica Médica')
+            clinic_address = clinic_info.get('endereco', '')
+            clinic_phone = clinic_info.get('telefone_contato', '') or clinic_info.get('whatsapp_contato', '')
+            clinic_email = clinic_info.get('email_contato', '')
+            clinic_reference = clinic_info.get('referencia_localizacao', '')
+            
+            clinic_info_text = f"""
+INFORMAÇÕES DA CLÍNICA (USE APENAS ESTAS INFORMAÇÕES, NÃO INVENTE):
+- Nome: {clinic_name}
+- Endereço: {clinic_address if clinic_address else 'Não informado'}
+- Referência de localização: {clinic_reference if clinic_reference else 'Não informado'}
+- Telefone: {clinic_phone if clinic_phone else 'Não informado'}
+- Email: {clinic_email if clinic_email else 'Não informado'}
+"""
+        
         prompt = f"""Você é um assistente virtual da {clinic_info.get('nome', 'Clínica Médica')}.
 
 MENSAGEM DO PACIENTE: "{message}"
 
 INTENÇÃO DETECTADA: {intent}
-
+SAUDAÇÃO JÁ ENVIADA: {saudacao_status}
+{clinic_info_text}
 INFORMAÇÕES JÁ COLETADAS (NÃO PERGUNTE NOVAMENTE):
 {collected_info_str}
 {availability_context}
@@ -267,35 +291,37 @@ MÉDICOS DISPONÍVEIS PARA A ESPECIALIDADE '{selected_specialty}':
 {medicos_text}
 
 INSTRUÇÕES:
-1. Responda de forma natural, educada e profissional
-2. NÃO repita perguntas sobre informações já coletadas (veja acima)
-3. Apenas se TODAS as informações estiverem coletadas, pergunte se deseja confirmar o pré-agendamento
-4. Se faltar alguma informação, pergunte APENAS a informação faltante
-5. Use emojis moderadamente para deixar a conversa mais amigável
-6. Seja objetivo e direto
-7. Não mencione que você é uma IA
+1. Responda de forma natural, educada e profissional.
+2. Se "SAUDAÇÃO JÁ ENVIADA" = "Não", cumprimente o paciente uma única vez e mencione que é a assistente virtual da clínica. Caso contrário, NÃO utilize expressões como "Olá", "Oi" e NÃO repita a apresentação.
+3. NÃO repita perguntas sobre informações já coletadas (veja acima).
+4. Verifique "INFORMAÇÕES AINDA NECESSÁRIAS". Se estiver vazio, avance para a confirmação/handoff.
+5. Se houver itens faltantes, pergunte APENAS o primeiro item da lista e aguarde a resposta.
+6. Use emojis moderadamente para deixar a conversa mais amigável.
+7. Seja objetivo e direto.
 
 REGRAS IMPORTANTES:
 - Se intent = "saudacao" E não tiver nome: SEMPRE pergunte o nome primeiro ("Olá! Para começar, qual é o seu nome?")
-- Se já tiver nome, especialidade, médico, data e horário: pergunte se deseja confirmar
-- Se faltar apenas UMA informação: pergunte essa informação
+- Se já tiver nome do paciente, especialidade, médico, data e horário: pergunte se deseja confirmar o pré-agendamento
+- Se faltar apenas UMA informação: pergunte exatamente essa informação faltante
 - Se todas as entidades foram extraídas e confirmadas, então envie o handoff
 - NÃO solicite informações que já estão na lista "INFORMAÇÕES JÁ COLETADAS"
 
-ORDEM DE COLETA DE INFORMAÇÕES (SEMPRE SEGUIR ESTA ORDEM):
-1. Nome do paciente (já coletado se chegou aqui)
+PRIORIDADE DE COLETA (use como guia, sem reiniciar etapas completadas):
+1. Nome do paciente (pergunte somente se ainda estiver faltando)
 2. Especialidade desejada
 3. Médico específico (após escolher especialidade)
 4. Data preferida
 5. Horário preferido
 6. Confirmação final
 
-NÃO pule etapas! Se faltar especialidade, pergunte APENAS a especialidade. Se faltar médico, pergunte APENAS o médico.
+Sempre confie na lista de faltantes para saber o próximo passo. Se faltar nome, peça o nome. Se faltar apenas horário, peça somente o horário.
 
 REGRAS CRÍTICAS:
 - NUNCA invente nomes de médicos! Use APENAS os médicos listados em "MÉDICOS DISPONÍVEIS"
 - Se o usuário perguntar sobre médicos, liste APENAS os médicos reais do banco de dados
 - Se não houver médicos para uma especialidade, informe que não há médicos disponíveis
+- NUNCA invente informações sobre endereço, telefone ou localização da clínica! Use APENAS as informações fornecidas em "INFORMAÇÕES DA CLÍNICA"
+- Se o usuário perguntar sobre localização, endereço ou onde a clínica está localizada, use EXATAMENTE o endereço fornecido em "INFORMAÇÕES DA CLÍNICA"
 
 DISTINÇÃO ENTRE DÚVIDAS E AGENDAMENTO:
 - Se intent = "buscar_info": Forneça APENAS a informação solicitada, NÃO inicie processo de agendamento

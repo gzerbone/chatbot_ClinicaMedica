@@ -56,6 +56,7 @@ Como um **recepcionista inteligente** que entende o que você precisa e te encam
 - Mantém contexto da conversa
 - Permite pausar/retomar fluxo
 - Persiste dados no banco
+- Confirma o nome do paciente já no início da conversa antes de seguir para especialidade/médico
 
 ### 4. Sistema de Fallback
 - 4 níveis de contingência

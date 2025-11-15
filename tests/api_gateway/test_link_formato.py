@@ -27,7 +27,6 @@ def test_link_format():
     patient_name = "Maria Silva"
     doctor_name = "Dr. Gustavo Magno"
     specialty = "Pneumologia"
-    appointment_type = "Cassi"
     date = "27/08/2025"
     time = "10h"
     
@@ -36,7 +35,6 @@ def test_link_format():
         patient_name=patient_name,
         doctor_name=doctor_name,
         specialty=specialty,
-        appointment_type=appointment_type,
         date=date,
         time=time
     )
@@ -45,15 +43,10 @@ def test_link_format():
     print(f"   👤 Nome do Paciente: {patient_name}")
     print(f"   👨‍⚕️ Médico: {doctor_name}")
     print(f"   🩺 Especialidade: {specialty}")
-    print(f"   💼 Tipo de Consulta: {appointment_type}")
     print(f"   📅 Data/Hora: {date} às {time}")
     
     print(f"\n🔗 LINK GERADO:")
     print(f"{link}")
-    
-    print(f"\n📱 FORMATO ESPERADO:")
-    expected_format = "https://api.whatsapp.com/send?phone=5573988221003&text=-%20Nome%20do%20Paciente%3A%20Maria%20Silva%0A-%20Médico%3A%20Gustavo%20Magno%0A-%20Especialidade%3A%20Pneumologia%0A-%20Tipo%20de%20Consulta%3A%20Cassi%0A-%20Data%2FHora%20escolhida%3A%2027%2F08%2F2025%20às%2010h"
-    print(f"{expected_format}")
     
     # Verificações específicas
     print(f"\n✅ VERIFICAÇÕES:")
@@ -62,14 +55,10 @@ def test_link_format():
         'Base URL': link.startswith('https://api.whatsapp.com/send?phone='),
         'Phone parameter': 'phone=' in link,
         'Text parameter': 'text=' in link,
-        'Espaços como %20': '%20' in link,
-        'Quebras como %0A': '%0A' in link,
-        'Dois pontos como %3A': '%3A' in link,
-        'Nome do paciente': 'Maria%20Silva' in link,
-        'Nome do médico': 'Gustavo%20Magno' in link or 'Gustavo' in link,
+        'Nome do paciente': 'Maria' in link or 'Silva' in link,
+        'Nome do médico': 'Gustavo' in link or 'Magno' in link,
         'Especialidade': 'Pneumologia' in link,
-        'Tipo consulta': 'Cassi' in link,
-        'Data': '27%2F08%2F2025' in link or '27' in link
+        'Data': '27' in link and '2025' in link
     }
     
     all_passed = True
@@ -88,6 +77,19 @@ def test_link_format():
     print("-" * 50)
     print(decoded_message)
     print("-" * 50)
+    
+    expected_lines = [
+        "Agendamento via Chatbot:",
+        f"Paciente: {patient_name}",
+        f"Médico: {doctor_name.replace('Dr. ', '').replace('Dra. ', '')}",
+        f"Especialidade: {specialty}",
+        f"Data/Horário: {date} às {time}"
+    ]
+    
+    for expected_line in expected_lines:
+        if expected_line not in decoded_message:
+            all_passed = False
+            print(f"   ❌ Linha ausente: {expected_line}")
     
     if all_passed:
         print("\n🎉 FORMATO CORRETO! Link está no padrão especificado.")

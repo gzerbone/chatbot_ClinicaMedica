@@ -490,8 +490,9 @@ class ConversationService:
             match = re.search(pattern, message, re.IGNORECASE)
             if match:
                 name = match.group(1).strip()
-                # Limitar a 3 palavras (nome + sobrenome + sobrenome)
-                name_parts = name.split()[:3]
+                # Não limitar a 3 palavras - aceitar nomes completos
+                # Apenas garantir que tenha pelo menos 2 palavras (nome e sobrenome)
+                name_parts = name.split()
                 if len(name_parts) >= 2:  # Pelo menos nome e sobrenome
                     return ' '.join(name_parts).title()
         

@@ -67,13 +67,16 @@ class SessionManager:
                         'phone_number': phone_number,
                         'current_state': db_session.current_state,
                         'patient_name': db_session.patient_name,
+                        'pending_name': db_session.pending_name,
+                        'name_confirmed': db_session.name_confirmed,
                         'selected_doctor': db_session.selected_doctor,
                         'selected_specialty': db_session.selected_specialty,
                         'preferred_date': db_session.preferred_date.isoformat() if db_session.preferred_date else None,
                         'preferred_time': db_session.preferred_time.isoformat() if db_session.preferred_time else None,
                         'insurance_type': db_session.insurance_type,
                         'created_at': db_session.created_at.isoformat(),
-                        'last_activity': timezone.now().isoformat()
+                        'last_activity': timezone.now().isoformat(),
+                        'has_greeted': getattr(db_session, 'name_confirmed', False)
                     }
                     logger.info(f"📥 Sessão carregada do banco - Nome: {db_session.patient_name}, Médico: {db_session.selected_doctor}")
                 else:
@@ -87,22 +90,27 @@ class SessionManager:
             
             cache.set(cache_key, session, token_monitor.get_cache_timeout())
         
+        session.setdefault('has_greeted', False)
         return session
     
     def _create_empty_session(self, phone_number: str) -> Dict[str, Any]:
         """Cria uma sessão vazia"""
-        return {
+        session = {
             'phone_number': phone_number,
             'current_state': 'idle',
             'patient_name': None,
+            'pending_name': None,
+            'name_confirmed': False,
             'selected_doctor': None,
             'selected_specialty': None,
             'preferred_date': None,
             'preferred_time': None,
             'insurance_type': None,
             'created_at': timezone.now().isoformat(),
-            'last_activity': timezone.now().isoformat()
+            'last_activity': timezone.now().isoformat(),
+            'has_greeted': False
         }
+        return session
     
     def update_session(self, phone_number: str, session: Dict, 
                       analysis_result: Dict, response_result: Dict):
@@ -116,6 +124,11 @@ class SessionManager:
             response_result: Resultado da geração de resposta
         """
         try:
+            # Garantir flags padrão
+            session.setdefault('has_greeted', False)
+            session.setdefault('pending_name', None)
+            session.setdefault('name_confirmed', False)
+
             # Atualizar estado (não sobrescrever se já estiver confirmando)
             if session.get('current_state') != 'confirming':
                 session['current_state'] = analysis_result['next_state']
@@ -126,6 +139,10 @@ class SessionManager:
                 session['last_response'] = response_result.get('response', '')
                 session['last_intent'] = response_result.get('intent', analysis_result.get('intent', ''))
                 session['last_confidence'] = response_result.get('confidence', analysis_result.get('confidence', 0.0))
+                
+                # Marcar que a saudação/apresentação já foi enviada após a primeira resposta
+                if not session.get('has_greeted'):
+                    session['has_greeted'] = True
                 
                 # Armazenar link de handoff se disponível
                 if response_result.get('handoff_link'):
@@ -173,8 +190,17 @@ class SessionManager:
             
             # Atualizar nome do paciente
             if entities.get('nome_paciente') and entities['nome_paciente'] != 'null':
-                session['patient_name'] = entities['nome_paciente']
-                logger.info(f"✅ Nome atualizado: {entities['nome_paciente']}")
+                nome_extraido = entities['nome_paciente'].strip()
+                logger.info(f"📝 Salvando nome na sessão: '{nome_extraido}' (tamanho: {len(nome_extraido)}, palavras: {len(nome_extraido.split())})")
+                session['patient_name'] = nome_extraido
+                session['pending_name'] = None
+                session['name_confirmed'] = True
+                logger.info(f"✅ Nome atualizado na sessão: '{session['patient_name']}' (tamanho: {len(session['patient_name'])})")
+            # IMPORTANTE: Preservar pending_name se já foi definido no fluxo de confirmação
+            # (não sobrescrever se já existe e não há entidade nome_paciente)
+            elif session.get('pending_name') and not entities.get('nome_paciente'):
+                # pending_name já está definido, apenas garantir que está preservado
+                logger.info(f"📝 Preservando pending_name na sessão: '{session['pending_name']}' (tamanho: {len(session['pending_name'])}, palavras: {len(session['pending_name'].split())})")
             
             # Atualizar médico selecionado
             if entities.get('medico') and entities['medico'] != 'null':
@@ -315,8 +341,8 @@ class SessionManager:
                 defaults={
                     'current_state': session.get('current_state', 'idle'),
                     'patient_name': session.get('patient_name'),
-                    'name_confirmed': bool(session.get('patient_name')),
-                    'pending_name': 'Paciente',
+                    'pending_name': session.get('pending_name'),
+                    'name_confirmed': session.get('name_confirmed', False),
                     'insurance_type': session.get('insurance_type'),
                     'selected_doctor': session.get('selected_doctor'),
                     'selected_specialty': session.get('selected_specialty'),
@@ -331,8 +357,19 @@ class SessionManager:
             if not created:
                 # Atualizar sessão existente
                 db_session.current_state = session.get('current_state', 'idle')
-                db_session.patient_name = session.get('patient_name')
-                db_session.name_confirmed = bool(session.get('patient_name'))
+                # Garantir que o nome completo seja salvo (sem truncamento)
+                patient_name = session.get('patient_name')
+                if patient_name:
+                    patient_name = patient_name.strip()
+                    logger.info(f"💾 Salvando nome no banco: '{patient_name}' (tamanho: {len(patient_name)}, palavras: {len(patient_name.split())})")
+                db_session.patient_name = patient_name
+                # Garantir que o pending_name completo seja salvo (sem truncamento)
+                pending_name = session.get('pending_name')
+                if pending_name:
+                    pending_name = pending_name.strip()
+                    logger.info(f"💾 Salvando pending_name no banco: '{pending_name}' (tamanho: {len(pending_name)}, palavras: {len(pending_name.split())})")
+                db_session.pending_name = pending_name
+                db_session.name_confirmed = session.get('name_confirmed', False)
                 db_session.insurance_type = session.get('insurance_type')
                 db_session.selected_doctor = session.get('selected_doctor')
                 db_session.selected_specialty = session.get('selected_specialty')

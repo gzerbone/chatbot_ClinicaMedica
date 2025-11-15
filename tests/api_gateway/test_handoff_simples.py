@@ -26,7 +26,6 @@ def test_handoff_service():
             patient_name="Maria Silva",
             doctor_name="Dr. João Carvalho",
             specialty="Cardiologia", 
-            appointment_type="Particular",
             date="15/09/2025",
             time="14:30"
         )

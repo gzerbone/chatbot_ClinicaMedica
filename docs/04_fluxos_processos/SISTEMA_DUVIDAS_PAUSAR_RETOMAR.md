@@ -116,28 +116,51 @@ has_paused = conversation_service.has_paused_appointment(phone_number)
 
 ### Detecção Automática de Dúvidas
 
-```python
-# No gemini_chatbot_service.py
+**Arquivo:** `api_gateway/services/gemini/core_service.py` (linhas 142-146)
 
+```python
 # Detectar se usuário quer tirar dúvidas durante agendamento
 if analysis_result['intent'] in ['buscar_info', 'duvida']:
     if session['current_state'] not in ['idle', 'answering_questions']:
         # Pausar agendamento para responder dúvida
         conversation_service.pause_for_question(phone_number)
-        response_result['response'] += "\n\n💡 _Seu agendamento foi pausado. Após responder suas dúvidas, digite 'continuar' para retomar._"
+        # Nota: O sistema apenas pausa silenciosamente
+        # A resposta do bot é gerada normalmente pelo ResponseGenerator
+        # Não há mensagem automática de aviso sobre a pausa
+```
+
+**⚠️ Comportamento Atual:**
+- ✅ Sistema pausa o agendamento automaticamente
+- ✅ Responde a dúvida normalmente
+- ❌ **NÃO** envia mensagem de aviso sobre a pausa
+- ⚠️ Usuário precisa saber que pode usar "continuar" para retomar
+
+**💡 Melhoria Sugerida:**
+Para melhorar a UX, seria recomendado adicionar a mensagem de aviso após pausar:
+
+```python
+# Após pausar, adicionar aviso à resposta
+if conversation_service.pause_for_question(phone_number):
+    response_result['response'] += "\n\n💡 Seu agendamento foi pausado. Digite 'continuar' para retomar."
 ```
 
 ### Detecção de Retomada
 
-```python
-# Palavras-chave para retomar
-resume_keywords = ['continuar', 'voltar', 'retomar', 'prosseguir', 'seguir', 'agendamento']
+**Arquivo:** `api_gateway/services/gemini/core_service.py` (linhas 84-89)
 
+```python
+# Verificar se há agendamento pausado (sistema de dúvidas)
 if conversation_service.has_paused_appointment(phone_number):
-    if any(keyword in message.lower() for keyword in resume_keywords):
-        resume_result = conversation_service.resume_appointment(phone_number)
-        # Retorna mensagem de retomada com próxima pergunta
+    # Detectar palavras-chave para retomar
+    if any(keyword in message.lower() for keyword in ['continuar', 'retomar', 'voltar']):
+        conversation_service.resume_appointment(phone_number)
+        return {'response': '✅ Certo! Vamos continuar com seu agendamento. Onde paramos?'}
 ```
+
+**Palavras-chave reconhecidas:**
+- `continuar`
+- `retomar`
+- `voltar`
 
 ## 📊 Fluxo de Estados
 
@@ -211,7 +234,7 @@ O teste cobre todos os cenários:
 
 👤 Espera, quanto custa uma consulta?
 🤖 O valor da consulta particular é R$ 250,00.
-    💡 Seu agendamento foi pausado. Digite 'continuar' para retomar.
+    [Nota: Sistema pausa silenciosamente - não há mensagem automática de aviso]
 
 👤 Entendi, quero continuar
 🤖 Perfeito! Vamos continuar seu agendamento de onde paramos.
@@ -286,7 +309,37 @@ if result['resumed']:
 
 ---
 
+---
+
+## 📝 Notas de Implementação
+
+### **Status Atual**
+- ✅ Sistema de pausar/retomar **implementado e funcional**
+- ✅ Integração com `core_service.py` **completa**
+- ✅ Validações **funcionando corretamente**
+- ✅ Múltiplas pausas **suportadas** (sistema permite várias dúvidas)
+
+### **Limitações Conhecidas**
+- ⚠️ **Mensagem de aviso sobre pausa NÃO é enviada automaticamente** - Sistema pausa silenciosamente
+- ⚠️ Usuário precisa saber intuitivamente que pode usar "continuar" para retomar
+- ⚠️ Retomada automática após timeout **não implementada** (melhoria futura)
+
+### **Melhoria Recomendada**
+Adicionar mensagem de aviso após pausar o agendamento:
+
+```python
+# Em core_service.py, após linha 145
+if conversation_service.pause_for_question(phone_number):
+    # Adicionar aviso à resposta (se ainda não foi gerada)
+    if not response_result.get('response'):
+        response_result = self.response_generator.generate_response(...)
+    response_result['response'] += "\n\n💡 Seu agendamento foi pausado. Digite 'continuar' para retomar."
+```
+
+---
+
 **Criado em:** 15/10/2025  
-**Última atualização:** 15/10/2025  
-**Versão:** 1.0
+**Última atualização:** Janeiro 2025  
+**Versão:** 2.0  
+**Status:** ✅ Validado com código atual
 

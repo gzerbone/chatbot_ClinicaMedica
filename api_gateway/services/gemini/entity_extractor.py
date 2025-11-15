@@ -45,6 +45,19 @@ class EntityExtractor:
             if self.model:
                 entities = self.extract_entities_with_gemini(message, session, conversation_history, clinic_data)
                 if entities and any(entities.values()):
+                    # Verificar se o nome extraído parece incompleto (apenas 2 palavras quando deveria ter mais)
+                    if 'nome_paciente' in entities:
+                        nome_extraido = entities['nome_paciente']
+                        palavras = nome_extraido.split() if nome_extraido else []
+                        # Se o nome tem apenas 2 palavras e termina com preposição, pode estar incompleto
+                        if len(palavras) == 2 and palavras[-1].lower() in ['da', 'de', 'do', 'dos', 'das']:
+                            logger.warning(f"⚠️ Nome extraído pode estar incompleto: '{nome_extraido}' - tentando regex como fallback")
+                            # Tentar regex para ver se consegue extrair mais
+                            regex_name = self.extract_patient_name(message)
+                            if regex_name and len(regex_name.split()) > len(palavras):
+                                logger.info(f"✅ Regex encontrou nome mais completo: '{regex_name}' - usando este")
+                                entities['nome_paciente'] = regex_name
+                    
                     return self.validate_entities(entities)
             
             # Fallback para regex
@@ -90,33 +103,102 @@ class EntityExtractor:
         current_state = session.get('current_state', 'idle')
         patient_name = session.get('patient_name')
         selected_doctor = session.get('selected_doctor')
+        last_suggested_doctor = session.get('last_suggested_doctor')
+        last_suggested_doctors = session.get('last_suggested_doctors') or []
         selected_specialty = session.get('selected_specialty')
         preferred_date = session.get('preferred_date')
         preferred_time = session.get('preferred_time')
-        
+
+        # Resumo compacto do histórico recente (últimas 4 mensagens)
+        history_summary = "Sem histórico recente."
+        if conversation_history:
+            recent_messages = conversation_history[-4:]
+            history_lines: List[str] = []
+            for msg in recent_messages:
+                role = "Paciente" if msg.get('is_user') else "Assistente"
+                content = (msg.get('content') or "").replace('\n', ' ').strip()
+                if len(content) > 90:
+                    content = content[:87].strip() + "..."
+                history_lines.append(f"- {role}: {content}")
+            if history_lines:
+                history_summary = "\n".join(history_lines)
+
+        # Resumo de especialidades disponíveis (limitar a 5)
+        specialties_summary = "Não disponível"
+        specialties = clinic_data.get('especialidades') or []
+        if specialties:
+            specialties_summary = ', '.join([
+                esp.get('nome', '').strip()
+                for esp in specialties[:5]
+                if esp.get('nome')
+            ]) or "Não disponível"
+
+        # Resumo de médicos disponíveis (limitar a 5)
+        doctors_summary = "Não disponível"
+        medicos = clinic_data.get('medicos') or []
+        doctor_entries: List[str] = []
+        for medico in medicos[:5]:
+            nome = (medico.get('nome') or '').strip()
+            if not nome:
+                continue
+            especialidades_medico = (medico.get('especialidades_display') or '').strip()
+            if especialidades_medico:
+                doctor_entries.append(f"{nome} ({especialidades_medico})")
+            else:
+                doctor_entries.append(nome)
+        if doctor_entries:
+            doctors_summary = ', '.join(doctor_entries)
+
+        recent_doctors_context = []
+        if selected_doctor:
+            recent_doctors_context.append(f"Confirmado: {selected_doctor}")
+        if last_suggested_doctor and last_suggested_doctor != selected_doctor:
+            recent_doctors_context.append(f"Sugerido: {last_suggested_doctor}")
+        if last_suggested_doctors:
+            others = [doc for doc in last_suggested_doctors if doc not in {selected_doctor, last_suggested_doctor}]
+            if others:
+                recent_doctors_context.append("Lista sugerida: " + ', '.join(others[:4]))
+        recent_doctors_text = recent_doctors_context and ' | '.join(recent_doctors_context) or 'Sem sugestões recentes.'
+
         prompt = f"""Você é um assistente especializado em extrair informações de mensagens de pacientes.
 
 MENSAGEM: "{message}"
 
 CONTEXTO:
-- Estado: {current_state}
-- Nome: {patient_name or 'Não informado'}
-- Médico: {selected_doctor or 'Não selecionado'}
-- Especialidade: {selected_specialty or 'Não selecionada'}
-- Data: {preferred_date or 'Não informada'}
-- Horário: {preferred_time or 'Não informado'}
+- Estado atual: {current_state}
+- Nome atual: {patient_name or 'Não informado'}
+- Médico atual: {selected_doctor or 'Não selecionado'}
+- Especialidade atual: {selected_specialty or 'Não selecionada'}
+- Data atual: {preferred_date or 'Não informada'}
+- Horário atual: {preferred_time or 'Não informado'}
+- Médicos recentes: {recent_doctors_text}
+
+HISTÓRICO RECENTE (máx. 4 mensagens):
+{history_summary}
+
+REFERÊNCIAS DISPONÍVEIS:
+- Especialidades: {specialties_summary}
+- Médicos: {doctors_summary}
 
 EXTRAIA as seguintes entidades da mensagem (use null se não encontrar):
-- nome_paciente: Nome completo do paciente
+- nome_paciente: Nome completo do paciente (EXTRAIA TODAS AS PALAVRAS DO NOME, incluindo preposições como "da", "de", "dos", "das". Exemplo: "João da Silva" deve ser extraído completamente como "João da Silva", NÃO apenas "João da". Se o paciente disser "Maria de Souza Santos", extraia "Maria de Souza Santos" completo)
 - medico: Nome do médico mencionado
 - especialidade: Especialidade médica
 - data: Data mencionada
 - horario: Horário mencionado
 
-IMPORTANTE:
+IMPORTANTE - EXTRAÇÃO DE NOME:
+- Para nome_paciente: SEMPRE extraia o nome completo com TODAS as palavras mencionadas pelo paciente. 
+- NÃO trunque o nome em nenhuma circunstância. 
+- Se o paciente disser "João da Silva", extraia EXATAMENTE "João da Silva" (3 palavras), NÃO "João da" (2 palavras).
+- Se o paciente disser "Maria de Souza", extraia "Maria de Souza" completo.
+- Preposições como "da", "de", "dos", "das" são PARTE DO NOME e devem ser incluídas.
+- O nome pode ter 2, 3, 4 ou mais palavras - extraia TODAS elas.
 - Se encontrar especialidade como "pneumologista", extraia como "pneumologia"
 - Se a mensagem modifica informações já coletadas, extraia os novos valores
 - Use o contexto para entender referências
+- Se for uma confirmação curta (ex.: "sim", "ok", "isso mesmo") e houver médico confirmado ou sugerido, retorne esse médico.
+- Caso o paciente utilize pronomes (ex.: "com ele"), utilize o histórico e a lista de médicos para identificar o nome correto.
 
 Responda APENAS com JSON válido:
 {{
@@ -126,7 +208,7 @@ Responda APENAS com JSON válido:
     "data": "data_ou_null",
     "horario": "horário_ou_null"
 }}"""
-        
+
         return prompt
             
     # Método para extrair entidades do JSON retornado pelo Gemini
@@ -143,8 +225,18 @@ Responda APENAS com JSON válido:
             
             entities = json.loads(response_text.strip())
             
+            # Log detalhado para debug de nomes
+            if 'nome_paciente' in entities and entities['nome_paciente']:
+                logger.info(f"🔍 Nome extraído pelo Gemini (RAW): '{entities['nome_paciente']}' (tamanho: {len(entities['nome_paciente'])})")
+            
             # Remover valores null
-            return {k: v for k, v in entities.items() if v and v != 'null'}
+            result = {k: v for k, v in entities.items() if v and v != 'null'}
+            
+            # Log após filtragem
+            if 'nome_paciente' in result:
+                logger.info(f"✅ Nome após filtragem: '{result['nome_paciente']}' (tamanho: {len(result['nome_paciente'])})")
+            
+            return result
             
         except Exception as e:
             logger.error(f"Erro ao extrair entidades do JSON: {e}")
@@ -205,12 +297,14 @@ Responda APENAS com JSON válido:
             r'me\s+chamo\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)'
         ]
         
-        # Lista de palavras que não são nomes
+        # Lista de palavras que não são nomes (removidas preposições comuns em nomes brasileiros)
         invalid_names = [
             'gostaria', 'queria', 'preciso', 'quero', 'desejo', 'solicito',
-            'consulta', 'agendamento', 'marcar', 'agendar', 'uma', 'de',
-            'para', 'com', 'em', 'no', 'na', 'do', 'da', 'por', 'pelo'
+            'consulta', 'agendamento', 'marcar', 'agendar', 'uma',
+            'para', 'com', 'em', 'no', 'na', 'por', 'pelo'
         ]
+        # NOTA: Removemos 'de', 'do', 'da', 'dos', 'das' da lista de inválidos
+        # pois são comuns em nomes brasileiros (ex: "João da Silva", "Maria de Souza")
         
         for pattern in name_patterns:
             match = re.search(pattern, message, re.IGNORECASE)
@@ -219,16 +313,22 @@ Responda APENAS com JSON válido:
                 
                 # Verificar se não é uma palavra inválida (palavras completas)
                 name_words = name.lower().split()
-                if any(word in invalid_names for word in name_words):
+                # Verificar se TODAS as palavras são inválidas (não apenas uma)
+                if all(word in invalid_names for word in name_words):
                     continue
                 
-                # Limitar a 3 palavras (nome + sobrenome + sobrenome)
-                name_parts = name.split()[:3]
+                # Não limitar a 3 palavras - aceitar nomes completos
+                # Apenas garantir que tenha pelo menos 2 palavras (nome e sobrenome)
+                name_parts = name.split()
                 if len(name_parts) >= 2:  # Pelo menos nome e sobrenome
-                    # Verificar se as partes não são palavras inválidas
+                    # Filtrar apenas palavras que são claramente inválidas (não preposições)
                     valid_parts = []
                     for part in name_parts:
-                        if part.lower() not in invalid_names:
+                        part_lower = part.lower()
+                        # Aceitar preposições comuns em nomes brasileiros
+                        if part_lower in ['de', 'do', 'da', 'dos', 'das']:
+                            valid_parts.append(part)
+                        elif part_lower not in invalid_names:
                             valid_parts.append(part)
                     
                     if len(valid_parts) >= 2:
@@ -398,8 +498,15 @@ Responda APENAS com JSON válido:
         # Validar nome
         if entities.get('nome_paciente'):
             name = entities['nome_paciente'].strip()
+            logger.info(f"🔍 Validando nome extraído: '{name}' (tamanho: {len(name)}, palavras: {len(name.split())})")
+            
+            # Aceitar nomes com pelo menos 3 caracteres e que contenham espaço (nome e sobrenome)
+            # Não limitar a 3 palavras - aceitar nomes completos com todas as palavras
             if len(name) >= 3 and ' ' in name:  # Nome e sobrenome mínimo
                 validated['nome_paciente'] = name.title()
+                logger.info(f"✅ Nome validado e formatado: '{validated['nome_paciente']}' (tamanho: {len(validated['nome_paciente'])})")
+            else:
+                logger.warning(f"⚠️ Nome rejeitado na validação: '{name}' (tamanho: {len(name)}, tem espaço: {' ' in name})")
         
         # Validar médico
         if entities.get('medico'):

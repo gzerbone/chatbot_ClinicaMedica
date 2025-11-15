@@ -24,7 +24,7 @@ GeminiChatbotService (Agent Router)
 
 ---
 
-## 🔀 Fluxo em 5 Passos
+## 🔀 Fluxo em 6 Passos
 
 ```python
 def process_message(phone_number, message):
@@ -34,19 +34,24 @@ def process_message(phone_number, message):
     # 2️⃣ ANALISAR
     intent = IntentDetector.analyze(message)
     entities = EntityExtractor.extract(message)
-    
-    # 3️⃣ ROTEAR
+
+    # 3️⃣ CONFIRMAR NOME (novo fluxo antecipado)
+    manual_name_response = Router.handle_patient_name(phone_number, session, message, intent, entities)
+    if manual_name_response:
+        return manual_name_response
+
+    # 4️⃣ ROTEAR
     if intent == 'buscar_info':
         result = RAGService.buscar()
     elif intent == 'agendar_consulta':
         result = SmartSchedulingService.agendar()
     elif intent == 'confirmar_agendamento':
         result = HandoffService.confirmar()
-    
-    # 4️⃣ RESPONDER
+
+    # 5️⃣ RESPONDER
     response = ResponseGenerator.generate(result)
-    
-    # 5️⃣ SALVAR
+
+    # 6️⃣ SALVAR
     SessionManager.save(session, response)
     
     return response
@@ -86,7 +91,7 @@ Router chama:
     ├── RAGService               → Base de conhecimento
     ├── SmartSchedulingService   → Agendamento + Calendar
     ├── HandoffService           → Links para secretaria
-    ├── ConversationService      → Persistência
+    ├── ConversationService      → Persistência + confirmação de nome
     └── GoogleCalendarService    → Horários reais
 ```
 

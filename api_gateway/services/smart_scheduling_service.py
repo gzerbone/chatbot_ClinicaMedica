@@ -74,7 +74,8 @@ class SmartSchedulingService:
         2. Se não encontrar na mensagem, busca na sessão (informações de mensagens anteriores)
         3. Retorna informações combinadas para manter contexto da conversa
         """
-        
+        message_lower = message.lower()
+
         info = {
             'message': message_lower,
             'doctor_mentioned': None,
@@ -83,8 +84,6 @@ class SmartSchedulingService:
             'time_mentioned': None,
             'appointment_type': None
         }
-        
-        message_lower = message.lower()
         
         # Extrair médico mencionado da mensagem
         doctor_patterns = [
@@ -303,8 +302,7 @@ class SmartSchedulingService:
                 doctor_name=doctor_name,
                 specialty=specialty,
                 date=date_mentioned,
-                time=time_mentioned,
-                appointment_type=extracted_info.get('appointment_type', 'Consulta')
+                time=time_mentioned
             )
             
             # Criar mensagem de confirmação com link

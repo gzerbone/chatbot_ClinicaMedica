@@ -29,7 +29,6 @@ def test_handoff_link_generation():
         patient_name = "Maria Silva"
         doctor_name = "Dr. João Carvalho"
         specialty = "Cardiologia"
-        appointment_type = "SulAmérica"
         date = "15/09/2025"
         time = "14:30"
         
@@ -38,13 +37,8 @@ def test_handoff_link_generation():
             patient_name=patient_name,
             doctor_name=doctor_name,
             specialty=specialty,
-            appointment_type=appointment_type,
             date=date,
-            time=time,
-            additional_info={
-                'telefone_paciente': '5511999999999',
-                'convenio': appointment_type
-            }
+            time=time
         )
         
         print("✅ Link de handoff gerado com sucesso!")
@@ -196,7 +190,6 @@ def test_conversation_flow():
                 patient_name=handoff_data['patient_name'],
                 doctor_name=handoff_data['doctor_name'],
                 specialty=handoff_data['specialty'],
-                appointment_type=handoff_data['appointment_type'],
                 date=handoff_data['date'],
                 time=handoff_data['time']
             )
@@ -222,7 +215,6 @@ def test_simple_handoff():
             patient_name="João Silva",
             doctor_name="Dr. João Carvalho", 
             specialty="Cardiologia",
-            appointment_type="Particular",
             date="15/09/2025",
             time="14:30"
         )

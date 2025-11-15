@@ -92,7 +92,7 @@ class IntentDetector:
             # ETAPA 4: Processar a resposta do Gemini
             # A resposta vem como texto, mas precisa ser convertida para JSON estruturado
             # Esta função extrai e valida o JSON retornado pelo Gemini
-            analysis_result = self._extract_analysis_from_response(response.text)
+            analysis_result = self._extract_analysis_from_response(response.text, message, session)
             
             # ETAPA 5: Retornar resultado da análise
             # O resultado contém todas as informações necessárias para o chatbot
@@ -119,7 +119,6 @@ class IntentDetector:
         selected_specialty = session.get('selected_specialty')
         preferred_date = session.get('preferred_date')
         preferred_time = session.get('preferred_time')
-        insurance_type = session.get('insurance_type')
         
         # Histórico da conversa
         history_text = ""
@@ -141,9 +140,13 @@ CONTEXTO ATUAL:
 - Especialidade escolhida: {selected_specialty or 'Não selecionada'}
 - Data preferida: {preferred_date or 'Não informada'}
 - Horário preferido: {preferred_time or 'Não informado'}
-- Tipo de convênio: {insurance_type or 'Não informado'}
 
-{history_text}
+Histórico (últimas 4):
+{history_text or '- vazio'}
+
+OBSERVAÇÕES IMPORTANTES:
+- Se a mensagem for apenas um nome (ex.: "Gabriela"), considere que o paciente está informando o nome. NÃO classifique como saudação; use o estado 'confirming_name'.
+- Evite redefinir a conversa para saudação se já estivermos coletando dados.
 
 ANÁLISE NECESSÁRIA:
 Analise a mensagem e determine:
@@ -153,7 +156,6 @@ Analise a mensagem e determine:
    - buscar_info: Perguntas sobre clínica, médicos, exames, preços, endereço, convênios, planos de saúde, especialidades - APENAS DÚVIDAS
    - agendar_consulta: Quero agendar, marcar consulta, agendamento
    - confirmar_agendamento: Confirmar dados, sim, está correto, confirmado
-   - despedida: Tchau, obrigado, até logo
    - duvida: Não entendi, pode repetir, ajuda
 
 IMPORTANTE - DISTINÇÃO ENTRE DÚVIDAS E AGENDAMENTO:
@@ -185,7 +187,7 @@ Responda APENAS com um JSON válido no formato:
         
         return prompt
     
-    def _extract_analysis_from_response(self, response_text: str) -> Dict[str, Any]:
+    def _extract_analysis_from_response(self, response_text: str, message: str, session: Dict) -> Dict[str, Any]:
         """Extrai análise estruturada da resposta do Gemini"""
         try:
             # Remover possíveis marcadores de código
@@ -213,16 +215,16 @@ Responda APENAS com um JSON válido no formato:
             if 'confidence' not in analysis:
                 analysis['confidence'] = 0.7
             
-            return analysis
+            return self._post_process_analysis(analysis, message, session)
             
         except Exception as e:
             logger.error(f"Erro ao extrair análise: {e}")
             logger.error(f"Resposta recebida: {response_text}")
             
             # Fallback: tentar extrair intent manualmente
-            return self._manual_intent_extraction(response_text)
+            return self._manual_intent_extraction(response_text, message, session)
     
-    def _manual_intent_extraction(self, response_text: str) -> Dict[str, Any]:
+    def _manual_intent_extraction(self, response_text: str, message: str, session: Dict) -> Dict[str, Any]:
         """Extração manual de intent como fallback"""
         intent = "duvida"  # Default
         
@@ -236,12 +238,13 @@ Responda APENAS com um JSON válido no formato:
         elif "confirmar" in response_text.lower():
             intent = "confirmar_agendamento"
         
-        return {
+        analysis = {
             'intent': intent,
             'next_state': 'collecting_info',
             'confidence': 0.3,
             'reasoning': 'Extração manual de fallback'
         }
+        return self._post_process_analysis(analysis, message, session)
     
     def _get_fallback_analysis(self, message: str, session: Dict) -> Dict[str, Any]:
         """
@@ -256,6 +259,16 @@ Responda APENAS com um JSON válido no formato:
         """
         message_lower = message.lower()
         current_state = session.get('current_state', 'idle')
+        
+        # Detectar se a mensagem parece ser apenas o nome do paciente
+        if self._is_probable_name(message):
+            next_state = 'confirming_name' if current_state in ['collecting_patient_info', 'idle', 'confirming_name'] else current_state
+            return {
+                'intent': 'agendar_consulta',
+                'next_state': next_state,
+                'confidence': 0.75,
+                'reasoning': 'Mensagem interpretada como fornecimento do nome do paciente'
+            }
         
         # Detectar intent baseado em palavras-chave
         if any(word in message_lower for word in ['oi', 'olá', 'bom dia', 'boa tarde', 'boa noite']):
@@ -285,5 +298,53 @@ Responda APENAS com um JSON válido no formato:
             'confidence': 0.5,
             'reasoning': f'Análise de fallback baseada em palavras-chave (estado atual: {current_state})'
         }
+
+    def _post_process_analysis(self, analysis: Dict[str, Any], message: str, session: Dict) -> Dict[str, Any]:
+        """Ajusta resultados para evitar classificações incorretas (ex.: nome tratado como saudação)."""
+        try:
+            msg = (message or '').strip()
+            if not msg:
+                return analysis
+            
+            msg_lower = msg.lower()
+            current_state = session.get('current_state', 'idle')
+            greeting_keywords = ['oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'boa madrugada', 'hello', 'hi', 'hey']
+            
+            if analysis.get('intent') == 'saudacao':
+                is_greeting = any(keyword in msg_lower for keyword in greeting_keywords)
+                if not is_greeting and self._is_probable_name(msg):
+                    analysis['intent'] = 'agendar_consulta'
+                    if current_state in ['collecting_patient_info', 'idle', 'confirming_name']:
+                        analysis['next_state'] = 'confirming_name'
+                    analysis['confidence'] = max(analysis.get('confidence', 0.7), 0.85)
+                    analysis['reasoning'] = 'Detectado nome do paciente; ajustando para fluxo de coleta de dados.'
+            
+            return analysis
+        except Exception as e:
+            logger.error(f"Erro no pós-processamento da análise: {e}")
+            return analysis
+
+    def _is_probable_name(self, message: str) -> bool:
+        """Verifica se a mensagem parece ser apenas um nome próprio."""
+        if not message:
+            return False
+        
+        cleaned = message.strip()
+        pattern = r"^[A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+){0,2}$"
+        if not re.fullmatch(pattern, cleaned):
+            return False
+        
+        invalid_terms = {
+            'oi', 'olá', 'ola', 'bom', 'dia', 'boa', 'tarde', 'noite', 'hey', 'hello', 'hi', 'tudo', 'bem'
+        }
+        words = cleaned.lower().split()
+        if any(word in invalid_terms for word in words):
+            return False
+        
+        # Evitar considerar mensagens muito curtas genéricas (ex.: "sim")
+        if cleaned.lower() in {'sim', 'não', 'nao', 'ok'}:
+            return False
+        
+        return True
 
 

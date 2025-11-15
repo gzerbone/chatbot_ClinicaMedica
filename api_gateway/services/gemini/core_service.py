@@ -8,7 +8,7 @@ Responsável por:
 """
 
 import logging
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from django.conf import settings
 
@@ -115,12 +115,35 @@ class GeminiChatbotService:
                 'reasoning': intent_result.get('reasoning', ''),
                 'raw_message': message  # 🔍 Guarda mensagem original para análises posteriores (pronome etc.)
             }
-            
+
+            # 6.1 Fluxo dedicado para confirmação precoce do nome do paciente
+            manual_name_response = self._handle_patient_name_flow(
+                phone_number=phone_number,
+                session=session,
+                message=message,
+                analysis_result=analysis_result
+            )
+            if manual_name_response:
+                response_result = manual_name_response
+
+                # Atualizar sessão com base no fluxo manual de nome
+                self.session_manager.update_session(
+                    phone_number, session, analysis_result, response_result
+                )
+
+                # Salvar histórico e retornar imediatamente
+                self.session_manager.save_messages(
+                    phone_number, message, response_result['response'], analysis_result
+                )
+
+                logger.info(f"✅ Fluxo de confirmação de nome tratado para {phone_number}")
+                return response_result
+
             # 7. Detectar se usuário quer tirar dúvidas durante agendamento
             if analysis_result['intent'] in ['buscar_info', 'duvida']:
                 if session['current_state'] not in ['idle', 'answering_questions']:
                     conversation_service.pause_for_question(phone_number)
-            
+
             # 7.5. Verificar disponibilidade real se for solicitação de agendamento
             if analysis_result['intent'] == 'agendar_consulta':
                 scheduling_analysis = self._handle_scheduling_request(
@@ -312,11 +335,11 @@ Nossa secretaria entrará em contato em breve para finalizar seu agendamento."""
                 self.session_manager.update_session(
                     phone_number, session, analysis_result, response_result
                 )
-            
+
             # 11. Salvar mensagens no histórico
             self.session_manager.save_messages(
                 phone_number, message, response_result['response'], analysis_result
-            )
+            )   
             
             logger.info(f"✅ Resposta gerada com sucesso para {phone_number}")
             
@@ -379,6 +402,227 @@ Nossa secretaria entrará em contato em breve para finalizar seu agendamento."""
                 'message': 'Desculpe, ocorreu um erro ao consultar a disponibilidade. Tente novamente.',
                 'has_availability_info': False
             }
+
+    def _handle_patient_name_flow(self, phone_number: str, session: Dict, message: str,
+                                  analysis_result: Dict) -> Optional[Dict[str, Any]]:
+        """Gerencia coleta e confirmação antecipada do nome do paciente."""
+        try:
+            # Se o nome já está confirmado, não há nada a fazer
+            if session.get('patient_name') and session.get('name_confirmed', False):
+                return None
+
+            session.setdefault('pending_name', None)
+            session.setdefault('name_confirmed', False)
+
+            message_lower = message.lower().strip()
+            last_response = (session.get('last_response') or '').lower()
+
+            # ──────────────────────────────────────────────────────────────────────
+            # 1) Se estamos aguardando confirmação de um nome pendente
+            # ──────────────────────────────────────────────────────────────────────
+            if session.get('pending_name'):
+                confirmation = conversation_service.confirm_patient_name(phone_number, message)
+                status = confirmation.get('status')
+
+                if status == 'confirmed':
+                    confirmed_name = confirmation.get('patient_name') or session['pending_name']
+                    logger.info(f"📝 Confirmando nome: '{confirmed_name}' (tamanho: {len(confirmed_name) if confirmed_name else 0}, palavras: {len(confirmed_name.split()) if confirmed_name else 0})")
+                    session['patient_name'] = confirmed_name
+                    session['pending_name'] = None
+                    session['name_confirmed'] = True
+
+                    analysis_result['intent'] = 'confirmar_nome'
+                    analysis_result['next_state'] = 'collecting_info'
+                    analysis_result['entities'] = {'nome_paciente': confirmed_name}
+                    logger.info(f"✅ Nome confirmado e salvo: '{confirmed_name}' (tamanho: {len(confirmed_name) if confirmed_name else 0})")
+
+                    follow_up = self._build_follow_up_after_name(phone_number, session)
+                    response_text = f"Perfeito, {confirmed_name}! {follow_up}"
+
+                    return {
+                        'response': response_text,
+                        'intent': 'confirmar_nome',
+                        'confidence': 1.0
+                    }
+
+                if status == 'rejected':
+                    session['pending_name'] = None
+                    session['patient_name'] = None
+                    session['name_confirmed'] = False
+
+                    analysis_result['intent'] = 'confirmar_nome'
+                    analysis_result['next_state'] = 'collecting_patient_info'
+                    analysis_result['entities'] = {}
+
+                    response_text = confirmation.get(
+                        'message',
+                        'Tudo bem! Por favor, informe novamente seu nome completo.'
+                    )
+
+                    return {
+                        'response': response_text,
+                        'intent': 'confirmar_nome',
+                        'confidence': 0.6
+                    }
+
+                if status in ['error', 'name_not_found']:
+                    analysis_result['intent'] = 'confirmar_nome'
+                    analysis_result['next_state'] = 'collecting_patient_info'
+                    analysis_result['entities'] = {}
+
+                    response_text = confirmation.get(
+                        'message',
+                        'Não consegui confirmar seu nome. Digite novamente seu nome completo, por favor.'
+                    )
+
+                    return {
+                        'response': response_text,
+                        'intent': 'confirmar_nome',
+                        'confidence': 0.6
+                    }
+
+                # status "no_pending_name" ou outros: seguir fluxo normal
+                return None
+
+            # ──────────────────────────────────────────────────────────────────────
+            # 2) Se ainda não temos nome confirmado, tentar extrair e confirmar
+            # ──────────────────────────────────────────────────────────────────────
+            expecting_name = 'nome' in last_response or any(
+                keyword in message_lower
+                for keyword in ['meu nome', 'me chamo', 'chamo-me', 'nome é', 'sou ']
+            )
+
+            if not expecting_name:
+                return None
+
+            # PRIORIDADE: Usar o nome já extraído pelo entity_extractor (que está correto)
+            # ao invés de chamar conversation_service que usa regex e pode truncar
+            extracted_name = None
+            entities = analysis_result.get('entities', {})
+            
+            if entities.get('nome_paciente'):
+                # Usar o nome extraído pelo Gemini/entity_extractor (já validado e completo)
+                extracted_name = entities['nome_paciente'].strip()
+                logger.info(f"✅ Usando nome extraído pelo entity_extractor: '{extracted_name}' (tamanho: {len(extracted_name)}, palavras: {len(extracted_name.split())})")
+            else:
+                # Fallback: se entity_extractor não extraiu, tentar com conversation_service
+                logger.warning("⚠️ Entity extractor não extraiu nome, usando fallback do conversation_service")
+                name_processing = conversation_service.process_patient_name(phone_number, message)
+                status = name_processing.get('status')
+                
+                if status == 'confirmation_needed':
+                    extracted_name = name_processing.get('extracted_name')
+                elif status == 'name_not_found':
+                    analysis_result['intent'] = 'confirmar_nome'
+                    analysis_result['next_state'] = 'collecting_patient_info'
+                    analysis_result['entities'] = {}
+                    
+                    response_text = name_processing.get(
+                        'message',
+                        'Por favor, informe seu nome completo (nome e sobrenome).'
+                    )
+                    
+                    return {
+                        'response': response_text,
+                        'intent': 'confirmar_nome',
+                        'confidence': 0.7
+                    }
+                elif status == 'error':
+                    analysis_result['intent'] = 'confirmar_nome'
+                    analysis_result['next_state'] = 'collecting_patient_info'
+                    analysis_result['entities'] = {}
+                    
+                    return {
+                        'response': name_processing.get('message', 'Tive um problema ao entender seu nome. Pode informar novamente?'),
+                        'intent': 'confirmar_nome',
+                        'confidence': 0.5
+                    }
+            
+            if extracted_name:
+                logger.info(f"📝 Nome extraído para confirmação: '{extracted_name}' (tamanho: {len(extracted_name)}, palavras: {len(extracted_name.split())})")
+                session['pending_name'] = extracted_name
+                session['name_confirmed'] = False
+                
+                # Sincronizar pending_name com o banco imediatamente para garantir que está salvo completo
+                try:
+                    self.session_manager.sync_to_database(phone_number, session)
+                    logger.info(f"💾 pending_name sincronizado com banco: '{extracted_name}'")
+                except Exception as e:
+                    logger.error(f"Erro ao sincronizar pending_name com banco: {e}")
+
+                analysis_result['intent'] = 'confirmar_nome'
+                analysis_result['next_state'] = 'confirming_name'
+                # Manter as entidades extraídas (incluindo o nome completo)
+                if not analysis_result.get('entities'):
+                    analysis_result['entities'] = {}
+
+                response_text = (
+                    f"Entendi. Confirma se seu nome completo é {extracted_name}? "
+                    "Se estiver correto, responda com 'sim'. Caso contrário, digite novamente seu nome completo."
+                )
+
+                return {
+                    'response': response_text,
+                    'intent': 'confirmar_nome',
+                    'confidence': 0.9
+                }
+
+
+            return None
+
+        except Exception as e:
+            logger.error(f"Erro ao processar fluxo de confirmação do nome: {e}")
+            return None
+
+    def _build_follow_up_after_name(self, phone_number: str, session: Dict) -> str:
+        """Gera pergunta apropriada após confirmar o nome do paciente."""
+        try:
+            missing_info = conversation_service.get_missing_appointment_info(phone_number)
+            next_action = missing_info.get('next_action', 'ask_general')
+
+            specialty = session.get('selected_specialty')
+            doctor = session.get('selected_doctor')
+            date_str = self._format_date_for_user(session.get('preferred_date'))
+
+            if next_action == 'ask_specialty':
+                return "Para continuarmos, qual especialidade você deseja consultar?"
+            if next_action == 'ask_doctor':
+                if specialty:
+                    return f"Certo! Qual médico você prefere na especialidade de {specialty}?"
+                return "Perfeito! Qual médico você prefere para a sua consulta?"
+            if next_action == 'ask_date':
+                if doctor:
+                    return f"Ótimo! Qual data você prefere para ser atendido pelo Dr. {doctor}?"
+                return "Ótimo! Qual data você prefere para a consulta?"
+            if next_action == 'ask_time':
+                if doctor and date_str:
+                    return f"Obrigado! Qual horário funciona melhor para você no dia {date_str} com o Dr. {doctor}?"
+                if date_str:
+                    return f"Obrigado! Qual horário funciona melhor para você no dia {date_str}?"
+                return "Obrigado! Qual horário funciona melhor para você?"
+
+            return "Como posso te ajudar na sequência?"
+        except Exception:
+            return "Como posso te ajudar na sequência?"
+
+    def _format_date_for_user(self, date_value: Any) -> str:
+        """Normaliza datas (string ou date) para formato DD/MM/YYYY amigável."""
+        if not date_value:
+            return ''
+        try:
+            from datetime import date, datetime
+
+            if isinstance(date_value, str):
+                try:
+                    parsed = datetime.fromisoformat(date_value)
+                except ValueError:
+                    parsed = datetime.strptime(date_value, '%Y-%m-%d')
+                return parsed.strftime('%d/%m/%Y')
+            if isinstance(date_value, date):
+                return date_value.strftime('%d/%m/%Y')
+        except Exception:
+            return str(date_value)
+        return str(date_value)
     
     def _get_clinic_data_optimized(self) -> Dict:
         """Obtém dados da clínica de forma otimizada"""
