@@ -95,15 +95,7 @@ resume_result = conversation_service.resume_appointment(phone_number)
 - ✅ Retorna a próxima pergunta do fluxo
 - ✅ Fornece mensagem de retomada
 
-#### 3. `is_in_question_mode(phone_number)`
-Verifica se o usuário está no modo de dúvidas.
-
-```python
-is_questioning = conversation_service.is_in_question_mode(phone_number)
-# Retorna: True ou False
-```
-
-#### 4. `has_paused_appointment(phone_number)`
+#### 3. `has_paused_appointment(phone_number)`
 Verifica se há um agendamento pausado.
 
 ```python

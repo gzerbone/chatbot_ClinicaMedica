@@ -161,7 +161,6 @@ Aproveitando as otimizações, foram implementados:
 **Novas Funções:**
 - `pause_for_question()` - Pausa agendamento
 - `resume_appointment()` - Retoma agendamento
-- `is_in_question_mode()` - Verifica modo
 - `has_paused_appointment()` - Verifica pausa
 
 **Novo Estado:**

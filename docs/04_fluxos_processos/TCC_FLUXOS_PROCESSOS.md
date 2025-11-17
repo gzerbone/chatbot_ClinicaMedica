@@ -482,7 +482,6 @@ O **sistema de pausar/retomar** permite que o bot responda essas dúvidas **sem 
 │     • pause_for_question(phone_number)                          │
 │     • resume_appointment(phone_number)                          │
 │     • has_paused_appointment(phone_number)                      │
-│     • is_in_question_mode(phone_number)                         │
 │                                                                  │
 │  4. Detecção de Palavras-chave de Retomada                      │
 │     • "continuar", "retomar", "voltar"                          │

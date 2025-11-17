@@ -298,23 +298,7 @@ class ConversationService:
                 'resumed': False,
                 'message': 'Ocorreu um erro ao retomar o agendamento.'
             }
-    
-    def is_in_question_mode(self, phone_number: str) -> bool:
-        """
-        Verifica se o usuário está no modo de dúvidas
-        
-        Args:
-            phone_number: Número do telefone
-            
-        Returns:
-            True se está em modo de dúvidas
-        """
-        try:
-            session = self.get_or_create_session(phone_number)
-            return session.current_state == 'answering_questions'
-        except:
-            return False
-    
+
     def has_paused_appointment(self, phone_number: str) -> bool:
         """
         Verifica se há um agendamento pausado
