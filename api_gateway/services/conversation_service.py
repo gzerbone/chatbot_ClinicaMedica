@@ -78,7 +78,6 @@ class ConversationService:
             # Atualizar estado da sessão baseado na intenção
             self._update_session_state(session, intent, entities)
             
-            logger.info(f"Mensagem adicionada para {phone_number}: {content[:50]}...")
             return message
             
         except Exception as e:
@@ -179,6 +178,7 @@ class ConversationService:
     def get_missing_appointment_info(self, phone_number: str) -> Dict[str, Any]:
         """
         Verifica quais informações faltam para completar o agendamento
+        VALIDA se especialidade e médico salvos são válidos no banco
         
         Args:
             phone_number: Número do telefone
@@ -195,11 +195,29 @@ class ConversationService:
             if not session.patient_name:
                 missing_info.append('patient_name')
             
+            # VALIDAR especialidade salva (pode estar inválida)
             if not session.selected_specialty:
                 missing_info.append('selected_specialty')
+            else:
+                # Validar se especialidade salva existe no banco
+                if not self._validate_specialty_in_db(session.selected_specialty):
+                    logger.warning(f"⚠️ Especialidade salva '{session.selected_specialty}' é inválida. Considerando como faltante.")
+                    missing_info.append('selected_specialty')
+                    # Limpar especialidade inválida
+                    session.selected_specialty = None
+                    session.save()
             
+            # VALIDAR médico salvo (pode estar inválido)
             if not session.selected_doctor:
                 missing_info.append('selected_doctor')
+            else:
+                # Validar se médico salvo existe no banco
+                if not self._validate_doctor_in_db(session.selected_doctor, session.selected_specialty):
+                    logger.warning(f"⚠️ Médico salvo '{session.selected_doctor}' é inválido. Considerando como faltante.")
+                    missing_info.append('selected_doctor')
+                    # Limpar médico inválido
+                    session.selected_doctor = None
+                    session.save()
             
             if not session.preferred_date:
                 missing_info.append('preferred_date')
@@ -334,13 +352,22 @@ class ConversationService:
             action = missing_info_result['next_action']
             session = self.get_or_create_session(phone_number)
             patient_name = session.patient_name or 'paciente'
+            current_state = session.current_state
             
-            # Mensagens baseadas na próxima ação
+            # Mensagens baseadas na próxima ação, considerando o estado atual
+            # Se já temos nome, não perguntar novamente
+            if action == 'ask_name' and patient_name:
+                # Se já tem nome, pular para próxima ação
+                if session.selected_specialty:
+                    action = 'ask_doctor' if not session.selected_doctor else 'ask_date'
+                else:
+                    action = 'ask_specialty'
+            
             action_messages = {
                 'ask_name': 'Para começar o agendamento, preciso saber seu nome completo. Qual é seu nome?',
-                'ask_specialty': f'Olá {patient_name}! Qual especialidade médica você procura?',
-                'ask_doctor': f'Perfeito {patient_name}! Temos médicos disponíveis nessa especialidade. Qual médico você prefere?',
-                'ask_date': f'Ótimo {patient_name}! Para qual data você gostaria de agendar?',
+                'ask_specialty': f'Olá {patient_name}! Qual especialidade médica você procura?' if patient_name else 'Qual especialidade médica você procura?',
+                'ask_doctor': f'Perfeito {patient_name}! Temos médicos disponíveis nessa especialidade. Qual médico você prefere?' if patient_name else 'Temos médicos disponíveis nessa especialidade. Qual médico você prefere?',
+                'ask_date': f'Ótimo {patient_name}! Para qual data você gostaria de agendar?' if patient_name else 'Para qual data você gostaria de agendar?',
                 'ask_time': f'Perfeito! Qual horário seria melhor para você?'
             }
             
@@ -350,9 +377,104 @@ class ConversationService:
             logger.error(f"Erro ao gerar próxima pergunta: {e}")
             return None
     
+    def _validate_specialty_in_db(self, specialty_name: str) -> bool:
+        """
+        Valida se especialidade existe no banco de dados
+        
+        Args:
+            specialty_name: Nome da especialidade a validar
+            
+        Returns:
+            True se especialidade é válida, False caso contrário
+        """
+        try:
+            from rag_agent.models import Especialidade
+            
+            if not specialty_name:
+                return False
+            
+            specialty_name_lower = specialty_name.lower().strip()
+            
+            # Busca exata (case-insensitive)
+            especialidade = Especialidade.objects.filter(
+                nome__iexact=specialty_name_lower,
+                ativa=True
+            ).first()
+            
+            if especialidade:
+                return True
+            
+            # Busca parcial (contém)
+            especialidade = Especialidade.objects.filter(
+                nome__icontains=specialty_name_lower,
+                ativa=True
+            ).first()
+            
+            return especialidade is not None
+            
+        except Exception as e:
+            logger.error(f"Erro ao validar especialidade '{specialty_name}': {e}")
+            return False
+    
+    def _validate_doctor_in_db(self, doctor_name: str, specialty: Optional[str] = None) -> bool:
+        """
+        Valida se médico existe no banco de dados
+        
+        Args:
+            doctor_name: Nome do médico a validar
+            specialty: Especialidade (opcional) para validar se médico tem essa especialidade
+            
+        Returns:
+            True se médico é válido, False caso contrário
+        """
+        try:
+            from rag_agent.models import Medico
+            
+            if not doctor_name:
+                return False
+            
+            doctor_name_lower = doctor_name.lower().strip()
+            
+            # Buscar médico diretamente no banco (mais confiável que via serializer)
+            medicos = Medico.objects.prefetch_related('especialidades').all()
+            
+            # Buscar médico por nome (busca flexível)
+            for medico in medicos:
+                medico_name = medico.nome
+                medico_name_lower = medico_name.lower()
+                
+                # Busca exata ou parcial
+                if (doctor_name_lower in medico_name_lower or 
+                    medico_name_lower in doctor_name_lower):
+                    
+                    # Se especialidade foi fornecida, validar se médico tem essa especialidade
+                    if specialty:
+                        # Buscar especialidades do médico diretamente do banco
+                        especialidades_medico = medico.especialidades.filter(ativa=True)
+                        especialidades_nomes = [esp.nome.lower() for esp in especialidades_medico]
+                        specialty_lower = specialty.lower()
+                        
+                        if specialty_lower not in especialidades_nomes:
+                            continue
+                    
+                    return True
+            
+            return False
+            
+        except Exception as e:
+            logger.error(f"Erro ao validar médico '{doctor_name}': {e}")
+            return False
+    
     def _get_next_action(self, missing_info: List[str]) -> str:
         """
         Determina a próxima ação baseada nas informações faltantes
+        
+        ORDEM OBRIGATÓRIA:
+        1. Nome do paciente
+        2. Especialidade médica
+        3. Médico (obrigatório antes de data/horário)
+        4. Data
+        5. Horário
         
         Args:
             missing_info: Lista de informações faltantes
@@ -363,81 +485,25 @@ class ConversationService:
         if not missing_info:
             return 'generate_handoff'
         
-        # Fluxo sequencial de coleta
+        # Fluxo sequencial OBRIGATÓRIO de coleta
+        # Ordem: nome → especialidade → médico → data → horário
         if 'patient_name' in missing_info:
             return 'ask_name'
         elif 'selected_specialty' in missing_info:
             return 'ask_specialty'
         elif 'selected_doctor' in missing_info:
+            # IMPORTANTE: Médico DEVE ser selecionado antes de data/horário
             return 'ask_doctor'
         elif 'preferred_date' in missing_info:
+            # Só pergunta data se já tiver especialidade E médico
             return 'ask_date'
         elif 'preferred_time' in missing_info:
+            # Só pergunta horário se já tiver data
             return 'ask_time'
         else:
             return 'ask_general'
     
-    def extract_patient_name(self, message: str) -> Optional[str]:
-        """
-        Extrai nome completo do paciente da mensagem
-        """
-        import re
 
-        # Padrões para extrair nome
-        name_patterns = [
-            r'meu\s+nome\s+é\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)',
-            r'sou\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)',
-            r'chamo-me\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)',
-            r'nome\s+é\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)',
-            r'me\s+chamo\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)',
-            r'^([A-Za-zÀ-ÿ]+\s+[A-Za-zÀ-ÿ]+)(?:\s|,|$)'
-        ]
-        
-        for pattern in name_patterns:
-            match = re.search(pattern, message, re.IGNORECASE)
-            if match:
-                name = match.group(1).strip()
-                # Não limitar a 3 palavras - aceitar nomes completos
-                # Apenas garantir que tenha pelo menos 2 palavras (nome e sobrenome)
-                name_parts = name.split()
-                if len(name_parts) >= 2:  # Pelo menos nome e sobrenome
-                    return ' '.join(name_parts).title()
-        
-        return None
-    
-    def process_patient_name(self, phone_number: str, message: str) -> Dict[str, Any]:
-        """
-        Processa nome do paciente com confirmação
-        """
-        try:
-            session = self.get_or_create_session(phone_number)
-            
-            # Extrair nome da mensagem
-            extracted_name = self.extract_patient_name(message)
-            
-            if extracted_name:
-                # Armazenar nome pendente de confirmação
-                session.pending_name = extracted_name
-                session.save()
-                
-                return {
-                    'status': 'confirmation_needed',
-                    'message': f'Confirma se seu nome é {extracted_name}?',
-                    'extracted_name': extracted_name
-                }
-            else:
-                return {
-                    'status': 'name_not_found',
-                    'message': 'Não consegui identificar seu nome. Por favor, digite seu nome completo.'
-                }
-                
-        except Exception as e:
-            logger.error(f"Erro ao processar nome do paciente: {e}")
-            return {
-                'status': 'error',
-                'message': 'Ocorreu um erro ao processar seu nome. Tente novamente.'
-            }
-    
     def confirm_patient_name(self, phone_number: str, confirmation: str) -> Dict[str, Any]:
         """
         Confirma ou rejeita o nome do paciente
@@ -519,9 +585,9 @@ class ConversationService:
                 # Para dias da semana, usar a lógica do smart_scheduling_service
                 from .smart_scheduling_service import SmartSchedulingService
                 smart_service = SmartSchedulingService()
-                normalized_date = smart_service._normalize_date(date_str)
-                if normalized_date:
-                    return normalized_date.strftime('%Y-%m-%d')
+                parsed_date = smart_service._parse_date(date_str)
+                if parsed_date:
+                    return parsed_date.strftime('%Y-%m-%d')
 
             # Tentar diferentes formatos de data
             date_formats = [

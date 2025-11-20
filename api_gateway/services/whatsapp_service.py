@@ -57,7 +57,6 @@ class WhatsAppService:
             response = requests.post(url, headers=headers, json=data)
             
             if response.status_code == 200:
-                logger.info(f"📱 Mensagem enviada para {to}")
                 return True
             else:
                 logger.error(f"❌ Erro ao enviar mensagem: {response.status_code} - {response.text}")
@@ -110,7 +109,6 @@ class WhatsAppService:
             response = requests.post(url, headers=headers, json=data)
             
             if response.status_code == 200:
-                logger.info(f"Template enviado com sucesso para {to}")
                 return True
             else:
                 logger.error(f"Erro ao enviar template: {response.status_code} - {response.text}")
@@ -146,7 +144,6 @@ class WhatsAppService:
             response = requests.post(url, headers=headers, json=data)
             
             if response.status_code == 200:
-                logger.info(f"Mensagem {message_id} marcada como lida")
                 return True
             else:
                 logger.error(f"Erro ao marcar mensagem como lida: {response.status_code} - {response.text}")
@@ -205,8 +202,6 @@ class WhatsAppService:
         verify_token = getattr(settings, 'WHATSAPP_VERIFY_TOKEN', '')
         
         if mode == 'subscribe' and token == verify_token:
-            logger.info("Webhook do WhatsApp verificado com sucesso")
             return challenge
         else:
-            logger.warning("Falha na verificação do webhook do WhatsApp")
             return None

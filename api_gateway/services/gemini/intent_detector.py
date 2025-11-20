@@ -75,10 +75,10 @@ class IntentDetector:
             response = self.model.generate_content(
                 analysis_prompt,
                 generation_config={
-                    "temperature": 0.7,  # Baixa temperatura = respostas mais determinísticas e consistentes
-                    "top_p": 0.8,        # Controla diversidade das respostas (0.8 = boa diversidade)
-                    "top_k": 20,         # Considera apenas os 20 tokens mais prováveis
-                    "max_output_tokens": 300  # Limita resposta a 300 tokens (suficiente para JSON)
+                    "temperature": 0.6,  # Ligeiramente reduzido para análise mais precisa (mas ainda flexível)
+                    "top_p": 0.85,       # Aumentado para melhor compreensão de contexto
+                    "top_k": 30,         # Aumentado de 20 para considerar mais opções na análise
+                    "max_output_tokens": 400  # Aumentado de 300 para permitir análises mais detalhadas
                 }
             )
             
@@ -100,11 +100,17 @@ class IntentDetector:
             return analysis_result
             
         except Exception as e:
-            # TRATAMENTO DE ERRO: Se algo der errado com o Gemini
-            # (API indisponível, resposta inválida, etc.), usar análise de fallback
-            # que tenta detectar intenções usando palavras-chave simples
+            # TRATAMENTO DE ERRO: Se algo der errado com o Gemini, retornar erro
+            # O sistema não tentará continuar com lógica simplificada
             logger.error(f"Erro na análise com Gemini: {e}")
-            return self._get_fallback_analysis(message, session)
+            
+            # Retornar erro para o usuário pedir reformulação
+            return {
+                'intent': 'error',
+                'next_state': session.get('current_state', 'idle'),
+                'confidence': 0.0,
+                'reasoning': f'Erro ao processar com Gemini: {str(e)}'
+            }
     
     def _build_analysis_prompt(self, message: str, session: Dict, 
                              conversation_history: List, clinic_data: Dict) -> str:
@@ -168,8 +174,8 @@ IMPORTANTE - DISTINÇÃO ENTRE DÚVIDAS E AGENDAMENTO:
    - idle: Estado inicial
    - collecting_patient_info: Coletando nome do paciente
    - confirming_name: Confirmando nome extraído
-   - selecting_doctor: Escolhendo médico
    - selecting_specialty: Escolhendo especialidade médica
+   - selecting_doctor: Escolhendo médico
    - choosing_schedule: Escolhendo data/horário
    - confirming: Confirmando dados finais do agendamento
    - collecting_info: Fornecendo informações solicitadas
@@ -209,7 +215,7 @@ Responda APENAS com um JSON válido no formato:
             # CORREÇÃO: Não permitir que o Gemini defina estado 'confirming'
             # Este estado deve ser definido apenas pelo core_service quando o handoff for gerado
             if analysis['next_state'] == 'confirming':
-                analysis['next_state'] = 'choosing_schedule'
+                analysis['next_state'] = 'collecting_info'
             
             # Garantir que confidence existe
             if 'confidence' not in analysis:
@@ -220,84 +226,7 @@ Responda APENAS com um JSON válido no formato:
         except Exception as e:
             logger.error(f"Erro ao extrair análise: {e}")
             logger.error(f"Resposta recebida: {response_text}")
-            
-            # Fallback: tentar extrair intent manualmente
-            return self._manual_intent_extraction(response_text, message, session)
-    
-    def _manual_intent_extraction(self, response_text: str, message: str, session: Dict) -> Dict[str, Any]:
-        """Extração manual de intent como fallback"""
-        intent = "duvida"  # Default
-        
-        # Tentar encontrar intent na resposta
-        if "agendar" in response_text.lower():
-            intent = "agendar_consulta"
-        elif "info" in response_text.lower() or "informação" in response_text.lower():
-            intent = "buscar_info"
-        elif "saudação" in response_text.lower() or "olá" in response_text.lower():
-            intent = "saudacao"
-        elif "confirmar" in response_text.lower():
-            intent = "confirmar_agendamento"
-        
-        analysis = {
-            'intent': intent,
-            'next_state': 'collecting_info',
-            'confidence': 0.3,
-            'reasoning': 'Extração manual de fallback'
-        }
-        return self._post_process_analysis(analysis, message, session)
-    
-    def _get_fallback_analysis(self, message: str, session: Dict) -> Dict[str, Any]:
-        """
-        Análise de fallback quando o Gemini falha
-        
-        Args:
-            message: Mensagem do usuário
-            session: Dados da sessão atual (usado para contexto)
-            
-        Returns:
-            Dict com análise baseada em palavras-chave
-        """
-        message_lower = message.lower()
-        current_state = session.get('current_state', 'idle')
-        
-        # Detectar se a mensagem parece ser apenas o nome do paciente
-        if self._is_probable_name(message):
-            next_state = 'confirming_name' if current_state in ['collecting_patient_info', 'idle', 'confirming_name'] else current_state
-            return {
-                'intent': 'agendar_consulta',
-                'next_state': next_state,
-                'confidence': 0.75,
-                'reasoning': 'Mensagem interpretada como fornecimento do nome do paciente'
-            }
-        
-        # Detectar intent baseado em palavras-chave
-        if any(word in message_lower for word in ['oi', 'olá', 'bom dia', 'boa tarde', 'boa noite']):
-            intent = 'saudacao'
-            next_state = 'idle'
-        elif any(word in message_lower for word in ['agendar', 'marcar', 'consulta','consultar', 'agendamento', 'com', 'para', 'com especialista', 'com médico', 'com doutor', 'com doutora']):
-            intent = 'agendar_consulta'
-            # Se já tem nome, vai direto para escolher médico/especialidade
-            if session.get('patient_name'):
-                next_state = 'selecting_doctor'
-            else:
-                next_state = 'collecting_patient_info'
-        elif any(word in message_lower for word in ['sim', 'confirmar', 'confirmado', 'está correto']):
-            intent = 'confirmar_agendamento'
-            # Não alterar estado aqui - deixar o core_service decidir baseado nas informações completas
-            next_state = current_state
-        elif any(word in message_lower for word in ['quais', 'quem', 'que', 'tem', 'atendem', 'disponível', 'especialista', 'médico', 'doutor', 'doutora', 'dr', 'dra']):
-            intent = 'buscar_info'
-            next_state = 'answering_questions'
-        else:
-            intent = 'buscar_info'
-            next_state = 'answering_questions'
-        
-        return {
-            'intent': intent,
-            'next_state': next_state,
-            'confidence': 0.5,
-            'reasoning': f'Análise de fallback baseada em palavras-chave (estado atual: {current_state})'
-        }
+
 
     def _post_process_analysis(self, analysis: Dict[str, Any], message: str, session: Dict) -> Dict[str, Any]:
         """Ajusta resultados para evitar classificações incorretas (ex.: nome tratado como saudação)."""
@@ -324,27 +253,6 @@ Responda APENAS com um JSON válido no formato:
             logger.error(f"Erro no pós-processamento da análise: {e}")
             return analysis
 
-    def _is_probable_name(self, message: str) -> bool:
-        """Verifica se a mensagem parece ser apenas um nome próprio."""
-        if not message:
-            return False
-        
-        cleaned = message.strip()
-        pattern = r"^[A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+){0,2}$"
-        if not re.fullmatch(pattern, cleaned):
-            return False
-        
-        invalid_terms = {
-            'oi', 'olá', 'ola', 'bom', 'dia', 'boa', 'tarde', 'noite', 'hey', 'hello', 'hi', 'tudo', 'bem'
-        }
-        words = cleaned.lower().split()
-        if any(word in invalid_terms for word in words):
-            return False
-        
-        # Evitar considerar mensagens muito curtas genéricas (ex.: "sim")
-        if cleaned.lower() in {'sim', 'não', 'nao', 'ok'}:
-            return False
-        
-        return True
+
 
 

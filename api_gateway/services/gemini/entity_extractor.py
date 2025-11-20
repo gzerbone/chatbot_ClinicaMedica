@@ -2,9 +2,9 @@
 Entity Extractor - Extração de Entidades das Mensagens
 
 Responsável por:
-- Extrair entidades relevantes das mensagens
-- Usar regex como fallback
+- Extrair entidades relevantes das mensagens usando Gemini
 - Normalizar e validar dados extraídos
+- Sem fallbacks - se Gemini falhar, retorna vazio
 """
 
 import json
@@ -37,8 +37,8 @@ class EntityExtractor:
     # Método principal para extrair entidades da mensagem
     def extract_entities(self, message: str, session: Dict, conversation_history: List, clinic_data: Dict) -> Dict[str, str]:
         """
-        Extrai entidades da mensagem (método principal)
-        Usa Gemini como método primário e regex como fallback
+        Extrai entidades da mensagem usando apenas Gemini
+        Sem fallbacks - se falhar, retorna vazio e pede novamente ao usuário
         """
         try:
             # Tentar extração com Gemini primeiro
@@ -47,27 +47,21 @@ class EntityExtractor:
                 if entities and any(entities.values()):
                     # Verificar se o nome extraído parece incompleto (apenas 2 palavras quando deveria ter mais)
                     if 'nome_paciente' in entities:
+                        # Validar nome extraído pelo Gemini
                         nome_extraido = entities['nome_paciente']
-                        palavras = nome_extraido.split() if nome_extraido else []
-                        # Se o nome tem apenas 2 palavras e termina com preposição, pode estar incompleto
-                        if len(palavras) == 2 and palavras[-1].lower() in ['da', 'de', 'do', 'dos', 'das']:
-                            logger.warning(f"⚠️ Nome extraído pode estar incompleto: '{nome_extraido}' - tentando regex como fallback")
-                            # Tentar regex para ver se consegue extrair mais
-                            regex_name = self.extract_patient_name(message)
-                            if regex_name and len(regex_name.split()) > len(palavras):
-                                logger.info(f"✅ Regex encontrou nome mais completo: '{regex_name}' - usando este")
-                                entities['nome_paciente'] = regex_name
+                        if nome_extraido:
+                            logger.info(f"✅ Nome extraído pelo Gemini: '{nome_extraido}'")
                     
                     return self.validate_entities(entities)
             
-            # Fallback para regex
-            logger.info("Usando regex como fallback para extração de entidades")
-            entities = self.extract_entities_with_regex(message)
-            return self.validate_entities(entities)
+            # Sem fallback - se Gemini não extraiu, retornar vazio
+            logger.warning("⚠️ Gemini não retornou entidades - retornando vazio")
+            return {}
             
         except Exception as e:
-            logger.error(f"Erro na extração de entidades: {e}")
-            return self.extract_entities_with_regex(message)
+            logger.error(f"❌ Erro na extração de entidades com Gemini: {e}")
+            # Sem fallback - retornar vazio e deixar o sistema pedir novamente
+            return {}
         
     # Método para extrair entidades com Gemini
     def extract_entities_with_gemini(self, message: str, session: Dict,
@@ -79,10 +73,10 @@ class EntityExtractor:
             response = self.model.generate_content(
                 prompt,
                 generation_config={
-                    "temperature": 0.5,
-                    "top_p": 0.8,
-                    "top_k": 20,
-                    "max_output_tokens": 200
+                    "temperature": 0.4,  # Mantido baixo para extração precisa, mas aumentado de 0.5 para melhor contexto
+                    "top_p": 0.85,      # Aumentado de 0.8 para melhor compreensão de referências
+                    "top_k": 30,        # Aumentado de 20 para considerar mais variações de nomes/entidades
+                    "max_output_tokens": 300  # Aumentado de 200 para extrair nomes completos e entidades complexas
                 }
             )
             
@@ -232,10 +226,6 @@ Responda APENAS com JSON válido:
             # Remover valores null
             result = {k: v for k, v in entities.items() if v and v != 'null'}
             
-            # Log após filtragem
-            if 'nome_paciente' in result:
-                logger.info(f"✅ Nome após filtragem: '{result['nome_paciente']}' (tamanho: {len(result['nome_paciente'])})")
-            
             return result
             
         except Exception as e:
@@ -244,245 +234,6 @@ Responda APENAS com JSON válido:
             return {}
 
 
-    def extract_entities_with_regex(self, message: str) -> Dict[str, str]:
-        """
-        Extrai entidades usando regex como fallback quando o Gemini falha
-        
-        Args:
-            message: Mensagem do usuário
-            
-        Returns:
-            Dict com entidades extraídas
-        """
-        entities = {}
-        message_lower = message.lower()
-        
-        # Extrair nome do paciente
-        name = self.extract_patient_name(message)
-        if name:
-            entities['nome_paciente'] = name
-        
-        # Extrair médico
-        doctor = self.extract_doctor(message)
-        if doctor:
-            entities['medico'] = doctor
-        
-        # Extrair data
-        date = self.extract_date(message)
-        if date:
-            entities['data'] = date
-        
-        # Extrair horário
-        time = self.extract_time(message)
-        if time:
-            entities['horario'] = time
-        
-        return entities
-    
-    def extract_patient_name(self, message: str) -> Optional[str]:
-        """
-        Extrai nome do paciente da mensagem
-        
-        Args:
-            message: Mensagem do usuário
-            
-        Returns:
-            Nome do paciente ou None
-        """
-        name_patterns = [
-            r'meu\s+nome\s+é\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)',
-            r'(?:eu\s+)?sou\s+(?:o\s+|a\s+)?([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)',
-            r'chamo-me\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)',
-            r'nome\s+é\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)',
-            r'me\s+chamo\s+([A-Za-zÀ-ÿ]+(?:\s+[A-Za-zÀ-ÿ]+)*)'
-        ]
-        
-        # Lista de palavras que não são nomes (removidas preposições comuns em nomes brasileiros)
-        invalid_names = [
-            'gostaria', 'queria', 'preciso', 'quero', 'desejo', 'solicito',
-            'consulta', 'agendamento', 'marcar', 'agendar', 'uma',
-            'para', 'com', 'em', 'no', 'na', 'por', 'pelo'
-        ]
-        # NOTA: Removemos 'de', 'do', 'da', 'dos', 'das' da lista de inválidos
-        # pois são comuns em nomes brasileiros (ex: "João da Silva", "Maria de Souza")
-        
-        for pattern in name_patterns:
-            match = re.search(pattern, message, re.IGNORECASE)
-            if match:
-                name = match.group(1).strip()
-                
-                # Verificar se não é uma palavra inválida (palavras completas)
-                name_words = name.lower().split()
-                # Verificar se TODAS as palavras são inválidas (não apenas uma)
-                if all(word in invalid_names for word in name_words):
-                    continue
-                
-                # Não limitar a 3 palavras - aceitar nomes completos
-                # Apenas garantir que tenha pelo menos 2 palavras (nome e sobrenome)
-                name_parts = name.split()
-                if len(name_parts) >= 2:  # Pelo menos nome e sobrenome
-                    # Filtrar apenas palavras que são claramente inválidas (não preposições)
-                    valid_parts = []
-                    for part in name_parts:
-                        part_lower = part.lower()
-                        # Aceitar preposições comuns em nomes brasileiros
-                        if part_lower in ['de', 'do', 'da', 'dos', 'das']:
-                            valid_parts.append(part)
-                        elif part_lower not in invalid_names:
-                            valid_parts.append(part)
-                    
-                    if len(valid_parts) >= 2:
-                        return ' '.join(valid_parts).title()
-        
-        return None
-    
-    def extract_doctor(self, message: str) -> Optional[str]:
-        """
-        Extrai nome do médico da mensagem
-        
-        Args:
-            message: Mensagem do usuário
-            
-        Returns:
-            Nome do médico ou None
-        """
-        doctor_patterns = [
-            r'dr\.?\s+([A-Za-zÀ-ÿ]+)',
-            r'dra\.?\s+([A-Za-zÀ-ÿ]+)',
-            r'doutor\s+([A-Za-zÀ-ÿ]+)',
-            r'doutora\s+([A-Za-zÀ-ÿ]+)',
-            r'com\s+([A-Za-zÀ-ÿ]+)'
-        ]
-        
-        for pattern in doctor_patterns:
-            match = re.search(pattern, message, re.IGNORECASE)
-            if match:
-                doctor_name = match.group(0).strip()
-                # Limitar a 3 palavras
-                doctor_parts = doctor_name.split()[:3]
-                return ' '.join(doctor_parts)
-        
-        return None
-    
-    def extract_date(self, message: str) -> Optional[str]:
-        """
-        Extrai data da mensagem
-        
-        Args:
-            message: Mensagem do usuário
-            
-        Returns:
-            Data extraída ou None
-        """
-        date_patterns = [
-            r'(\d{1,2})/(\d{1,2})/(\d{2,4})',
-            r'(\d{1,2})/(\d{1,2})',
-            r'(segunda|terça|quarta|quinta|sexta|sábado|domingo)',
-            r'(amanhã|hoje|depois)'
-        ]
-        
-        for pattern in date_patterns:
-            match = re.search(pattern, message, re.IGNORECASE)
-            if match:
-                return match.group(0).strip()
-        
-        return None
-    
-    def extract_time(self, message: str) -> Optional[str]:
-        """
-        Extrai horário da mensagem
-        
-        Args:
-            message: Mensagem do usuário
-            
-        Returns:
-            Horário extraído ou None
-        """
-        time_patterns = [
-            r'(\d{1,2}):(\d{2})',
-            r'(\d{1,2})h(\d{2})?',
-            r'(\d{1,2})\s+da\s+(manhã|tarde|noite)'
-        ]
-        
-        for pattern in time_patterns:
-            match = re.search(pattern, message, re.IGNORECASE)
-            if match:
-                return match.group(0).strip()
-        
-        return None
-    
-    def extract_specialty(self, message: str) -> Optional[str]:
-        """
-        Extrai especialidade médica da mensagem e valida contra o banco de dados
-        
-        Args:
-            message: Mensagem do usuário
-            
-        Returns:
-            Nome da especialidade se encontrada e registrada, None caso contrário
-        """
-        from ..rag_service import RAGService
-
-        # Buscar especialidades ativas no banco de dados
-        especialidades_ativas = RAGService.get_especialidades()
-        
-        # Converter a mensagem para minúsculas
-        mensagem_usuario = message.lower()
-        
-        # Verificar se a especialidade no BD está na mensagem do usuário
-        for especialidade in especialidades_ativas:
-            nome_esp = especialidade.get('nome', ' ').lower()
-            if nome_esp in mensagem_usuario:
-                return especialidade.get('nome') # Retorna o nome da especialidade normalizado
-        
-        # Se não encontrar, retornar None
-        logger.warning(f"Especialidade não encontrada na mensagem: {message}")
-        return None
-    
-    def validate_specialty(self, specialty_name: str, especialidades_ativas: list[Dict]) -> bool:
-        """
-        Valida se a especialidade existe no banco de dados
-        
-        Args:
-            specialty_name: Nome da especialidade
-            especialidades_ativas: Lista de especialidades ativas
-        """
-        if not specialty_name or not especialidades_ativas:
-            return False
-        
-        # Converter o nome da especialidade para minúsculas
-        specialty_name = specialty_name.lower()
-        
-        # Verificar se a especialidade existe no banco de dados
-        for especialidade in especialidades_ativas:
-            if especialidade.get('nome', '').lower() == specialty_name:
-                return True
-        
-        return False
-    
-    def get_available_specialties_message(self, especialidades_ativas: list[Dict] = None) -> str:
-        """
-        Gera mensagem com lista de especialidades disponíveis
-        
-        Returns:
-            Mensagem com lista de especialidades disponíveis
-        """
-        from ..rag_service import RAGService
-
-        # Buscar especialidades ativas no banco de dados
-        if especialidades_ativas is None:
-            especialidades_ativas = RAGService.get_especialidades()
-        
-        if not especialidades_ativas:
-            return "No momento não temos nenhuma especialidade cadastrada"
-        
-        # Gerar mensagem com lista de especialidades
-        lista = [f"- {especialidade.get('nome')}" for especialidade in especialidades_ativas]
-        return "Nossas Especialidades disponíveis são:\n" + "\n".join(lista)
-
-    
-
-    
     def validate_entities(self, entities: Dict[str, str]) -> Dict[str, str]:
         """
         Valida e normaliza entidades extraídas
@@ -498,15 +249,11 @@ Responda APENAS com JSON válido:
         # Validar nome
         if entities.get('nome_paciente'):
             name = entities['nome_paciente'].strip()
-            logger.info(f"🔍 Validando nome extraído: '{name}' (tamanho: {len(name)}, palavras: {len(name.split())})")
             
             # Aceitar nomes com pelo menos 3 caracteres e que contenham espaço (nome e sobrenome)
             # Não limitar a 3 palavras - aceitar nomes completos com todas as palavras
             if len(name) >= 3 and ' ' in name:  # Nome e sobrenome mínimo
                 validated['nome_paciente'] = name.title()
-                logger.info(f"✅ Nome validado e formatado: '{validated['nome_paciente']}' (tamanho: {len(validated['nome_paciente'])})")
-            else:
-                logger.warning(f"⚠️ Nome rejeitado na validação: '{name}' (tamanho: {len(name)}, tem espaço: {' ' in name})")
         
         # Validar médico
         if entities.get('medico'):
@@ -533,5 +280,3 @@ Responda APENAS com JSON válido:
                 validated['horario'] = time
         
         return validated
-
-

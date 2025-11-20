@@ -53,8 +53,6 @@ def verify_webhook(request):
         token = request.GET.get('hub.verify_token')
         challenge = request.GET.get('hub.challenge')
         
-        logger.info(f"Tentativa de verificação do webhook: mode={mode}, token={token}")
-        
         result = whatsapp_service.validate_webhook(mode, token, challenge)
         
         if result:
@@ -74,12 +72,8 @@ def handle_webhook(request):
     try:
         body = json.loads(request.body.decode('utf-8'))
 
-        # Log mais limpo do webhook
-        logger.info("📨 Webhook do WhatsApp processado com sucesso")
-
         # Verificar se é uma mensagem válida
         if 'entry' not in body:
-            logger.warning("Webhook sem entries válidas")
             return JsonResponse({'status': 'ok'})
 
         total_messages = 0
@@ -94,8 +88,6 @@ def handle_webhook(request):
 
                     for message in messages:
                         process_message(message, change['value'])
-
-        logger.info(f"✅ Webhook processado: {total_messages} mensagens")
 
         return JsonResponse({'status': 'ok'})
 
@@ -142,9 +134,6 @@ def process_message(message, webhook_data):
                     success = whatsapp_service.send_message(from_number, response_text)
 
                     if success:
-                        logger.info(f"✅ RESPOSTA ENVIADA ({agent})")
-                        logger.info(f"💬 GEMINI: {response_text}")
-
                         # Log limpo da conversação
                         conversation_logger.info(f"💬 {from_number} → {text_content}")
                         conversation_logger.info(f"🤖 GEMINI → {response_text}")
@@ -158,18 +147,13 @@ def process_message(message, webhook_data):
                     response_text = "Desculpe, estou temporariamente indisponível. Como posso ajudá-lo?"
                     success = whatsapp_service.send_message(from_number, response_text)
                     
-                    if success:
-                        logger.info("✅ Resposta fallback enviada")
-                        logger.info(f"💬 FALLBACK: {response_text}")
-                    else:
+                    if not success:
                         logger.error(f"❌ Falha ao enviar resposta fallback para {from_number}")
 
             else:
                 # Mensagem de texto vazia ou inválida
-                logger.warning(f"⚠️ Mensagem de texto vazia ou inválida de {from_number}")
                 response_text = "❌ Desculpe, não consegui processar sua mensagem. Por favor, envie uma mensagem de texto válida."
                 whatsapp_service.send_message(from_number, response_text)
-                logger.info(f"💬 ERRO TEXTO: {response_text}")
 
         else:
             # Rejeitar todos os outros tipos de mensagem (imagem, áudio, vídeo, documento, etc.)
@@ -195,7 +179,6 @@ def process_message(message, webhook_data):
             
             # Enviar mensagem de erro
             whatsapp_service.send_message(from_number, response_text)
-            logger.info(f"💬 ERRO FORMATO: {response_text}")
 
     except Exception as e:
         logger.error(f"❌ Erro ao processar mensagem: {e}")

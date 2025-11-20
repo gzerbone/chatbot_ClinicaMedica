@@ -56,13 +56,13 @@ class RequestLoggingMiddleware(MiddlewareMixin):
         Log de requests recebidos
         """
         if request.path.startswith('/api/'):
-            logger.info(f"📡 API Request: {request.method} {request.path}")
+            #logger.info(f"📡 API Request: {request.method} {request.path}")
 
             # Log mais detalhado para webhooks
             if request.path.startswith('/api/webhook/') and request.body:
                 try:
                     body_data = json.loads(request.body.decode('utf-8'))
-                    logger.info(f"📱 WhatsApp Webhook - {len(body_data.get('entry', []))} entries")
+                    #logger.info(f"📱 WhatsApp Webhook - {len(body_data.get('entry', []))} entries")
 
                     # Log resumido das mensagens
                     for entry in body_data.get('entry', []):
@@ -72,7 +72,7 @@ class RequestLoggingMiddleware(MiddlewareMixin):
                                 for msg in messages:
                                     msg_type = msg.get('type', 'unknown')
                                     from_number = msg.get('from', 'unknown')
-                                    logger.info(f"💬 Mensagem recebida: {msg_type} de {from_number}")
+                                    #logger.info(f"💬 Mensagem recebida: {msg_type} de {from_number}")
 
                 except Exception as e:
                     logger.debug(f"Erro ao parsear webhook: {e}")

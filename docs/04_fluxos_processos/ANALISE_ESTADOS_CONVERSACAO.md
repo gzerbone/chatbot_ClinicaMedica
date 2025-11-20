@@ -1,9 +1,5 @@
 # 📊 Análise dos Estados da ConversationSession
 
-## 🎯 Problema Identificado
-
-Os estados `completed` e `cancelled` estão definidos no modelo mas **nunca são utilizados** no código, ficando "ócios" no banco de dados.
-
 ## 🔍 Análise dos Estados
 
 ### **Estados Definidos no Modelo:**
@@ -18,8 +14,6 @@ choices=[
     ('selecting_doctor', 'Selecionando Médico'),
     ('choosing_schedule', 'Escolhendo Horário'),
     ('confirming', 'Confirmando'),
-    ('completed', 'Concluído'),        # ❌ NUNCA USADO
-    ('cancelled', 'Cancelado')         # ❌ NUNCA USADO
 ]
 ```
 
@@ -36,9 +30,6 @@ choices=[
 - `choosing_schedule` - Escolhendo horário
 - `confirming` - Confirmando agendamento
 
-#### **❌ Estados Ócios:**
-- `completed` - **NUNCA é definido no código**
-- `cancelled` - **NUNCA é definido no código**
 
 ## 🔍 Fluxo Atual do Sistema
 
@@ -52,11 +43,6 @@ confirming → (handoff gerado)
 qualquer_estado → answering_questions → (retomar com "continuar")
 ```
 
-### **Estados Não Utilizados:**
-```
-completed ❌ (nunca alcançado)
-cancelled ❌ (nunca alcançado)
-```
 
 ## 🔄 Sistema de Pausar/Retomar para Dúvidas
 

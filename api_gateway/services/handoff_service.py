@@ -48,7 +48,6 @@ class HandoffService:
 
         except Exception as exc:
             logger.error("Erro ao gerar link de handoff: %s", exc)
-            return self._generate_fallback_link()
 
     def _build_message(
         self,
@@ -74,12 +73,6 @@ class HandoffService:
             f"Especialidade: {speciality}\n"
             f"Data/Horário: {appointment_date} às {appointment_time}"
         )
-
-    def _generate_fallback_link(self) -> str:
-        """Gera um link genérico quando não é possível montar os dados do agendamento."""
-        fallback_message = "Olá! Gostaria de agendar uma consulta através do chatbot."
-        encoded_message = urllib.parse.quote(fallback_message)
-        return f"{self.base_url}?phone={self.clinic_phone}&text={encoded_message}"
 
     def create_confirmation_message(
         self,

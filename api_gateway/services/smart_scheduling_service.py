@@ -9,24 +9,13 @@ from typing import Any, Dict, List, Optional
 
 from django.utils import timezone
 
+# Importar função e constantes compartilhadas do session_manager
+from .gemini.session_manager import (PRONOUN_DOCTOR_MESSAGE_TERMS,
+                                     PRONOUN_DOCTOR_REGEX,
+                                     PRONOUN_DOCTOR_TERMS,
+                                     resolve_doctor_reference)
 from .google_calendar_service import google_calendar_service
 from .rag_service import RAGService
-
-# Termos usados para reconhecer confirmações de médico por pronome
-PRONOUN_DOCTOR_TERMS = {
-    'ele', 'ela', 'ele mesmo', 'ela mesma', 'com ele', 'com ela', 'com ele mesmo', 'com ela mesma',
-    'ele sim', 'ela sim', 'com o mesmo', 'com a mesma', 'o mesmo', 'a mesma',
-    'nele', 'nela', 'ele msm', 'ela msm', 'com ele msm', 'com ela msm'
-}
-
-PRONOUN_DOCTOR_MESSAGE_TERMS = PRONOUN_DOCTOR_TERMS.union(
-    {f"quero {term}" for term in PRONOUN_DOCTOR_TERMS}.union(
-        {f"prefiro {term}" for term in PRONOUN_DOCTOR_TERMS},
-        {f"gostaria {term}" for term in PRONOUN_DOCTOR_TERMS}
-    )
-)
-
-PRONOUN_DOCTOR_REGEX = [r'\bele\b', r'\bela\b']
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +87,7 @@ class SmartSchedulingService:
             match = re.search(pattern, message_lower)
             if match:
                 doctor_reference = match.group(1).strip()
-                resolved_doctor = self._resolve_doctor_reference(doctor_reference, message_lower, session)
+                resolved_doctor = resolve_doctor_reference(doctor_reference, message_lower, session)
                 if resolved_doctor:
                     info['doctor_mentioned'] = resolved_doctor
                     logger.info(f"🤝 Referência ao médico interpretada como: {resolved_doctor}")
@@ -170,52 +159,6 @@ class SmartSchedulingService:
         
         return info
 
-    def _resolve_doctor_reference(self, doctor_reference: Optional[str], message_lower: str, session: Dict) -> Optional[str]:
-        """Resolve referência ao médico convertendo pronomes em nomes concretos."""
-        reference_clean = (doctor_reference or '').strip()
-        reference_lower = reference_clean.lower()
-
-        def _normalize_reference(text: str) -> str:
-            normalized = text.strip().lower()
-            normalized = re.sub(r'^(dr\.?|dra\.?|doutor(a)?)\s+', '', normalized)
-            if normalized.startswith('com '):
-                normalized = normalized[4:]
-            return normalized.strip()
-
-        normalized_reference = _normalize_reference(reference_lower) if reference_lower else ''
-
-        pronoun_detected = False
-        if normalized_reference in PRONOUN_DOCTOR_TERMS or reference_lower in PRONOUN_DOCTOR_TERMS:
-            pronoun_detected = True
-        elif normalized_reference and any(term in normalized_reference for term in PRONOUN_DOCTOR_TERMS):
-            pronoun_detected = True
-        elif reference_lower and any(term in reference_lower for term in PRONOUN_DOCTOR_TERMS):
-            pronoun_detected = True
-        elif message_lower:
-            simplified_message = message_lower.replace('  ', ' ')
-            if any(term in simplified_message for term in PRONOUN_DOCTOR_MESSAGE_TERMS):
-                pronoun_detected = True
-            else:
-                for regex_pattern in PRONOUN_DOCTOR_REGEX:
-                    if re.search(regex_pattern, simplified_message):
-                        pronoun_detected = True
-                        break
-
-        if pronoun_detected:
-            candidate = session.get('selected_doctor') or session.get('last_suggested_doctor')
-            if not candidate:
-                suggested_list = session.get('last_suggested_doctors') or []
-                if suggested_list:
-                    candidate = suggested_list[0]
-            return candidate
-
-        if reference_clean:
-            if reference_clean.lower().startswith('com '):
-                reference_clean = reference_clean[4:]
-            return reference_clean.strip().title()
-
-        return None
-
     def _determine_next_action(self, extracted_info: Dict, session: Dict) -> Dict[str, Any]:
         """
         Determina próxima ação baseada nas informações extraídas
@@ -236,7 +179,7 @@ class SmartSchedulingService:
             doctor_info = self._validate_doctor(doctor_mentioned)
             if doctor_info:
                 # Consultar disponibilidade real
-                availability = self._get_doctor_availability(doctor_info['nome'], date_mentioned)
+                availability = self.get_doctor_availability(doctor_info['nome'], days_ahead=7, date_filter=date_mentioned)
                 return {
                     'action': 'show_availability',
                     'response_type': 'availability_info',
@@ -275,7 +218,7 @@ class SmartSchedulingService:
         Verifica se a mensagem é uma confirmação de agendamento
         """
         confirmation_keywords = [
-            'sim', 'confirmo', 'confirma', 'está correto', 'está certo',
+            'sim', 'confirmo', 'confirma', 'está correto', 'está certo','s',
             'perfeito', 'ótimo', 'ok', 'beleza', 'pode ser',
             'quero esse horário', 'aceito', 'concordo', 'isso está correto','isso','confirmado','correto'
         ]
@@ -369,122 +312,30 @@ class SmartSchedulingService:
             logger.error(f"Erro ao validar médico: {e}")
             return None
 
-    def _get_doctor_availability(self, doctor_name: str, date_filter: str = None) -> Dict[str, Any]:
-        """
-        Consulta disponibilidade do médico no Google Calendar
-        """
-        try:
-            # Consultar disponibilidade para os próximos 7 dias
-            availability = self.calendar_service.get_doctor_availability(
-                doctor_name=doctor_name,
-                days_ahead=7
-            )
-            
-            if not availability:
-                return {
-                    'available': False,
-                    'reason': 'calendar_error',
-                    'message': 'Erro ao consultar agenda'
-                }
-            
-            # Filtrar por data se especificada
-            days_info = availability.get('days', [])
-            if date_filter:
-                target_date = self._parse_date(date_filter)
-                if target_date:
-                    # Filtrar apenas o dia solicitado
-                    filtered_days = [day for day in days_info 
-                                   if datetime.strptime(day['date'], '%d/%m/%Y').date() == target_date]
-                    days_info = filtered_days
-            
-            # Verificar se há horários disponíveis
-            has_availability = any(len(day.get('available_times', [])) > 0 for day in days_info)
-            
-            return {
-                'available': has_availability,
-                'doctor': doctor_name,
-                'days_info': days_info,  # Usar days_info para compatibilidade
-                'total_days': len(days_info)
-            }
-            
-        except Exception as e:
-            logger.error(f"Erro ao consultar disponibilidade: {e}")
-            return {
-                'available': False,
-                'reason': 'error',
-                'message': 'Erro ao consultar disponibilidade'
-            }
-
-    def _check_real_availability(self, doctor_name: str, date_str: str, time_str: str) -> Dict[str, Any]:
-        """
-        Verifica disponibilidade real no Google Calendar
-        """
-        try:
-            # Converter data para formato adequado
-            target_date = self._parse_date(date_str)
-            target_time = self._parse_time(time_str)
-            
-            if not target_date or not target_time:
-                return {
-                    'available': False,
-                    'reason': 'invalid_date_time',
-                    'message': 'Data ou horário inválidos'
-                }
-            
-            # Verificar disponibilidade no Google Calendar
-            availability = self.calendar_service.get_doctor_availability(
-                doctor_name=doctor_name,
-                start_date=target_date,
-                days=1
-            )
-            
-            if not availability:
-                return {
-                    'available': False,
-                    'reason': 'calendar_error',
-                    'message': 'Erro ao consultar agenda'
-                }
-            
-            # Verificar se horário específico está disponível
-            day_availability = availability.get('days', [])
-            if not day_availability:
-                return {
-                    'available': False,
-                    'reason': 'no_schedule',
-                    'message': 'Médico não atende neste dia'
-                }
-            
-            day_info = day_availability[0]
-            available_times = day_info.get('available_times', [])
-            
-            # Verificar se horário solicitado está disponível
-            time_available = target_time in available_times
-            
-            return {
-                'available': time_available,
-                'requested_time': target_time,
-                'available_times': available_times,
-                'occupied_times': day_info.get('occupied_times', []),
-                'date': target_date.strftime('%d/%m/%Y'),
-                'doctor': doctor_name
-            }
-            
-        except Exception as e:
-            logger.error(f"Erro ao verificar disponibilidade: {e}")
-            return {
-                'available': False,
-                'reason': 'error',
-                'message': 'Erro ao verificar disponibilidade'
-            }
 
     def _parse_date(self, date_str: str) -> Optional[date]:
         """
         Converte string de data para objeto date
+        Suporta múltiplos formatos: DD/MM, DD/MM/YYYY, YYYY-MM-DD, nomes de dias, etc.
         """
+        import re  # Import no início da função
+        
         try:
             today = timezone.now().date()
             date_lower = date_str.lower().strip()
             
+            # Se já é um objeto date, retornar diretamente
+            if isinstance(date_str, date):
+                return date_str
+            
+            # Tentar formato ISO primeiro (YYYY-MM-DD)
+            if re.match(r'^\d{4}-\d{1,2}-\d{1,2}$', date_str):
+                try:
+                    return datetime.strptime(date_str, '%Y-%m-%d').date()
+                except ValueError:
+                    logger.warning(f"Erro ao parsear data ISO: {date_str}")
+            
+            # Nomes de dias relativos
             if 'hoje' in date_lower:
                 return today
             elif 'amanhã' in date_lower:
@@ -518,7 +369,6 @@ class SmartSchedulingService:
                 return today + timedelta(days=days_ahead)
             
             # Tentar parsear formato DD/MM ou DD/MM/YYYY
-            import re
             date_match = re.search(r'(\d{1,2})/(\d{1,2})(?:/(\d{2,4}))?', date_str)
             if date_match:
                 day, month, year = date_match.groups()
@@ -527,56 +377,39 @@ class SmartSchedulingService:
                     year += 2000
                 return date(int(year), int(month), int(day))
             
+            # Se só tem um número (ex: "20"), assumir como dia do mês atual
+            if re.match(r'^\d{1,2}$', date_str):
+                try:
+                    day = int(date_str)
+                    # Verificar se o dia é válido
+                    if 1 <= day <= 31:
+                        # Tentar criar data com mês/ano atuais
+                        try:
+                            result_date = date(today.year, today.month, day)
+                            # Se a data resultante já passou, assumir mês seguinte
+                            if result_date < today:
+                                # Tentar próximo mês
+                                if today.month == 12:
+                                    result_date = date(today.year + 1, 1, day)
+                                else:
+                                    result_date = date(today.year, today.month + 1, day)
+                            logger.info(f"✅ Dia isolado '{day}' convertido para: {result_date}")
+                            return result_date
+                        except ValueError:
+                            # Dia inválido para o mês (ex: 31 de fevereiro)
+                            logger.warning(f"⚠️ Dia {day} inválido para mês {today.month}")
+                except ValueError:
+                    pass
+            
             return None
             
         except Exception as e:
-            logger.error(f"Erro ao parsear data: {e}")
+            logger.error(f"Erro ao parsear data '{date_str}': {e}")
             return None
 
-    def _parse_time(self, time_str: str) -> Optional[str]:
-        """
-        Converte string de horário para formato HH:MM
-        """
-        try:
-            import re
-            
-            time_lower = time_str.lower().strip()
-            
-            # Padrão HH:MM
-            time_match = re.search(r'(\d{1,2}):(\d{2})', time_str)
-            if time_match:
-                hour, minute = time_match.groups()
-                return f"{int(hour):02d}:{minute}"
-            
-            # Padrão HHhMM ou HHh
-            time_match = re.search(r'(\d{1,2})h(\d{2})?', time_str)
-            if time_match:
-                hour, minute = time_match.groups()
-                minute = minute or '00'
-                return f"{int(hour):02d}:{minute}"
-            
-            # Padrão "X da manhã/tarde/noite"
-            time_match = re.search(r'(\d{1,2})\s+da\s+(manhã|tarde|noite)', time_lower)
-            if time_match:
-                hour, period = time_match.groups()
-                hour = int(hour)
-                
-                if period == 'manhã':
-                    return f"{hour:02d}:00"
-                elif period == 'tarde':
-                    if hour < 12:
-                        hour += 12
-                    return f"{hour:02d}:00"
-                elif period == 'noite':
-                    if hour < 12:
-                        hour += 12
-                    return f"{hour:02d}:00"
-            
-            return None
-            
-        except Exception as e:
-            logger.error(f"Erro ao parsear horário: {e}")
-            return None
+    # REMOVIDO: _parse_time() - função não utilizada (código morto)
+    # Era usada apenas por _check_real_availability() que também foi removida
+    # O parsing de horário é feito pelo entity_extractor que retorna no formato correto
 
     # Métodos de mensagens
     def _format_doctor_price(self, preco) -> str:
@@ -669,7 +502,7 @@ Para qual médico gostaria de consultar os horários?"""
         
         if not availability.get('available'):
             # Se não há horários para o dia específico, consultar outros dias
-            general_availability = self._get_doctor_availability(doctor_name, None)
+            general_availability = self.get_doctor_availability(doctor_name, days_ahead=7, date_filter=None)
             
             if general_availability.get('available'):
                 days_info = general_availability.get('days', [])
@@ -743,9 +576,9 @@ Entre em contato conosco para mais informações ligando para:
         
         return message
 
-    def get_doctor_availability(self, doctor_name: str, days_ahead: int = 7) -> Dict[str, Any]:
+    def get_doctor_availability(self, doctor_name: str, days_ahead: int = 7, date_filter: Optional[str] = None) -> Dict[str, Any]:
         """
-        Método público para consultar disponibilidade de um médico
+        Consulta disponibilidade do médico no Google Calendar
         
         Baseado no GUIA_SECRETARIA_CALENDAR.md:
         - Consulta Google Calendar em tempo real
@@ -755,55 +588,353 @@ Entre em contato conosco para mais informações ligando para:
         Args:
             doctor_name: Nome do médico (ex: "Dr. João Carvalho")
             days_ahead: Quantos dias à frente consultar (padrão: 7)
+            date_filter: Data específica para filtrar (opcional, ex: "20/11", "amanhã")
+                        Se especificado, retorna apenas o dia solicitado
             
         Returns:
-            Dict com informações de disponibilidade
+            Dict com informações de disponibilidade:
+            - success: bool - Se a consulta foi bem-sucedida
+            - doctor_name: str - Nome do médico
+            - days_ahead: int - Quantos dias foram consultados
+            - days_info: list - Lista de dias com horários disponíveis
+            - available_slots: int - Total de slots disponíveis
+            - has_availability: bool - Se há horários disponíveis
+            - available: bool - Compatibilidade com código antigo
+            - doctor: str - Compatibilidade com código antigo
+            - total_days: int - Compatibilidade com código antigo
+            - error: str - Mensagem de erro (se houver)
         """
         try:
-            logger.info(f"🗓️ Consultando disponibilidade para {doctor_name} - próximos {days_ahead} dias")
-            
-            # Usar o método privado existente
-            availability = self._get_doctor_availability(doctor_name, None)
-            
-            if availability and availability.get('days_info'):
-                # Limitar aos dias solicitados
-                days_info = availability['days_info'][:days_ahead]
-                
-                # Contar slots disponíveis
-                total_slots = sum(len(day.get('available_times', [])) for day in days_info)
-                
-                return {
-                    'success': True,
-                    'doctor_name': doctor_name,
-                    'days_ahead': days_ahead,
-                    'days_info': days_info,
-                    'available_slots': total_slots,
-                    'has_availability': total_slots > 0
-                }
+            if date_filter:
+                logger.info(f"🗓️ Consultando disponibilidade para {doctor_name} - filtrando por data: {date_filter}")
             else:
-                logger.warning(f"⚠️ Nenhuma disponibilidade encontrada para {doctor_name}")
+                logger.info(f"🗓️ Consultando disponibilidade para {doctor_name} - próximos {days_ahead} dias")
+            
+            # Consultar disponibilidade para os próximos 7 dias (máximo)
+            # Depois filtramos conforme necessário
+            availability = self.calendar_service.get_doctor_availability(
+                doctor_name=doctor_name,
+                days_ahead=7
+            )
+            
+            if not availability:
                 return {
                     'success': False,
+                    'available': False,
                     'doctor_name': doctor_name,
+                    'doctor': doctor_name,
                     'days_ahead': days_ahead,
                     'days_info': [],
                     'available_slots': 0,
                     'has_availability': False,
-                    'error': 'Nenhum horário disponível encontrado'
+                    'total_days': 0,
+                    'reason': 'calendar_error',
+                    'message': 'Erro ao consultar agenda',
+                    'error': 'Erro ao consultar agenda'
                 }
-                
+            
+            # Obter lista de dias
+            days_info = availability.get('days', [])
+            
+            # Filtrar por data específica se solicitado
+            if date_filter:
+                target_date = self._parse_date(date_filter)
+                if target_date:
+                    # Filtrar apenas o dia solicitado
+                    filtered_days = [day for day in days_info 
+                                   if datetime.strptime(day['date'], '%d/%m/%Y').date() == target_date]
+                    days_info = filtered_days
+                else:
+                    # Se não conseguiu parsear a data, retornar erro
+                    logger.warning(f"⚠️ Não foi possível parsear a data: {date_filter}")
+                    return {
+                        'success': False,
+                        'available': False,
+                        'doctor_name': doctor_name,
+                        'doctor': doctor_name,
+                        'days_ahead': days_ahead,
+                        'days_info': [],
+                        'available_slots': 0,
+                        'has_availability': False,
+                        'total_days': 0,
+                        'reason': 'invalid_date',
+                        'message': f'Data inválida: {date_filter}',
+                        'error': f'Data inválida: {date_filter}'
+                    }
+            
+            # Limitar aos dias solicitados (se não foi filtrado por data específica)
+            if not date_filter and days_ahead < 7:
+                days_info = days_info[:days_ahead]
+            
+            # Verificar se há horários disponíveis
+            has_availability = any(len(day.get('available_times', [])) > 0 for day in days_info)
+            
+            # Contar slots disponíveis
+            total_slots = sum(len(day.get('available_times', [])) for day in days_info)
+            
+            # Retornar formato unificado com compatibilidade
+            return {
+                'success': True,
+                'available': has_availability,
+                'doctor_name': doctor_name,
+                'doctor': doctor_name,  # Compatibilidade
+                'days_ahead': days_ahead,
+                'days_info': days_info,
+                'available_slots': total_slots,
+                'has_availability': has_availability,
+                'total_days': len(days_info)  # Compatibilidade
+            }
+            
         except Exception as e:
             logger.error(f"❌ Erro ao consultar disponibilidade para {doctor_name}: {e}")
             return {
                 'success': False,
+                'available': False,
                 'doctor_name': doctor_name,
+                'doctor': doctor_name,
                 'days_ahead': days_ahead,
                 'days_info': [],
                 'available_slots': 0,
                 'has_availability': False,
+                'total_days': 0,
+                'reason': 'error',
+                'message': 'Erro ao consultar disponibilidade',
                 'error': str(e)
             }
 
+    def is_time_slot_available(self, doctor_name: str, requested_date: str, requested_time: str) -> Dict[str, Any]:
+        """
+        Verifica se um horário específico está disponível no calendário
+        
+        Args:
+            doctor_name: Nome do médico
+            requested_date: Data solicitada (formato DD/MM ou DD/MM/YYYY ou date object)
+            requested_time: Horário solicitado (formato HH:MM ou time object)
+            
+        Returns:
+            Dict com:
+                - available: bool - Se o horário está disponível
+                - date_formatted: str - Data formatada (DD/MM/YYYY)
+                - time_formatted: str - Horário formatado (HH:MM)
+                - alternative_times: list - Horários alternativos próximos (se não disponível)
+                - message: str - Mensagem descritiva
+        """
+        try:
+            # Normalizar data
+            if isinstance(requested_date, str):
+                logger.info(f"📅 Parseando data string: '{requested_date}'")
+                target_date = self._parse_date(requested_date)
+                if target_date:
+                    logger.info(f"✅ Data parseada com sucesso: {target_date}")
+                else:
+                    logger.error(f"❌ Falha ao parsear data: '{requested_date}'")
+            elif isinstance(requested_date, date):
+                target_date = requested_date
+                logger.info(f"📅 Data já é objeto date: {target_date}")
+            else:
+                # Tentar converter tipos diversos
+                logger.warning(f"⚠️ Tipo de data inesperado: {type(requested_date)}")
+                target_date = None
+            
+            if not target_date:
+                return {
+                    'available': False,
+                    'error': 'Data inválida',
+                    'message': 'Não foi possível processar a data solicitada.'
+                }
+            
+            # Normalizar horário
+            logger.info(f"⏰ Parseando horário: '{requested_time}' (tipo: {type(requested_time)})")
+            if isinstance(requested_time, str):
+                # Remover "as" ou "às" se presente
+                time_clean = requested_time.lower().replace('as ', '').replace('às ', '').replace('horas', '').replace('h', '').strip()
+                # Remover segundos se presente (HH:MM:SS -> HH:MM)
+                if time_clean.count(':') == 2:
+                    time_clean = ':'.join(time_clean.split(':')[:2])
+                # Garantir formato HH:MM
+                if ':' not in time_clean:
+                    if len(time_clean) <= 2:
+                        # Se é só um número (ex: "8"), adicionar ":00"
+                        time_clean = f"{time_clean.zfill(2)}:00"
+                time_str = time_clean
+            else:
+                # Se é um objeto time
+                time_str = requested_time.strftime('%H:%M')
+            
+            # Garantir formato HH:MM com zero à esquerda se necessário
+            if len(time_str.split(':')[0]) == 1:
+                time_str = f"0{time_str}"
+            
+            logger.info(f"✅ Horário normalizado para: '{time_str}'")
+            
+            # ═══════════════════════════════════════════════════════════════════
+            # VERIFICAR SE A DATA É HOJE E SE JÁ PASSOU O HORÁRIO DE EXPEDIENTE
+            # ═══════════════════════════════════════════════════════════════════
+            from django.utils import timezone
+            today = timezone.now().date()
+            current_time = timezone.now().time()
+            
+            if target_date == today:
+                # Se é hoje, verificar se já passou o horário de expediente (18:00)
+                from datetime import time as dt_time
+                end_of_day = dt_time(18, 0)  # 18:00
+                
+                # Converter time_str para objeto time para comparação
+                try:
+                    requested_time_obj = datetime.strptime(time_str, '%H:%M').time()
+                    
+                    # Se o horário solicitado já passou hoje OU se já passou 18:00
+                    if requested_time_obj < current_time or current_time >= end_of_day:
+                        logger.warning(f"⚠️ Data é hoje ({today}) mas horário já passou ou expediente acabou")
+                        
+                        # Consultar disponibilidade para outros dias
+                        availability = self.get_doctor_availability(
+                            doctor_name=doctor_name,
+                            days_ahead=7
+                        )
+                        
+                        if availability.get('has_availability'):
+                            days_info = availability.get('days_info', [])
+                            # Filtrar apenas dias futuros (não hoje)
+                            future_days = [day for day in days_info 
+                                         if datetime.strptime(day['date'], '%d/%m/%Y').date() > today]
+                            
+                            if future_days:
+                                alternative_days = []
+                                for day in future_days[:3]:
+                                    if day.get('available_times'):
+                                        alternative_days.append({
+                                            'date': day.get('date'),
+                                            'weekday': day.get('weekday'),
+                                            'times': day.get('available_times', [])[:5]
+                                        })
+                                
+                                return {
+                                    'available': False,
+                                    'date_formatted': target_date.strftime('%d/%m/%Y'),
+                                    'time_formatted': time_str,
+                                    'message': f'Hoje ({target_date.strftime("%d/%m/%Y")}) o expediente já acabou ou o horário {time_str} já passou.',
+                                    'alternative_days': alternative_days,
+                                    'alternative_times': [],
+                                    'reason': 'past_time_today'
+                                }
+                except ValueError:
+                    logger.warning(f"⚠️ Erro ao converter horário para comparação: {time_str}")
+                    # Continuar com validação normal se não conseguir converter
+            
+            # Consultar disponibilidade do médico
+            availability = self.get_doctor_availability(
+                doctor_name=doctor_name,
+                days_ahead=7
+            )
+            
+            if not availability.get('has_availability'):
+                return {
+                    'available': False,
+                    'message': f'O médico {doctor_name} não tem horários disponíveis nos próximos dias.',
+                    'alternative_times': []
+                }
+            
+            # Procurar o dia específico
+            days_info = availability.get('days_info', [])
+            if not days_info:
+                days_info = availability.get('days', [])  # Compatibilidade com formato antigo
+            
+            target_date_str = target_date.strftime('%d/%m/%Y')
+            
+            logger.info(f"🔍 DEBUG - Procurando dia {target_date_str} em {len(days_info)} dias disponíveis")
+            
+            target_day = None
+            for day in days_info:
+                day_date = day.get('date')
+                logger.debug(f"  Comparando: '{day_date}' == '{target_date_str}'")
+                if day_date == target_date_str:
+                    target_day = day
+                    logger.info(f"✅ Dia encontrado: {day_date}")
+                    break
+            
+            if not target_day:
+                # Dia não tem disponibilidade - sugerir dias próximos
+                logger.warning(f"⚠️ Dia {target_date_str} não encontrado na disponibilidade")
+                alternative_days = []
+                for day in days_info[:3]:
+                    if day.get('available_times'):
+                        alternative_days.append({
+                            'date': day.get('date'),
+                            'weekday': day.get('weekday'),
+                            'times': day.get('available_times', [])[:5]
+                        })
+                
+                logger.info(f"📅 Sugerindo {len(alternative_days)} dias alternativos")
+                return {
+                    'available': False,
+                    'date_formatted': target_date_str,
+                    'message': f'Não há horários disponíveis para {target_date_str}.',
+                    'alternative_days': alternative_days,
+                    'alternative_times': []
+                }
+            
+            # Verificar se o horário específico está disponível
+            available_times = target_day.get('available_times', [])
+            logger.info(f"📋 Horários disponíveis no dia {target_date_str}: {len(available_times)} horários")
+            logger.debug(f"  Horários: {available_times[:10]}")  # Mostrar até 10 para debug
+            
+            # Normalizar horários para comparação (remover segundos se necessário)
+            available_times_normalized = []
+            for t in available_times:
+                t_clean = t.strip()
+                # Se tem formato HH:MM:SS, converter para HH:MM
+                if t_clean.count(':') == 2:
+                    t_clean = ':'.join(t_clean.split(':')[:2])
+                available_times_normalized.append(t_clean)
+            
+            # Normalizar horário solicitado
+            time_str_normalized = time_str.strip()
+            # Se tem formato HH:MM:SS, converter para HH:MM
+            if time_str_normalized.count(':') == 2:
+                time_str_normalized = ':'.join(time_str_normalized.split(':')[:2])
+            
+            logger.info(f"🔍 Verificando se '{time_str_normalized}' está em {available_times_normalized[:5]}...")
+            
+            is_available = time_str_normalized in available_times_normalized
+            
+            if is_available:
+                logger.info(f"✅ Horário {time_str_normalized} está disponível!")
+                return {
+                    'available': True,
+                    'date_formatted': target_date_str,
+                    'time_formatted': time_str_normalized,
+                    'weekday': target_day.get('weekday'),
+                    'message': f'Horário {time_str_normalized} disponível em {target_date_str}.'
+                }
+            else:
+                # Horário não disponível - sugerir horários próximos do mesmo dia
+                logger.warning(f"❌ Horário {time_str_normalized} NÃO está disponível")
+                logger.info(f"📅 Retornando {len(available_times)} horários alternativos")
+                logger.info(f"📋 Horários alternativos: {available_times[:8]}")
+                
+                result = {
+                    'available': False,
+                    'date_formatted': target_date_str,
+                    'time_formatted': time_str_normalized,
+                    'weekday': target_day.get('weekday'),
+                    'message': f'O horário {time_str_normalized} não está disponível em {target_date_str}.',
+                    'alternative_times': available_times[:8],  # Até 8 horários alternativos
+                    'total_alternatives': len(available_times)
+                }
+                logger.info(f"📦 RETORNO FINAL: {result}")
+                return result
+                
+        except Exception as e:
+            logger.error(f"Erro ao verificar disponibilidade de horário: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return {
+                'available': False,
+                'error': str(e),
+                'message': 'Erro ao verificar disponibilidade do horário.'
+            }
+    
     def _get_fallback_analysis(self) -> Dict[str, Any]:
         return {
             'action': 'fallback',

@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 import logging
 from pathlib import Path
+from pickle import FALSE
 
 from decouple import config
 
@@ -210,6 +211,8 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 # Configurações do Gemini AI
 GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
 GEMINI_ENABLED = config('GEMINI_ENABLED', default=True, cast=bool)
+# Modelos disponíveis: gemini-2.5-flash-lite (mais rápido/econômico), gemini-2.0-flash (balanceado), gemini-1.5-pro (mais inteligente)
+#GEMINI_MODEL = config('GEMINI_MODEL', default='gemini-2.0-flash')
 GEMINI_MODEL = config('GEMINI_MODEL', default='gemini-2.5-flash-lite')
 GEMINI_TEMPERATURE = config('GEMINI_TEMPERATURE', default=0.7, cast=float)
 GEMINI_MAX_TOKENS = config('GEMINI_MAX_TOKENS', default=1024, cast=int)
@@ -234,20 +237,6 @@ CLINIC_DOMAIN = config('CLINIC_DOMAIN', default='clinica.com')
 # Calendário único da clínica (controlado pela secretária)
 CLINIC_CALENDAR_ID = config('CLINIC_CALENDAR_ID', default='agenda@clinica.com')
 
-# Padrões de eventos para identificar médicos no calendário único
-# Formato esperado: "Dr. João - Consulta", "Dra. Maria - Exame", etc.
-# 
-# NOTA: Este dicionário é usado como FALLBACK quando o sistema não consegue
-# gerar padrões dinamicamente a partir do banco de dados.
-# 
-# ⚠️ RECOMENDAÇÃO: Em vez de hardcoded, o sistema deveria buscar médicos
-# do banco de dados e gerar esses padrões automaticamente.
-# Ver: api_gateway/services/google_calendar_service.py (linha 155)
-#
-DOCTOR_EVENT_PATTERNS = {
-    # Exemplo de configuração manual (apenas se necessário):
-    # 'dr. gustavo magno': ['dr. gustavo', 'dr gustavo', 'gustavo magno', 'magno'],
-}
 # Configurações de CORS para desenvolvimento
 CORS_ALLOW_ALL_ORIGINS = True  # Apenas para desenvolvimento
 CORS_ALLOWED_ORIGINS = [
