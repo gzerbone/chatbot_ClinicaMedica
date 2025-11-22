@@ -315,7 +315,7 @@ Vamos entender cada passo:
 4. **Solicita análise**: Envia mensagem para o IntentDetector
 5. **Gemini AI analisa**: IA processa e identifica intenção = "agendar_consulta"
 6. **Retorna intent**: Intenção + confiança volta para o Router
-7. **Confirmação antecipada do nome**: Antes de rotear para outros serviços, o router chama `_handle_patient_name_flow()` para extrair/validar o nome usando o `ConversationService`. Se o nome ainda não estiver confirmado, o fluxo interrompe aqui para pedir confirmação (sem acionar o LLM novamente).
+7. **Confirmação antecipada do nome**: Antes de rotear para outros serviços, o router chama `_handle_patient_name_flow()` que utiliza o nome já extraído pelo `EntityExtractor` (via Gemini AI) e valida usando `ConversationService.confirm_patient_name()`. Se o nome ainda não estiver confirmado, o fluxo interrompe aqui para pedir confirmação (sem acionar o LLM novamente).
 8. **Decisão de roteamento**: Router decide qual serviço chamar
 9. **Chama serviço específico**: No caso, SmartSchedulingService
 10. **Serviço processa**: Busca médicos, horários, etc.

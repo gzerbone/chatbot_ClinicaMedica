@@ -611,11 +611,13 @@ PASSO 2: Coleta de Nome
 
 🤖 Sistema:
    │
-   ├─ EntityExtractor → Extrai: patient_name = ["João Silva"]
-   ├─ ConversationService.process_patient_name()
+   ├─ EntityExtractor → Extrai: nome_paciente = "João Silva"
+   │  └─ Usa Gemini AI para extrair nome completo
+   ├─ _handle_patient_name_flow()
+   │  ├─ Detecta nome extraído em analysis_result['entities']['nome_paciente']
    │  └─ Salva em: session.pending_name = "João Silva"
    ├─ Estado: collecting_patient_info → confirming_name
-   └─ Resposta: "Confirma se seu nome é João Silva?"
+   └─ Resposta: "Confirma se seu nome completo é João Silva?"
 
 PASSO 3: Confirmação de Nome
 ─────────────────────────────────────────────────────────────────
@@ -624,10 +626,11 @@ PASSO 3: Confirmação de Nome
 🤖 Sistema:
    │
    ├─ IntentDetector → Detecta: "confirmar_agendamento"
-   ├─ ConversationService.confirm_patient_name()
-   │  ├─ session.patient_name = "João Silva"
-   │  ├─ session.name_confirmed = True
-   │  └─ session.pending_name = None
+   ├─ _handle_patient_name_flow()
+   │  └─ Chama ConversationService.confirm_patient_name()
+   │     ├─ session.patient_name = "João Silva"
+   │     ├─ session.name_confirmed = True
+   │     └─ session.pending_name = None
    ├─ Estado: confirming_name → selecting_specialty
    └─ Resposta: "Perfeito, João Silva! Qual especialidade médica você procura?"
 
@@ -764,9 +767,9 @@ A tabela abaixo apresenta como cada combinação de **intenção detectada** e *
 | `idle` | `saudacao` | Iniciar conversa | ResponseGenerator |
 | `idle` | `buscar_info` | Responder dúvida | RAGService |
 | `idle` | `agendar_consulta` | Iniciar agendamento | ConversationService |
-| `collecting_patient_info` | Texto livre | Extrair nome | EntityExtractor |
-| `confirming_name` | `confirmar_agendamento` | Salvar nome | ConversationService |
-| `confirming_name` | Negação | Solicitar novamente | ConversationService |
+| `collecting_patient_info` | Texto livre | Extrair nome | EntityExtractor + _handle_patient_name_flow |
+| `confirming_name` | `confirmar_agendamento` | Confirmar nome | _handle_patient_name_flow + ConversationService.confirm_patient_name |
+| `confirming_name` | Negação | Solicitar novamente | _handle_patient_name_flow + ConversationService.confirm_patient_name |
 | `selecting_specialty` | Texto com especialidade | Salvar especialidade | ConversationService |
 | `selecting_doctor` | Texto com médico | Mostrar horários | SmartSchedulingService |
 | `choosing_schedule` | Texto com data/hora | Solicitar confirmação | ConversationService |
@@ -817,10 +820,11 @@ def _determine_routing(self, analysis_result: Dict, session: Dict) -> Dict:
     
     # Regra 3: Fluxo de confirmação de nome
     if current_state == 'confirming_name':
+        # O _handle_patient_name_flow já gerencia isso antes do roteamento
+        # Aqui apenas retornamos para continuar o fluxo normal
         return {
-            'service': 'ConversationService',
-            'action': 'confirm_patient_name',
-            'params': {'confirmation': analysis_result['raw_message']}
+            'service': 'ResponseGenerator',
+            'action': 'generate_response'
         }
     
     # Regra 4: Agendamento - consultar horários

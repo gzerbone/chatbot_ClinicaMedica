@@ -383,7 +383,6 @@ class ConversationService:
     def add_message(phone: str, content: str, type: str) -> Message
     def pause_for_question(phone: str) -> bool
     def resume_appointment(phone: str) -> Dict
-    def process_patient_name(phone: str, message: str) -> Dict
     def confirm_patient_name(phone: str, confirmation: str) -> Dict
     def get_missing_appointment_info(phone: str) -> Dict
 ```

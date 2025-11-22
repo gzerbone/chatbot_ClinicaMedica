@@ -263,8 +263,9 @@ def process_message(self, phone_number: str, message: str) -> Dict[str, Any]:
 
 Após combinar os resultados, o router executa um **fluxo especializado de confirmação do nome**:
 
-- Chama `_handle_patient_name_flow(...)`, responsável por interpretar respostas como “me chamo Gabriela” ou confirmações curtas (“sim”, “isso”) quando já existe um `pending_name`.
-- Esse fluxo utiliza o `ConversationService` para extrair e confirmar o nome (`process_patient_name` e `confirm_patient_name`), armazenando os campos `pending_name`, `patient_name` e `name_confirmed` na sessão e no banco.
+- Chama `_handle_patient_name_flow(...)`, responsável por interpretar respostas como "me chamo Gabriela" ou confirmações curtas ("sim", "isso") quando já existe um `pending_name`.
+- O nome é extraído diretamente pelo `EntityExtractor` (que usa Gemini AI) e armazenado em `pending_name` na sessão.
+- O fluxo utiliza o `ConversationService.confirm_patient_name()` apenas para confirmar ou rejeitar o nome pendente, armazenando os campos `pending_name`, `patient_name` e `name_confirmed` na sessão e no banco.
 - Caso a confirmação seja concluída, o método retorna imediatamente uma resposta amigável e atualiza o estado para a próxima informação necessária (especialidade, médico, data ou horário). Assim, o LLM não segue adiante até que o nome esteja oficialmente confirmado.
 
 Somente quando o fluxo de nome não retorna uma resposta (ou seja, já temos um nome confirmado) o processamento continua para as etapas seguintes de roteamento.
@@ -500,10 +501,17 @@ def _handle_patient_name_flow(
 **Responsabilidades principais:**
 
 - Detectar quando ainda não temos `patient_name` confirmado ou quando um `pending_name` precisa ser validado.
-- Reaproveitar o `ConversationService` para extrair e confirmar o nome (`process_patient_name` / `confirm_patient_name`).
+- Usar o nome já extraído pelo `EntityExtractor` (que utiliza Gemini AI) ao invés de processar novamente.
+- Se há `pending_name`, chamar `ConversationService.confirm_patient_name()` para confirmar ou rejeitar o nome.
 - Persistir `pending_name`, `patient_name` e `name_confirmed` na sessão e no banco (via `SessionManager`).
-- Construir respostas manuais (“Confirma se seu nome completo é…”) sem chamar o LLM, garantindo baixo consumo de tokens.
+- Construir respostas manuais ("Confirma se seu nome completo é…") sem chamar o LLM novamente, garantindo baixo consumo de tokens.
 - Após a confirmação, direcionar imediatamente para a próxima informação necessária (especialidade, médico, data ou horário), consultando `get_missing_appointment_info()` para definir o follow-up.
+
+**Fluxo de processamento:**
+
+1. Se há `pending_name`: chama `confirm_patient_name()` para validar confirmação/rejeição do usuário.
+2. Se não há nome confirmado: usa o nome extraído pelo `EntityExtractor` (já presente em `analysis_result['entities']['nome_paciente']`), salva em `pending_name` e solicita confirmação.
+3. Se o `EntityExtractor` não extraiu nome: solicita novamente ao usuário.
 
 > Esse handler é chamado antes das decisões de roteamento. Se ele devolver uma resposta, o método `process_message()` encerra ali mesmo, evitando que o Gemini formule prompts complexos enquanto o nome não estiver validado.
 

@@ -652,7 +652,6 @@ Paciente    ChatBot    ConversationService    SmartScheduling    GoogleCalendar 
 │  │  + pause_for_question(phone): bool                       │  │
 │  │  + resume_appointment(phone): Dict                       │  │
 │  │  + has_paused_appointment(phone): bool                   │  │
-│  │  + process_patient_name(phone, message): Dict            │  │
 │  │  + confirm_patient_name(phone, confirmation): Dict       │  │
 │  └──────────────────────────────────────────────────────────┘  │
 │                                                                  │
