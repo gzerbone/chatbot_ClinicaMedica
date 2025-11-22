@@ -126,6 +126,7 @@ A arquitetura atual mantém o **Google Gemini AI** como cérebro central do chat
    - Analisa mensagens com Gemini AI
    - Retorna intenção, próximo estado e confiança
    - Pós-processamento para ajustes de classificação
+   - **Confiança**: coletada para métricas/monitoramento, não usada para decisões
 
 3. **`EntityExtractor`** (`api_gateway/services/gemini/entity_extractor.py`)
    - Extrai entidades exclusivamente com Gemini AI
@@ -212,6 +213,13 @@ class IntentDetector:
     - Pós-processamento para ajustes de classificação
     - Temperature: 0.6 (análise precisa)
     - Retorna: intent, next_state, confidence, reasoning
+    
+    Nota sobre Confiança (confidence):
+    - A confiança é coletada do Gemini para monitoramento e métricas
+    - Armazenada em banco de dados e logs para análise histórica
+    - Atualmente NÃO é usada para tomar decisões (sem fallback)
+    - Propósito: métricas de qualidade, debugging e análises futuras
+    - Possíveis usos futuros: confirmação adicional quando < 0.7
     """
 ```
 
@@ -614,6 +622,33 @@ print(f"Modo econômico ativo: {stats['economy_mode_active']}")
 - **Histórico** de agendamentos e handoffs gerado automaticamente
 - **Métricas** de performance por componente
 - **Alertas** de limite de tokens (80%, 90%, 95%)
+
+### Sobre a Confiança (Confidence)
+
+Com a remoção do mecanismo de fallback, a **confiança** (`confidence`) coletada pelo `IntentDetector` não é mais usada para tomar decisões operacionais. Seu propósito atual é:
+
+1. **Métricas e Monitoramento**
+   - Análise histórica da qualidade das detecções de intenção
+   - Identificação de padrões de baixa confiança
+   - Acompanhamento de performance ao longo do tempo
+
+2. **Logging e Auditoria**
+   - Registro de cada detecção com seu nível de confiança
+   - Facilita debugging de problemas de classificação
+   - Permite análise de casos específicos
+
+3. **Armazenamento em Banco**
+   - Cada mensagem armazena sua confiança em `ConversationMessage.confidence`
+   - Dados históricos para análises estatísticas
+   - Base para melhorias futuras do sistema
+
+4. **Possíveis Usos Futuros**
+   - Implementar confirmação adicional quando confiança < 0.7
+   - Ajustar comportamento da resposta baseado na confiança
+   - Gerar alertas para revisão manual em casos de baixa confiança
+   - Melhorar prompts quando padrões de baixa confiança são detectados
+
+**Importante**: A confiança é coletada automaticamente, mas o sistema **sempre aceita a decisão do Gemini**, independentemente do valor de confiança. Não há lógica condicional que use a confiança para alterar o fluxo de processamento.
 
 ## Próximos Passos Recomendados
 
