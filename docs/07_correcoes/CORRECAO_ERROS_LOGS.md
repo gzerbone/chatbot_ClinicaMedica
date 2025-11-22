@@ -1,5 +1,12 @@
 # 🔧 Correção dos Erros Identificados nos Logs
 
+> **📜 REGISTRO HISTÓRICO DE CORREÇÃO**  
+> Este documento registra melhorias implementadas nos logs e tratamento de erros.  
+> **Status:** ✅ Melhorias implementadas e testadas.  
+> Este documento é mantido como registro histórico do processo de melhoria.
+
+---
+
 ## 🎯 Problemas Identificados
 
 Analisando os logs, foram identificados dois erros principais:
@@ -191,7 +198,7 @@ As correções garantem que:
 
 ## 🔧 Arquivos Modificados
 
-1. **`api_gateway/services/gemini_chatbot_service.py`**
+1. **`api_gateway/services/gemini/core_service.py`** (modularizado - antes era `gemini_chatbot_service.py`)
    - ✅ Implementado parsing inteligente com regex
    - ✅ Adicionados múltiplos formatos de data
    - ✅ Implementado fallback robusto

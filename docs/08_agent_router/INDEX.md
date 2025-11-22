@@ -1,5 +1,7 @@
 # 📚 Índice Geral - Documentação Agent Router
 
+> ⚠️ **NOTA**: Este é um índice simplificado. Para documentação completa e atualizada para TCC, consulte **[INDEX_COMPLETO.md](./INDEX_COMPLETO.md)** que contém informações mais detalhadas e organizadas para uso acadêmico.
+
 > Navegação centralizada para toda a documentação do Agent Router
 
 ---

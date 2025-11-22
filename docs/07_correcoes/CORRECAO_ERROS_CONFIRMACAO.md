@@ -1,5 +1,12 @@
 # Correção de Erros no Fluxo de Confirmação
 
+> **📜 REGISTRO HISTÓRICO DE CORREÇÃO**  
+> Este documento registra a correção de erros na confirmação de agendamento.  
+> **Status:** ✅ Correção implementada e testada.  
+> Este documento é mantido como registro histórico do processo de correção.
+
+---
+
 ## 📋 Resumo dos Problemas
 
 Durante testes reais, foram identificados **2 erros críticos** no fluxo de agendamento:
@@ -16,7 +23,7 @@ Durante testes reais, foram identificados **2 erros críticos** no fluxo de agen
 
 ### Erro 1: Valor `None` não tratado
 
-**Localização**: `api_gateway/services/gemini_chatbot_service.py`, linha 1295
+**Localização**: `api_gateway/services/gemini/core_service.py` (modularizado - antes estava em `gemini_chatbot_service.py`, linha 1295)
 
 **Código Original**:
 ```python
@@ -40,7 +47,7 @@ O operador `or` retorna o segundo valor se o primeiro for `None`, `''`, `0`, etc
 
 ### Erro 2: Confirmação Processada Múltiplas Vezes
 
-**Localização**: `api_gateway/services/gemini_chatbot_service.py`, linhas 154-169
+**Localização**: `api_gateway/services/gemini/intent_detector.py` (modularizado - antes estava em `gemini_chatbot_service.py`, linhas 154-169)
 
 **Problema**:
 
@@ -165,7 +172,7 @@ Bot: [NÃO deve perguntar novamente, deve gerar handoff]
 
 ## 📝 Arquivos Modificados
 
-1. **`api_gateway/services/gemini_chatbot_service.py`**:
+1. **`api_gateway/services/gemini/core_service.py`** (modularizado - antes era `gemini_chatbot_service.py`):
    - Linha 1296: Tratamento de `None` em `patient_name`
    - Linhas 155-176: Verificação de estado para evitar duplicação
    - Linhas 537, 551: Melhorias nas instruções do prompt

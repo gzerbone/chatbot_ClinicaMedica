@@ -16,7 +16,7 @@ Foi criado um sistema modular e organizado para monitoramento de tokens do Gemin
   - Gerenciamento de cache baseado no uso
   - Alertas automáticos
 
-### ✅ Modificado: `api_gateway/services/gemini_chatbot_service.py`
+### ✅ Modificado: `api_gateway/services/gemini/core_service.py` (modularizado - antes era `gemini_chatbot_service.py`)
 - **Removido**: Métodos duplicados de monitoramento
 - **Adicionado**: Integração com `token_monitor`
 - **Atualizado**: Timeouts de cache dinâmicos
@@ -98,7 +98,8 @@ stats = token_monitor.get_token_usage_stats()
 
 ### Via Gemini Service (Compatibilidade)
 ```python
-from api_gateway.services.gemini_chatbot_service import gemini_chatbot_service
+from api_gateway.services.gemini import GeminiChatbotService
+gemini_chatbot_service = GeminiChatbotService()
 
 # Interface mantida para compatibilidade
 stats = gemini_chatbot_service.get_token_usage_stats()
@@ -135,7 +136,7 @@ GEMINI_DAILY_TOKEN_LIMIT = 1500000  # 1.5M tokens
 ## ✅ Status
 
 - ✅ Arquivo `token_monitor.py` criado
-- ✅ `gemini_chatbot_service.py` refatorado
+- ✅ `api_gateway/services/gemini/core_service.py` refatorado (modularizado)
 - ✅ `views.py` atualizado
 - ✅ Script de teste criado
 - ✅ Integração testada

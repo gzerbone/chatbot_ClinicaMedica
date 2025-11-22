@@ -300,7 +300,7 @@ extractor = EntityExtractor()
 ### **❌ NÃO FAZER: Importar do arquivo antigo (removido)**
 ```python
 # ❌ ERRADO: Este arquivo não existe mais!
-from api_gateway.services.gemini_chatbot_service import GeminiChatbotService
+from api_gateway.services.gemini import GeminiChatbotService
 ```
 
 ---
@@ -412,7 +412,7 @@ from api_gateway.services.gemini_chatbot_service import GeminiChatbotService
 
 ### **Opção 1 (DESCARTADA): Manter wrapper de compatibilidade**
 ```python
-# gemini_chatbot_service.py (wrapper)
+# api_gateway/services/gemini/core_service.py (modularizado)
 from .gemini import GeminiChatbotService
 gemini_chatbot_service = GeminiChatbotService()
 ```
@@ -443,7 +443,7 @@ gemini_chatbot_service = GeminiChatbotService()
 
 **`api_gateway/views.py`** (ANTES):
 ```python
-from .services.gemini_chatbot_service import GeminiChatbotService
+from .services.gemini import GeminiChatbotService
 gemini_chatbot_service = GeminiChatbotService()
 ```
 

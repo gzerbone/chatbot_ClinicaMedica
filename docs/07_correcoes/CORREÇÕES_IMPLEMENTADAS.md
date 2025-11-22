@@ -1,5 +1,12 @@
 # ✅ Correções Implementadas - Sistema de Chatbot
 
+> **📜 REGISTRO HISTÓRICO DE CORREÇÕES**  
+> Este documento registra as correções implementadas em 16/10/2025.  
+> **Status:** ✅ Todas as correções foram implementadas e testadas.  
+> Este documento é mantido como registro histórico do processo de correção.
+
+---
+
 ## 📊 Resumo Executivo
 
 **Data:** 16/10/2025  
@@ -33,7 +40,7 @@ Durante testes reais com usuários, foi identificado que o chatbot:
 
 ### 1. Cache Expirando Sem Recarregar do Banco
 
-**Arquivo:** `api_gateway/services/gemini_chatbot_service.py:760`
+**Arquivo:** `api_gateway/services/gemini/session_manager.py` (modularizado - antes estava em `gemini_chatbot_service.py:760`)
 
 ```python
 # ❌ ANTES: Criava sessão vazia ao expirar cache
@@ -66,7 +73,7 @@ O prompt para o Gemini não informava quais dados já haviam sido coletados, faz
 
 ### Correção 1: Carregar Dados do Banco
 
-**Arquivo:** `api_gateway/services/gemini_chatbot_service.py:760-819`
+**Arquivo:** `api_gateway/services/gemini/session_manager.py` (modularizado - antes estava em `gemini_chatbot_service.py:760-819`)
 
 ```python
 # ✅ DEPOIS: Carrega do banco antes de criar vazio
@@ -99,7 +106,7 @@ def _get_or_create_session(self, phone_number: str):
 
 ### Correção 2: Sincronizar `selected_specialty`
 
-**Arquivo:** `api_gateway/services/gemini_chatbot_service.py:846-849`
+**Arquivo:** `api_gateway/services/gemini/session_manager.py` (modularizado - antes estava em `gemini_chatbot_service.py:846-849`)
 
 ```python
 # ✅ Atualizar especialidade selecionada
@@ -110,7 +117,7 @@ if entities.get('especialidade') and entities['especialidade'] != 'null':
 
 ### Correção 3: Validação Inteligente
 
-**Arquivo:** `api_gateway/services/gemini_chatbot_service.py:1315-1330`
+**Arquivo:** `api_gateway/services/gemini/response_generator.py` (modularizado - antes estava em `gemini_chatbot_service.py:1315-1330`)
 
 ```python
 # ✅ Considera ENTIDADES E SESSÃO
@@ -129,7 +136,7 @@ for info_key, info_config in required_info.items():
 
 ### Correção 4: Prompt Contextualizado
 
-**Arquivo:** `api_gateway/services/gemini_chatbot_service.py:400-413`
+**Arquivo:** `api_gateway/services/gemini/intent_detector.py` (modularizado - antes estava em `gemini_chatbot_service.py:400-413`)
 
 ```python
 # ✅ Criar lista de informações já coletadas
@@ -222,10 +229,10 @@ Bot: "Perfeito! Resumindo:
 
 | Arquivo | Linhas | Alterações |
 |---------|--------|------------|
-| `api_gateway/services/gemini_chatbot_service.py` | 760-819 | Carregamento do banco |
-| `api_gateway/services/gemini_chatbot_service.py` | 846-849 | Sync especialidade |
-| `api_gateway/services/gemini_chatbot_service.py` | 1315-1330 | Validação melhorada |
-| `api_gateway/services/gemini_chatbot_service.py` | 400-446 | Prompt contextualizado |
+| `api_gateway/services/gemini/session_manager.py` | - | Carregamento do banco (modularizado) |
+| `api_gateway/services/gemini/session_manager.py` | - | Sync especialidade (modularizado) |
+| `api_gateway/services/gemini/response_generator.py` | - | Validação melhorada (modularizado) |
+| `api_gateway/services/gemini/intent_detector.py` | - | Prompt contextualizado (modularizado) |
 
 ---
 
@@ -332,12 +339,12 @@ Durante testes reais com usuários, foram identificados dois erros críticos:
 #### Erro 1: "Olá, None!"
 - **Sintoma**: Mensagem exibindo "Olá, None! Para prosseguir com o agendamento..."
 - **Causa**: `session.get('patient_name', 'Paciente')` retorna `None` quando o valor existe mas é `None`
-- **Localização**: `gemini_chatbot_service.py`, linha 1295
+- **Localização**: `api_gateway/services/gemini/core_service.py` (modularizado - antes estava em `gemini_chatbot_service.py`, linha 1295)
 
 #### Erro 2: Mensagem de Confirmação Duplicada
 - **Sintoma**: Bot enviava a mesma pergunta de confirmação duas vezes seguidas
 - **Causa**: Falta de verificação de estado e instruções ambíguas no prompt
-- **Localização**: `gemini_chatbot_service.py`, linhas 154-169
+- **Localização**: `api_gateway/services/gemini/intent_detector.py` (modularizado - antes estava em `gemini_chatbot_service.py`, linhas 154-169)
 
 ### Soluções Implementadas
 
@@ -381,7 +388,7 @@ if analysis_result['intent'] == 'confirmar_agendamento':
 - ✅ "**NUNCA pergunte confirmação duas vezes seguidas**"
 
 ### Arquivos Modificados
-- `api_gateway/services/gemini_chatbot_service.py`:
+- `api_gateway/services/gemini/core_service.py` (modularizado - antes era `gemini_chatbot_service.py`):
   - Linha 1296: Tratamento de `None`
   - Linhas 155-176: Verificação de estado
   - Linhas 537, 540-552: Melhorias no prompt

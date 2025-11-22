@@ -67,8 +67,14 @@ chatbot_ClinicaMedica/
 ### Componentes Principais
 
 #### 1. **Gemini Chatbot Service** 🤖 (Motor Principal)
-- **Arquivo**: `api_gateway/services/gemini_chatbot_service.py`
+- **Arquivo**: `api_gateway/services/gemini/core_service.py` (modularizado)
 - **Modelo**: Google Gemini AI 2.0 Flash
+- **Estrutura Modular**:
+  - `core_service.py`: Orquestrador principal (GeminiChatbotService)
+  - `intent_detector.py`: Detecção de intenções
+  - `entity_extractor.py`: Extração de entidades
+  - `response_generator.py`: Geração de respostas
+  - `session_manager.py`: Gerenciamento de sessões
 - **Responsabilidades**:
   - Gerenciamento completo do fluxo de conversação
   - Análise de intenções e extração de entidades (nome, telefone, especialidade)

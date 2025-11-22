@@ -99,7 +99,7 @@ def process_whatsapp_message(data):
 
 #### **2. Configuração do Serviço**
 ```python
-# api_gateway/services/gemini_chatbot_service.py
+# api_gateway/services/gemini/core_service.py (modularizado - antes era gemini_chatbot_service.py)
 import google.generativeai as genai
 
 class GeminiChatbotService:

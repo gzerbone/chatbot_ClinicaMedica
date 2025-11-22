@@ -1,9 +1,17 @@
 # 🏗️ Plano de Modularização do Projeto
 
+> **📜 PLANO HISTÓRICO - JÁ IMPLEMENTADO**  
+> Este documento descreve o plano de modularização que foi seguido.  
+> **Status:** ✅ Modularização do `gemini_chatbot_service.py` concluída com sucesso.  
+> Veja `docs/06_modularizacao/MODULARIZACAO_GEMINI_COMPLETA.md` para o resultado final.  
+> Este documento é mantido como registro histórico do planejamento.
+
+---
+
 ## 📊 Análise Atual
 
 ### Arquivos Mais Problemáticos (por tamanho):
-1. **`gemini_chatbot_service.py`** - 1.526 linhas, 34 funções
+1. **`gemini_chatbot_service.py`** - 1.526 linhas, 34 funções (arquivo já foi modularizado)
 2. **`conversation_service.py`** - 590 linhas, 18 funções  
 3. **`smart_scheduling_service.py`** - 580 linhas, 15 funções
 4. **`google_calendar_service.py`** - 502 linhas, 15 funções

@@ -350,7 +350,6 @@ class IntentDetector:
 - `doctors`: Nomes de médicos
 - `dates`: Datas mencionadas
 - `times`: Horários mencionados
-- `insurance`: Tipo de convênio
 
 **Técnicas**:
 - Gemini AI (único método)

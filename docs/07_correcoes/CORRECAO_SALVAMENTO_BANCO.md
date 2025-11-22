@@ -1,5 +1,12 @@
 # 🔧 Correção do Salvamento no Banco de Dados
 
+> **📜 REGISTRO HISTÓRICO DE CORREÇÃO**  
+> Este documento registra a correção do problema de salvamento no banco de dados.  
+> **Status:** ✅ Correção implementada e testada.  
+> Este documento é mantido como registro histórico do processo de correção.
+
+---
+
 ## 🎯 Problema Identificado
 
 O mapeamento obrigatório estava sendo feito corretamente, mas os dados **não estavam sendo salvos no banco de dados** porque:
@@ -223,7 +230,7 @@ A correção garante que:
 
 ## 🔧 Arquivos Modificados
 
-1. **`api_gateway/services/gemini_chatbot_service.py`**
+1. **`api_gateway/services/gemini/core_service.py`** (modularizado - antes era `gemini_chatbot_service.py`)
    - ✅ Adicionados campos na sincronização
    - ✅ Implementada conversão de tipos
    - ✅ Adicionado parsing de data/hora

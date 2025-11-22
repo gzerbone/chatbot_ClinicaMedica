@@ -91,7 +91,12 @@ python scripts/testar_persistencia_completa.py
 #### **1. Serviços Principais**
 ```python
 # api_gateway/services/
-├── gemini_chatbot_service.py    # Motor principal
+├── gemini/
+│   ├── core_service.py          # Motor principal (modularizado)
+│   ├── intent_detector.py       # Detecção de intenções
+│   ├── entity_extractor.py      # Extração de entidades
+│   ├── response_generator.py    # Geração de respostas
+│   └── session_manager.py      # Gerenciamento de sessões
 ├── conversation_service.py       # Gerenciamento de conversas
 ├── whatsapp_service.py          # Integração WhatsApp
 ├── google_calendar_service.py   # Integração Calendar
@@ -133,7 +138,7 @@ class NovoService:
         pass
 
 # 2. Integre com Gemini
-# api_gateway/services/gemini_chatbot_service.py
+# api_gateway/services/gemini/core_service.py (modularizado)
 def process_message(self, message, phone_number):
     # Adicione nova funcionalidade
     if intent == 'nova_funcionalidade':

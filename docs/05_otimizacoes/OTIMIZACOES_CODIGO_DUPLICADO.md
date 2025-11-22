@@ -1,5 +1,12 @@
 # 🔧 Otimizações - Remoção de Código Duplicado
 
+> **📜 REGISTRO HISTÓRICO DE OTIMIZAÇÕES**  
+> Este documento registra as otimizações implementadas para eliminar código duplicado.  
+> **Status:** ✅ Todas as otimizações foram implementadas.  
+> Este documento é mantido como registro histórico do processo de otimização.
+
+---
+
 ## 📋 Resumo das Otimizações Realizadas
 
 Este documento detalha todas as otimizações feitas para eliminar códigos duplicados e redundantes no projeto.
@@ -10,7 +17,7 @@ Este documento detalha todas as otimizações feitas para eliminar códigos dupl
 
 ### ❌ Antes (Código Duplicado)
 
-O `conversation_service` era importado localmente em **4 lugares diferentes** dentro do `gemini_chatbot_service.py`:
+O `conversation_service` era importado localmente em **4 lugares diferentes** dentro do arquivo monolítico (antes da modularização):
 
 ```python
 # Linha 109
@@ -31,7 +38,7 @@ from .conversation_service import conversation_service
 Importação única no topo do arquivo:
 
 ```python
-# api_gateway/services/gemini_chatbot_service.py
+# api_gateway/services/gemini/core_service.py (após modularização)
 
 from .conversation_service import conversation_service
 from .rag_service import RAGService

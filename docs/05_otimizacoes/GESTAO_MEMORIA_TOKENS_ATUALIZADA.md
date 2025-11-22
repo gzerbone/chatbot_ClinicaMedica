@@ -1,5 +1,12 @@
 # 🧠 Gestão de Memória para Otimização de Tokens - Atualizada 09/10 (mais recente)
 
+> **📜 DOCUMENTAÇÃO TÉCNICA**  
+> Este documento descreve as estratégias implementadas para gestão de memória e tokens do Gemini AI.  
+> **Status:** ✅ Estratégias implementadas e funcionando.  
+> **Nota:** Referências a arquivos foram atualizadas para refletir a estrutura modular atual.
+
+---
+
 ## 📋 Índice
 - [Visão Geral](#visão-geral)
 - [Estratégia de Gestão de Estado](#estratégia-de-gestão-de-estado)
@@ -59,14 +66,14 @@ class ConversationSession(models.Model):
 ```
 
 #### 2. **Histórico Limitado**
-**Arquivo:** `api_gateway/services/gemini_chatbot_service.py` (linhas 975-981)
+**Arquivo:** `api_gateway/services/gemini/session_manager.py` (modularizado)
 
 **Como funciona:**
 - O sistema **limita o histórico** enviado ao Gemini para apenas as **últimas mensagens relevantes**
 - Não envia todo o histórico completo da conversa
 
 ```python
-# gemini_chatbot_service.py (linhas 249-254)
+# api_gateway/services/gemini/response_generator.py (modularizado)
 # Histórico da conversa
 history_text = ""
 if conversation_history:
@@ -77,14 +84,14 @@ if conversation_history:
 ```
 
 #### 3. **Cache de Sessão em Memória**
-**Arquivo:** `api_gateway/services/gemini_chatbot_service.py` (linhas 731-750)
+**Arquivo:** `api_gateway/services/gemini/session_manager.py` (modularizado)
 
 **Como funciona:**
 - As informações da sessão são armazenadas em **cache (Redis/Memcached)**
 - Ao invés de reenviar tudo, o sistema recupera o estado atual do cache
 
 ```python
-# gemini_chatbot_service.py (linhas 731-750)
+# api_gateway/services/gemini/session_manager.py (modularizado)
 def _get_or_create_session(self, phone_number: str) -> Dict[str, Any]:
     """Obtém ou cria sessão da conversa"""
     cache_key = f"gemini_session_{phone_number}"
@@ -106,14 +113,14 @@ def _get_or_create_session(self, phone_number: str) -> Dict[str, Any]:
 ```
 
 #### 4. **Sincronização Banco + Cache**
-**Arquivo:** `api_gateway/services/gemini_chatbot_service.py` (linhas 929-973)
+**Arquivo:** `api_gateway/services/gemini/core_service.py` (modularizado)
 
 **Como funciona:**
 - As informações são mantidas em **cache** (rápido) e **banco de dados** (persistente)
 - Quando necessário, apenas o **estado atual** é consultado, não todo o histórico
 
 ```python
-# gemini_chatbot_service.py (linhas 929-973)
+# api_gateway/services/gemini/core_service.py (modularizado)
 def _sync_session_to_database(self, phone_number: str, session: Dict):
     """Sincroniza sessão do cache com o banco de dados"""
     try:
@@ -290,7 +297,7 @@ def get_economy_config(self) -> Dict[str, Any]:
 ### 1. **Prompts Otimizados**
 
 #### Análise de Mensagem (Tokens Reduzidos)
-**Arquivo:** `api_gateway/services/gemini_chatbot_service.py` (linhas 231-341)
+**Arquivo:** `api_gateway/services/gemini/intent_detector.py` (modularizado)
 
 ```python
 def _build_analysis_prompt(self, message: str, session: Dict, 
@@ -319,7 +326,7 @@ def _build_analysis_prompt(self, message: str, session: Dict,
 
 #### Resposta ao Usuário (Tokens Controlados)
 ```python
-# gemini_chatbot_service.py (linhas 52-58)
+# api_gateway/services/gemini/core_service.py (modularizado)
 self.generation_config = {
     "temperature": 0.7,
     "top_p": 0.8,
@@ -330,7 +337,7 @@ self.generation_config = {
 
 ### 2. **Cache de Dados da Clínica**
 
-**Arquivo:** `api_gateway/services/gemini_chatbot_service.py` (linhas 1315-1339)
+**Arquivo:** `api_gateway/services/gemini/response_generator.py` (modularizado)
 
 ```python
 def _get_clinic_data_optimized(self) -> Dict[str, Any]:
@@ -389,7 +396,7 @@ def get_cache_timeout(self) -> int:
 ### 4. **Otimização de Cache por Médico e Especialidade**
 
 ```python
-# gemini_chatbot_service.py (linhas 1341-1399)
+# api_gateway/services/gemini/response_generator.py (modularizado)
 def _get_doctor_info_optimized(self, doctor_name: str) -> Dict[str, Any]:
     """
     Obtém informações de um médico específico de forma otimizada
@@ -660,7 +667,7 @@ CACHES = {
 
 ### Exemplo: Cache de Sessão (Detalhado)
 
-**Arquivo:** `api_gateway/services/gemini_chatbot_service.py` (linhas 731-750)
+**Arquivo:** `api_gateway/services/gemini/session_manager.py` (modularizado)
 
 ```python
 def _get_or_create_session(self, phone_number: str) -> Dict[str, Any]:
