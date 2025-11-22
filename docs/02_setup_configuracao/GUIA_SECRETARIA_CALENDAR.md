@@ -76,14 +76,16 @@ Dra. Maria Santos - Avaliação
 ## 📱 **Como o Chatbot Funciona**
 
 ### **O que o chatbot faz:**
-1. **Consulta o calendário** em tempo real
-2. **Filtra eventos** por nome do médico
-3. **Calcula horários livres** baseado nos ocupados
-4. **Informa paciente** sobre disponibilidade
+1. **Coleta informações** do paciente (nome, especialidade, médico, data, horário)
+2. **Consulta o calendário** em tempo real do Google Calendar
+3. **Filtra eventos** por nome do médico (busca no título E descrição dos eventos)
+4. **Calcula horários livres** baseado nos ocupados
+5. **Informa paciente** sobre disponibilidade em tempo real
+6. **Gera link de WhatsApp** pré-formatado com todas as informações quando paciente confirma
 
-### **Exemplo de consulta do chatbot:**
+### **Exemplo completo de agendamento:**
 
-**Calendário atual:**
+**Calendário atual no Google Calendar:**
 ```
 15/09 09:00 - Dr. João Carvalho - Consulta
 15/09 14:00 - Dra. Maria Santos - Consulta  
@@ -91,19 +93,48 @@ Dra. Maria Santos - Avaliação
 16/09 10:00 - Dr. João Carvalho - Consulta
 ```
 
-**Paciente pergunta:** "Quero agendar com Dr. João"
-
-**Chatbot responde:**
+**Conversa com o paciente:**
 ```
-Dr. João Carvalho está disponível:
+👤 Paciente: "Quero agendar uma consulta"
+🤖 Chatbot: "Olá! Para começar, qual é o seu nome completo?"
 
-📅 Segunda (15/09):
+👤 Paciente: "Maria Silva"
+🤖 Chatbot: "Perfeito, Maria! Qual especialidade você precisa?"
+
+👤 Paciente: "Pneumologia"
+🤖 Chatbot: "Ótimo! Temos o Dr. João Carvalho. Qual data prefere?"
+
+👤 Paciente: "Amanhã"
+🤖 Chatbot: "Dr. João Carvalho está disponível amanhã (15/09):
 • 08:00, 08:30, 10:00, 10:30, 11:00, 14:00, 14:30, 15:00, 16:00
+Qual horário prefere?"
 
-📅 Terça (16/09):  
-• 08:00, 08:30, 09:00, 09:30, 11:00, 14:00, 14:30, 15:00, 15:30
+👤 Paciente: "14:00"
+🤖 Chatbot: "✅ Perfeito! Vamos confirmar seu pré-agendamento:
 
-Qual horário prefere?
+📋 RESUMO:
+👤 Paciente: Maria Silva
+👨‍⚕️ Médico: Dr. João Carvalho
+🧠 Especialidade: Pneumologia
+📅 Data: 15/09
+🕐 Horário: 14:00
+
+📞 Clique no link abaixo para falar diretamente com nossa equipe:
+[Link WhatsApp com informações pré-preenchidas]"
+```
+
+### **Importante - Como o Sistema Filtra Eventos:**
+
+O sistema busca o nome do médico em:
+- ✅ **Título do evento** (summary)
+- ✅ **Descrição do evento** (description)
+
+**Exemplo de eventos que seriam encontrados:**
+```
+✅ "Dr. João Carvalho - Consulta" (título)
+✅ "Consulta Dr. João" (título)
+✅ "Reunião - Dr. João presente" (descrição contém "Dr. João")
+✅ "Dra. Maria - Retorno Paciente Silva" (título)
 ```
 
 ---
@@ -157,13 +188,18 @@ Qual horário prefere?
 - Respeitar grade de horários
 - Considerar duração por tipo
 
-#### **Descrição (Opcional):**
+#### **Descrição (Recomendado):**
 ```
 Paciente: João Silva
 Telefone: (11) 99999-9999
 Convênio: SulAmérica
 Observações: Primeira consulta
 ```
+
+**💡 Importante:**
+- A descrição é **útil para buscar** informações do paciente rapidamente
+- O sistema **também busca** nomes de médicos na descrição do evento
+- Use descrições para adicionar informações importantes (telefone, convênio, observações)
 
 ---
 
@@ -254,34 +290,67 @@ Dra. Maria - Procedimento Cirúrgico (2h)
 4. **Mantenha margem** entre consultas
 
 ### **Para Melhor Atendimento:**
-1. **Responda rapidamente** às solicitações do chatbot
-2. **Mantenha calendário atualizado** em tempo real
-3. **Use descrições** para informações importantes
+1. **Responda rapidamente** às mensagens do WhatsApp (link gerado pelo chatbot)
+2. **Mantenha calendário atualizado** em tempo real (chatbot consulta direto do Google Calendar)
+3. **Use descrições** nos eventos para informações importantes (ex: telefone do paciente)
 4. **Monitore** horários de pico
+5. **Confirme agendamentos** criando o evento no calendário assim que receber via WhatsApp
 
 ---
 
 ## 🔄 **Fluxo de Trabalho Integrado**
 
-### **Quando Paciente Consulta Chatbot:**
+### **Quando Paciente Consulta Chatbot (Fluxo Completo):**
 ```
-1. 👤 Paciente: "Quero agendar com Dr. João"
-2. 🤖 Chatbot: Consulta Google Calendar
-3. 📅 Sistema: Filtra eventos do Dr. João
-4. 🧮 Sistema: Calcula horários livres
-5. 💬 Chatbot: "Dr. João disponível: 14:00, 15:00..."
-6. 👤 Paciente: "Quero 14:00"
-7. 🤖 Chatbot: "Entre em contato para confirmar: (11) 99999-9999"
+1. 👤 Paciente: "Quero agendar uma consulta"
+2. 🤖 Chatbot: "Qual é o seu nome completo?"
+3. 👤 Paciente: "Maria Silva"
+4. 🤖 Chatbot: "Perfeito, Maria! Qual especialidade você precisa?"
+5. 👤 Paciente: "Pneumologia"
+6. 🤖 Chatbot: "Temos o Dr. João Carvalho. Qual data prefere?"
+7. 👤 Paciente: "Amanhã"
+8. 🤖 Chatbot: [Consulta Google Calendar em tempo real]
+   └─ Filtra eventos do Dr. João Carvalho
+   └─ Calcula horários livres
+9. 🤖 Chatbot: "Dr. João disponível amanhã: 08:00, 10:00, 14:00, 15:00..."
+10. 👤 Paciente: "Quero 14:00"
+11. 🤖 Chatbot: "✅ Perfeito! Resumo do agendamento:
+    - Paciente: Maria Silva
+    - Médico: Dr. João Carvalho
+    - Especialidade: Pneumologia
+    - Data: 15/09 às 14:00
+    
+    📞 Clique no link para confirmar com nossa equipe:
+    [Link WhatsApp pré-formatado]"
 ```
 
-### **Quando Secretária Recebe Ligação:**
+### **Quando Secretária Recebe Mensagem via WhatsApp:**
 ```
-1. 📞 Paciente liga: "O chatbot disse que Dr. João tem 14:00 livre"
-2. 👩‍💼 Secretária: Verifica Google Calendar
-3. ✅ Secretária: Confirma disponibilidade
-4. 📝 Secretária: Cria evento "Dr. João - Consulta"
-5. 💬 Secretária: Confirma com paciente
+1. 📱 Secretária recebe WhatsApp via link gerado pelo chatbot:
+   "Agendamento via Chatbot:
+   Paciente: Maria Silva
+   Médico: João Carvalho
+   Especialidade: Pneumologia
+   Data/Horário: 15/09 às 14:00"
+
+2. 👩‍💼 Secretária: Verifica Google Calendar em tempo real
+3. ✅ Secretária: Confirma que horário 14:00 está realmente livre
+4. 📝 Secretária: Cria evento no calendário:
+   Título: "Dr. João Carvalho - Consulta"
+   Data/Horário: 15/09 14:00 - 14:30
+   Descrição: "Paciente: Maria Silva | WhatsApp: 5511999999999"
+5. 💬 Secretária: Confirma com paciente via WhatsApp:
+   "✅ Confirmado! Sua consulta está agendada:
+   📅 15/09 às 14:00 com Dr. João Carvalho
+   
+   Aguardamos você! 😊"
 ```
+
+### **Vantagens do Sistema:**
+- ✅ **Paciente não precisa ligar** - tudo via WhatsApp
+- ✅ **Informações já pré-preenchidas** - secretária não precisa digitar
+- ✅ **Calendário sempre atualizado** - chatbot consulta em tempo real
+- ✅ **Menos erros** - sistema calcula automaticamente horários livres
 
 ---
 
