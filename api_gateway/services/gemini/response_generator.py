@@ -312,115 +312,126 @@ INFORMAÇÕES AINDA NECESSÁRIAS:
 """
         
         if scheduling_info.get('has_availability_info'):
-            calendar_availability = scheduling_info.get('calendar_availability', {})
-            if calendar_availability.get('has_availability'):
-                days_info = calendar_availability.get('days_info', [])
-                doctor_name = calendar_availability.get('doctor_name', 'Médico')
-                total_slots = calendar_availability.get('available_slots', 0)
-                
-                # Verificar se data E horário já foram fornecidos
-                has_date = bool(preferred_date)
-                has_time = bool(preferred_time)
-                
-                # Se data E horário já foram fornecidos, não mostrar lista completa
-                if has_date and has_time:
-                    # Data e horário já fornecidos - não mostrar lista de disponibilidade
-                    availability_context = f"""
+            # Verificar se há mensagem formatada pronta para usar
+            formatted_message = scheduling_info.get('formatted_availability_message')
+            
+            if formatted_message:
+                # Usar mensagem já formatada pelo smart_scheduling_service
+                availability_context = f"""
+DISPONIBILIDADE REAL DO GOOGLE CALENDAR:
+{formatted_message}
+"""
+            else:
+                # Construir mensagem manualmente (fallback)
+                calendar_availability = scheduling_info.get('calendar_availability', {})
+                if calendar_availability.get('has_availability'):
+                    days_info = calendar_availability.get('days_info', [])
+                    doctor_name = calendar_availability.get('doctor_name', 'Médico')
+                    total_slots = calendar_availability.get('available_slots', 0)
+                    
+                    # Verificar se data E horário já foram fornecidos
+                    has_date = bool(preferred_date)
+                    has_time = bool(preferred_time)
+                    
+                    # Se data E horário já foram fornecidos, não mostrar lista completa
+                    if has_date and has_time:
+                        # Data e horário já fornecidos - não mostrar lista de disponibilidade
+                        availability_context = f"""
 DISPONIBILIDADE REAL DO GOOGLE CALENDAR:
 ✅ O horário {preferred_time} em {preferred_date} foi validado e está disponível
 ⚠️ IMPORTANTE: NÃO liste horários disponíveis - o paciente já escolheu data e horário
 - Você deve CONFIRMAR o agendamento, não listar horários novamente
 """
-                elif has_date and not has_time:
-                    # Tem data mas falta horário - mostrar apenas horários da data escolhida
-                    # Normalizar formato da data para comparação
-                    from datetime import datetime
-                    try:
-                        if isinstance(preferred_date, str):
-                            if '-' in preferred_date:
-                                date_obj = datetime.strptime(preferred_date, '%Y-%m-%d').date()
-                            else:
-                                date_obj = datetime.strptime(preferred_date, '%d/%m/%Y').date()
-                        else:
-                            date_obj = preferred_date
-                        
-                        # Encontrar o dia específico
-                        selected_day_info = None
-                        for day in days_info:
-                            day_date_str = day.get('date', '')
-                            try:
-                                if '/' in day_date_str:
-                                    day_date_obj = datetime.strptime(day_date_str, '%d/%m/%Y').date()
+                    elif has_date and not has_time:
+                        # Tem data mas falta horário - mostrar apenas horários da data escolhida
+                        # Normalizar formato da data para comparação
+                        from datetime import datetime
+                        try:
+                            if isinstance(preferred_date, str):
+                                if '-' in preferred_date:
+                                    date_obj = datetime.strptime(preferred_date, '%Y-%m-%d').date()
                                 else:
-                                    day_date_obj = datetime.strptime(day_date_str, '%Y-%m-%d').date()
-                                
-                                if day_date_obj == date_obj:
-                                    selected_day_info = day
-                                    break
-                            except:
-                                continue
-                        
-                        if selected_day_info:
-                            available_times = selected_day_info.get('available_times', [])
-                            weekday = selected_day_info.get('weekday', '')
-                            date_str = selected_day_info.get('date', '')
-                            availability_context = f"""
+                                    date_obj = datetime.strptime(preferred_date, '%d/%m/%Y').date()
+                            else:
+                                date_obj = preferred_date
+                            
+                            # Encontrar o dia específico
+                            selected_day_info = None
+                            for day in days_info:
+                                day_date_str = day.get('date', '')
+                                try:
+                                    if '/' in day_date_str:
+                                        day_date_obj = datetime.strptime(day_date_str, '%d/%m/%Y').date()
+                                    else:
+                                        day_date_obj = datetime.strptime(day_date_str, '%Y-%m-%d').date()
+                                    
+                                    if day_date_obj == date_obj:
+                                        selected_day_info = day
+                                        break
+                                except:
+                                    continue
+                            
+                            if selected_day_info:
+                                available_times = selected_day_info.get('available_times', [])
+                                weekday = selected_day_info.get('weekday', '')
+                                date_str = selected_day_info.get('date', '')
+                                availability_context = f"""
 DISPONIBILIDADE REAL DO GOOGLE CALENDAR:
 ✅ Horários disponíveis para {weekday}, {date_str}:
 {', '.join(available_times[:10])}
 """
-                        else:
+                            else:
+                                availability_context = f"""
+DISPONIBILIDADE REAL DO GOOGLE CALENDAR:
+✅ {doctor_name} tem {total_slots} horários disponíveis nos próximos 7 dias
+📅 Informações detalhadas por dia:"""
+                                max_days = 3
+                                for day in days_info[:max_days]:
+                                    date_str = day.get('date', '')
+                                    weekday = day.get('weekday', '')
+                                    available_times = day.get('available_times', [])
+                                    if available_times:
+                                        max_times = 6
+                                        times_str = ', '.join(available_times[:max_times])
+                                        if len(available_times) > max_times:
+                                            times_str += f" (+{len(available_times) - max_times} outros)"
+                                        availability_context += f"\n• {weekday} ({date_str}): {times_str}"
+                        except Exception as e:
+                            logger.warning(f"Erro ao processar data para filtrar horários: {e}")
                             availability_context = f"""
 DISPONIBILIDADE REAL DO GOOGLE CALENDAR:
 ✅ {doctor_name} tem {total_slots} horários disponíveis nos próximos 7 dias
-📅 Informações detalhadas por dia:"""
-                            max_days = 3
-                            for day in days_info[:max_days]:
-                                date_str = day.get('date', '')
-                                weekday = day.get('weekday', '')
-                                available_times = day.get('available_times', [])
-                                if available_times:
-                                    max_times = 6
-                                    times_str = ', '.join(available_times[:max_times])
-                                    if len(available_times) > max_times:
-                                        times_str += f" (+{len(available_times) - max_times} outros)"
-                                    availability_context += f"\n• {weekday} ({date_str}): {times_str}"
-                    except Exception as e:
-                        logger.warning(f"Erro ao processar data para filtrar horários: {e}")
+"""
+                    else:
+                        # Não tem data - mostrar todos os dias
                         availability_context = f"""
 DISPONIBILIDADE REAL DO GOOGLE CALENDAR:
 ✅ {doctor_name} tem {total_slots} horários disponíveis nos próximos 7 dias
-"""
-                else:
-                    # Não tem data - mostrar todos os dias
-                    availability_context = f"""
-DISPONIBILIDADE REAL DO GOOGLE CALENDAR:
-✅ {doctor_name} tem {total_slots} horários disponíveis nos próximos 7 dias
 📅 Informações detalhadas por dia:"""
+                        
+                        # Mostrar mais dias quando estiver em choosing_schedule (até 5 dias)
+                        max_days = 5 if current_state == 'choosing_schedule' else 3
+                        for day in days_info[:max_days]:
+                            date_str = day.get('date', '')
+                            weekday = day.get('weekday', '')
+                            available_times = day.get('available_times', [])
+                            if available_times:
+                                # Mostrar mais horários quando estiver em choosing_schedule (até 8 por dia)
+                                max_times = 8 if current_state == 'choosing_schedule' else 4
+                                times_str = ', '.join(available_times[:max_times])
+                                if len(available_times) > max_times:
+                                    times_str += f" (+{len(available_times) - max_times} outros)"
+                                availability_context += f"\n• {weekday} ({date_str}): {times_str}"
                     
-                    # Mostrar mais dias quando estiver em choosing_schedule (até 5 dias)
-                    max_days = 5 if current_state == 'choosing_schedule' else 3
-                    for day in days_info[:max_days]:
-                        date_str = day.get('date', '')
-                        weekday = day.get('weekday', '')
-                        available_times = day.get('available_times', [])
-                        if available_times:
-                            # Mostrar mais horários quando estiver em choosing_schedule (até 8 por dia)
-                            max_times = 8 if current_state == 'choosing_schedule' else 4
-                            times_str = ', '.join(available_times[:max_times])
-                            if len(available_times) > max_times:
-                                times_str += f" (+{len(available_times) - max_times} outros)"
-                            availability_context += f"\n• {weekday} ({date_str}): {times_str}"
-                
-                # Verificar se data E horário já foram fornecidos
-                has_date = bool(preferred_date)
-                has_time = bool(preferred_time)
-                
-                if current_state == 'choosing_schedule' and not (has_date and has_time):
-                    # Só listar horários se ainda não tiver data E horário
-                    if has_date:
-                        # Tem data mas falta horário - filtrar apenas horários da data escolhida
-                        availability_context += f"""
+                    # Verificar se data E horário já foram fornecidos
+                    has_date = bool(preferred_date)
+                    has_time = bool(preferred_time)
+                    
+                    if current_state == 'choosing_schedule' and not (has_date and has_time):
+                        # Só listar horários se ainda não tiver data E horário
+                        if has_date:
+                            # Tem data mas falta horário - filtrar apenas horários da data escolhida
+                            availability_context += f"""
 
 ⚠️ CRÍTICO - ESTADO CHOOSING_SCHEDULE (DATA JÁ ESCOLHIDA):
 - O paciente já escolheu a data: {preferred_date}
@@ -431,9 +442,9 @@ DISPONIBILIDADE REAL DO GOOGLE CALENDAR:
   • [listar apenas os horários do dia {preferred_date}]
 - Após listar, pergunte: "Qual desses horários você prefere?"
 """
-                    else:
-                        # Não tem data - listar todos os dias
-                        availability_context += f"""
+                        else:
+                            # Não tem data - listar todos os dias
+                            availability_context += f"""
 
 ⚠️ CRÍTICO - ESTADO CHOOSING_SCHEDULE:
 - Você DEVE LISTAR esses horários disponíveis na sua resposta ao paciente!
@@ -447,11 +458,13 @@ DISPONIBILIDADE REAL DO GOOGLE CALENDAR:
 - Após listar TODOS os horários, pergunte: "Qual desses horários você prefere?" ou "Qual data e horário funcionam melhor para você?"
 - NUNCA pergunte sobre data/horário sem listar os horários disponíveis primeiro!
 """
+                    else:
+                        # Não está em choosing_schedule ou já tem data e horário
+                        availability_context += f"\n\n⚠️ IMPORTANTE: Use essas informações REAIS do calendário para informar horários disponíveis!"
                 else:
-                    availability_context += f"\n\n⚠️ IMPORTANTE: Use essas informações REAIS do calendário para informar horários disponíveis!"
-            else:
-                doctor_name = calendar_availability.get('doctor_name', 'Médico')
-                availability_context = f"""
+                    # Não há disponibilidade
+                    doctor_name = calendar_availability.get('doctor_name', 'Médico')
+                    availability_context = f"""
 DISPONIBILIDADE REAL DO GOOGLE CALENDAR:
 -{doctor_name} não tem horários disponíveis nos próximos 7 dias
 -Informe que o médico está sem agenda disponível e sugira outro médico ou que entre em contato."""
@@ -477,8 +490,77 @@ INFORMAÇÕES DA CLÍNICA (USE APENAS ESTAS INFORMAÇÕES, NÃO INVENTE):
         # Contexto específico baseado no estado
         state_context = ""
         
+        # ═══════════════════════════════════════════════════════════════════════════════
+        # ESTADO: ANSWERING_QUESTIONS - Respondendo dúvidas (agendamento pausado)
+        # ═══════════════════════════════════════════════════════════════════════════════
+        if current_state == 'answering_questions' and session.get('previous_state'):
+            previous_state = session.get('previous_state')
+            
+            # Verificar se há entidades de agendamento sendo fornecidas
+            has_appointment_entities = any([
+                entities.get('medico'),
+                entities.get('especialidade'),
+                entities.get('data'),
+                entities.get('horario')
+            ])
+            
+            if has_appointment_entities:
+                # Se há entidades de agendamento, o usuário está fornecendo informações, não apenas perguntando
+                # Continuar o agendamento fluidamente
+                state_context = f"""
+⚠️ ESTADO ATUAL: RESPONDENDO DÚVIDAS (AGENDAMENTO PAUSADO) - MAS USUÁRIO ESTÁ FORNECENDO INFORMAÇÕES
+- O agendamento foi pausado no estado: {previous_state}
+- O usuário está fornecendo informações de agendamento (médico/especialidade/data/horário)
+- Você DEVE continuar o agendamento fluidamente, processando as informações fornecidas
+- NÃO apenas responda a dúvida - processe as informações e continue o fluxo
+- Se o usuário forneceu médico, confirme e avance para próxima etapa
+- Se o usuário forneceu data, confirme e pergunte horário
+- Se o usuário forneceu horário, confirme e avance para confirmação
+- IMPORTANTE: Continue o agendamento naturalmente, como se não tivesse sido pausado
+"""
+            else:
+                # Se não há entidades de agendamento, apenas responder a dúvida
+                state_context = f"""
+⚠️ ESTADO ATUAL: RESPONDENDO DÚVIDAS (AGENDAMENTO PAUSADO)
+- O paciente está tirando dúvidas durante o agendamento
+- O agendamento foi pausado no estado: {previous_state}
+- Você DEVE responder a dúvida/pergunta do paciente de forma completa e clara
+- NÃO continue o agendamento agora - apenas responda a pergunta
+- Se o paciente perguntar sobre preço, informe o valor da consulta (veja "VALOR DA CONSULTA" acima)
+- Se o paciente perguntar sobre horários, informe os horários disponíveis
+- Se o paciente perguntar sobre especialidades, liste as especialidades disponíveis
+- Se o paciente perguntar sobre médicos, liste os médicos disponíveis
+- Após responder, você pode mencionar que pode continuar o agendamento quando o paciente quiser
+- IMPORTANTE: Responda APENAS a pergunta do paciente, não tente coletar informações de agendamento agora
+"""
+        # ═══════════════════════════════════════════════════════════════════════════════
+        # ESTADO: COLLECTING_PATIENT_INFO - Coletando nome do paciente
+        # ═══════════════════════════════════════════════════════════════════════════════
+        # CRÍTICO: Quando o estado é collecting_patient_info, SEMPRE pergunte o nome PRIMEIRO
+        # NÃO pergunte sobre especialidade, médico, data ou horário até que o nome seja coletado
+        # ═══════════════════════════════════════════════════════════════════════════════
+        if current_state == 'collecting_patient_info':
+            # Verificar se o nome já foi coletado
+            if not patient_name or not session.get('name_confirmed', False):
+                state_context = f"""
+⚠️ ESTADO ATUAL: COLETANDO NOME DO PACIENTE
+- Você DEVE perguntar o nome completo do paciente PRIMEIRO
+- NÃO pergunte sobre especialidade, médico, data ou horário ainda
+- A ordem obrigatória é: 1) nome → 2) especialidade → 3) médico → 4) data → 5) horário
+- Pergunte: "Para começar o agendamento, preciso saber seu nome completo. Qual é seu nome?" ou "Olá! Para começar, qual é seu nome completo?"
+- IMPORTANTE: Aguarde o paciente informar o nome antes de perguntar sobre especialidade
+"""
+            else:
+                # Nome já coletado, pode perguntar especialidade
+                state_context = f"""
+⚠️ ESTADO ATUAL: COLETANDO INFORMAÇÕES
+- O nome do paciente já foi coletado: {patient_name}
+- Agora você DEVE perguntar a especialidade médica desejada
+- NÃO pergunte sobre médico, data ou horário ainda
+- Pergunte: "Qual especialidade médica você deseja consultar?" ou "Para qual especialidade você gostaria de agendar?"
+"""
         # Se tem médico mas NÃO tem especialidade, deve perguntar especialidade primeiro
-        if selected_doctor and not selected_specialty:
+        elif selected_doctor and not selected_specialty:
             # Obter especialidades do médico selecionado
             doctor_specialties = []
             for medico in medicos:
@@ -615,12 +697,13 @@ INSTRUÇÕES:
 7. Seja objetivo e direto.
 
 REGRAS IMPORTANTES:
+- **CRÍTICO 0**: Se o ESTADO ATUAL for "collecting_patient_info", você DEVE perguntar o NOME do paciente PRIMEIRO, independente do que esteja em "INFORMAÇÕES AINDA NECESSÁRIAS". A ordem obrigatória é: 1) nome → 2) especialidade → 3) médico → 4) data → 5) horário.
 - Se intent = "saudacao" E não tiver nome: SEMPRE pergunte o nome primeiro ("Olá! Para começar, qual é o seu nome?")
 - Se já tiver nome do paciente, especialidade, médico, data e horário: pergunte se deseja confirmar o pré-agendamento
 - Se faltar apenas UMA informação: pergunte exatamente essa informação faltante
 - Se todas as entidades foram extraídas e confirmadas, então envie o handoff
 - NÃO solicite informações que já estão na lista "INFORMAÇÕES JÁ COLETADAS"
-- **CRÍTICO 1**: Se NÃO tem especialidade selecionada, você DEVE perguntar a especialidade PRIMEIRO. NÃO pergunte sobre médico, data ou horário até que a especialidade seja selecionada.
+- **CRÍTICO 1**: Se NÃO tem especialidade selecionada E já tem nome confirmado, você DEVE perguntar a especialidade. NÃO pergunte sobre médico, data ou horário até que a especialidade seja selecionada.
 - **CRÍTICO 2**: Se tem especialidade mas NÃO tem médico selecionado, você DEVE perguntar qual médico o paciente prefere. NÃO pergunte sobre data ou horário até que o médico seja selecionado.
 - **CRÍTICO 3**: Se tem médico mas NÃO tem especialidade, você DEVE perguntar qual especialidade do médico o paciente deseja. NÃO pergunte sobre data ou horário até que a especialidade seja selecionada.
 - **CRÍTICO 4**: NUNCA pergunte sobre data ou horário se especialidade OU médico ainda não foram selecionados. A ordem obrigatória é: 1) Especialidade → 2) Médico → 3) Data → 4) Horário
@@ -629,12 +712,14 @@ REGRAS IMPORTANTES:
 - **NUNCA** pule a etapa de seleção da especialidade indo direto para médico ou data/horário
 
 PRIORIDADE DE COLETA (ORDEM OBRIGATÓRIA - NÃO PULE ETAPAS):
-1. Nome do paciente (pergunte somente se ainda estiver faltando)
-2. Especialidade desejada (OBRIGATÓRIO antes de médico, data ou horário)
+1. **NOME DO PACIENTE** (OBRIGATÓRIO PRIMEIRO se o estado for collecting_patient_info ou se não tiver nome confirmado)
+2. Especialidade desejada (OBRIGATÓRIO após nome ser confirmado, antes de médico, data ou horário)
 3. Médico específico (OBRIGATÓRIO após escolher especialidade) - SEMPRE pergunte ao paciente qual médico ele deseja, MESMO que haja apenas um disponível
 4. Data preferida (SOMENTE após especialidade E médico serem selecionados)
 5. Horário preferido (SOMENTE após especialidade E médico serem selecionados)
 6. Confirmação final
+
+**IMPORTANTE**: Se o estado for "collecting_patient_info", você DEVE perguntar o nome primeiro, mesmo que "INFORMAÇÕES AINDA NECESSÁRIAS" liste especialidade. A ordem é SEMPRE: nome → especialidade → médico → data → horário.
 
 Sempre confie na lista de faltantes para saber o próximo passo. Se faltar nome, peça o nome. Se faltar médico, apresente os médicos disponíveis e PERGUNTE qual o paciente prefere. Se faltar apenas horário, peça somente o horário.
 

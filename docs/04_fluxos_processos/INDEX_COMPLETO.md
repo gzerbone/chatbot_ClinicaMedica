@@ -412,7 +412,6 @@ Y.9. Conclusão
 6. choosing_schedule        → Escolhendo horário
 7. confirming               → Confirmando agendamento
 8. answering_questions      → Respondendo dúvidas (sistema pausar/retomar)
-9. collecting_info          → Coletando informações gerais
 ```
 
 ### Fluxo Normal
@@ -590,5 +589,6 @@ O sistema de fluxos e processos apresenta as seguintes **contribuições origina
 ---
 
 **🎓 Documentação completa e profissional! Use com confiança em seu TCC! ✨**
+
 
 

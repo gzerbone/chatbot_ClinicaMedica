@@ -18,7 +18,6 @@ class ConversationSession(models.Model):
         choices=[
             ('idle', 'Ocioso'),
             ('collecting_patient_info', 'Coletando Dados do Paciente'),
-            ('collecting_info', 'Coletando Informações'),
             ('answering_questions', 'Respondendo Dúvidas'),
             ('confirming_name', 'Confirmando Nome do Paciente'),
             ('selecting_doctor', 'Selecionando Médico'),

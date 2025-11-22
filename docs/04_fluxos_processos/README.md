@@ -125,16 +125,15 @@ Esta pasta contém a documentação completa dos fluxos e processos do sistema d
 
 ## 📊 Estados do Sistema (Resumo)
 
-### **Estados Ativos (9):**
+### **Estados Ativos (8):**
 1. `idle` - Ocioso
 2. `collecting_patient_info` - Coletando dados do paciente
-3. `collecting_info` - Coletando informações
-4. `answering_questions` - Respondendo dúvidas
-5. `confirming_name` - Confirmando nome
-6. `selecting_specialty` - Selecionando especialidade
-7. `selecting_doctor` - Selecionando médico
-8. `choosing_schedule` - Escolhendo horário
-9. `confirming` - Confirmando agendamento
+3. `answering_questions` - Respondendo dúvidas
+4. `confirming_name` - Confirmando nome
+5. `selecting_specialty` - Selecionando especialidade
+6. `selecting_doctor` - Selecionando médico
+7. `choosing_schedule` - Escolhendo horário
+8. `confirming` - Confirmando agendamento
 
 ### **Estados Removidos:**
 - ❌ `completed` - Nunca utilizado
@@ -146,8 +145,8 @@ Esta pasta contém a documentação completa dos fluxos e processos do sistema d
 
 ```
 idle → collecting_patient_info → confirming_name → 
-collecting_info → selecting_specialty → selecting_doctor → 
-choosing_schedule → confirming
+selecting_specialty → selecting_doctor → choosing_schedule → 
+confirming
 ```
 
 **Com sistema de pausar/retomar:**

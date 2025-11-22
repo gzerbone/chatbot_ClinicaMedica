@@ -530,7 +530,7 @@ Mensagem do usuário: "Quero agendar"
 ```python
 # Envia apenas o essencial:
 prompt = f"""
-Estado atual: collecting_info
+Estado atual: selecting_specialty
 Nome do paciente: João Silva
 Médico selecionado: Dr. Gustavo
 

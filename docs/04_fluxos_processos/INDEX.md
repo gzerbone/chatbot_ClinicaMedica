@@ -45,7 +45,6 @@ Esta pasta contém documentação detalhada sobre os **fluxos de processos** do 
 **Estados implementados:**
 - `idle` - Ocioso
 - `collecting_patient_info` - Coletando dados
-- `collecting_info` - Coletando informações
 - `answering_questions` - Respondendo dúvidas
 - `confirming_name` - Confirmando nome
 - `selecting_specialty` - Selecionando especialidade

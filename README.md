@@ -225,12 +225,12 @@ chatbot_ClinicaMedica/
 └─────────────────────────────────────────────────────────────────┘
                                 ↓
 ┌─────────────────────────────────────────────────────────────────┐
-│  3️⃣ IDENTIFICAÇÃO DE NECESSIDADE                                │
+│  3️⃣ SELEÇÃO DE ESPECIALIDADE                                   │
 ├─────────────────────────────────────────────────────────────────┤
 │  • Consulta RAG para especialidades disponíveis                 │
 │  • Análise da necessidade do paciente                           │
 │  • Sugestão de especialidades relevantes                        │
-│  • Estado: collecting_info                                      │
+│  • Estado: selecting_specialty                                  │
 └─────────────────────────────────────────────────────────────────┘
                                 ↓
 ┌─────────────────────────────────────────────────────────────────┐
@@ -259,8 +259,7 @@ chatbot_ClinicaMedica/
 │  • Estado: confirming                                           │
 │  • Resumo completo do pré-agendamento                           │
 │  • Geração de link de confirmação WhatsApp                      │
-│  • Transferência para secretaria (Handoff Service)              │
-│  • Criação de evento no Google Calendar                         │
+│  • Transferência para secretaria (Handoff Service)              ││                                                                 │
 └─────────────────────────────────────────────────────────────────┘
                                 ↓
 ┌─────────────────────────────────────────────────────────────────┐
@@ -277,11 +276,10 @@ chatbot_ClinicaMedica/
 - `idle` → Aguardando nova interação
 - `collecting_patient_info` → Coletando dados básicos
 - `confirming_name` → Confirmando nome do paciente
-- `collecting_info` → Identificando necessidade
-- `answering_questions` → Respondendo dúvidas do paciente
-- `selecting_doctor` → Escolhendo médico
 - `selecting_specialty` → Escolhendo especialidade médica
-- `choosing_schedule` → Selecionando horário
+- `selecting_doctor` → Escolhendo médico
+- `choosing_schedule` → Selecionando data/horário
+- `answering_questions` → Respondendo dúvidas do paciente
 - `confirming` → Confirmando agendamento
 
 ### 🔄 Gerenciamento Dinâmico do Fluxo

@@ -198,8 +198,11 @@ class SessionManager:
 
             # Atualizar estado (não sobrescrever se já estiver confirmando ou respondendo dúvidas)
             # Se está respondendo dúvidas (answering_questions), manter esse estado
-            if session.get('current_state') not in ['confirming', 'answering_questions']:
-                session['current_state'] = analysis_result['next_state']
+            # IMPORTANTE: Se next_state estiver definido e não for None, atualizar o estado
+            next_state = analysis_result.get('next_state')
+            if next_state and session.get('current_state') not in ['confirming', 'answering_questions']:
+                session['current_state'] = next_state
+                logger.debug(f"🔄 Estado atualizado no cache: {next_state}")
             session['last_activity'] = timezone.now().isoformat()
             
             # CORREÇÃO: Armazenar informações da resposta gerada
@@ -379,10 +382,12 @@ class SessionManager:
             cache_key = f"gemini_session_{phone_number}"
             cache.set(cache_key, session, token_monitor.get_cache_timeout())
             
-            # Log do estado final da sessão
+            # Log do estado final da sessão ANTES de sincronizar
             logger.info(f"📋 Sessão atualizada - Estado: {session['current_state']}, Nome: {session.get('patient_name')}, Médico: {session.get('selected_doctor')}")
             
             # Sincronizar com banco de dados
+            # IMPORTANTE: O estado já foi atualizado no cache (linhas 201-202 e 337-361)
+            # Agora sincronizamos com o banco para persistir
             self.sync_to_database(phone_number, session)
         except Exception as e:
             logger.error(f"Erro ao atualizar sessão: {e}")
@@ -573,8 +578,25 @@ class SessionManager:
             
             if not created:
                 # Atualizar sessão existente
-                db_session.current_state = session.get('current_state', 'idle')
-                db_session.previous_state = session.get('previous_state')
+                current_state_from_session = session.get('current_state', 'idle')
+                # Log para debug: verificar se o estado está sendo atualizado
+                if db_session.current_state != current_state_from_session:
+                    logger.info(f"🔄 Atualizando estado no banco: {db_session.current_state} → {current_state_from_session}")
+                db_session.current_state = current_state_from_session
+                # IMPORTANTE: Preservar previous_state se já existir no banco e não estiver na sessão em memória
+                # Isso evita que o previous_state seja limpo incorretamente quando pause_for_question já salvou
+                previous_state_from_session = session.get('previous_state')
+                if previous_state_from_session is not None:
+                    # Se a sessão em memória tem previous_state, usar esse valor
+                    db_session.previous_state = previous_state_from_session
+                # Se previous_state não está na sessão em memória (None), manter o valor do banco
+                # Isso preserva o previous_state salvo pelo pause_for_question mesmo se a sessão em memória não foi atualizada
+                elif db_session.previous_state:
+                    # Manter o previous_state do banco se ele já existir
+                    pass  # Não sobrescrever
+                else:
+                    # Se não tem no banco nem na sessão, pode ser None
+                    db_session.previous_state = None
                 # Garantir que o nome completo seja salvo (sem truncamento)
                 patient_name = session.get('patient_name')
                 if patient_name:
@@ -595,7 +617,7 @@ class SessionManager:
                 db_session.updated_at = timezone.now()
                 db_session.save()
             
-            logger.info(f"💾 Sessão sincronizada com banco - ID: {db_session.id}, Nome: {db_session.patient_name}, Data: {normalized_date}")
+            logger.info(f"💾 Sessão sincronizada com banco - ID: {db_session.id}, Estado: {db_session.current_state}, Nome: {db_session.patient_name}, Data: {normalized_date}")
             
         except Exception as e:
             logger.error(f"Erro ao sincronizar sessão com banco: {e}")

@@ -34,7 +34,7 @@ A arquitetura foi projetada para atender os seguintes objetivos:
 | **Escalabilidade** | Suportar crescimento de usuários e funcionalidades | Arquitetura em camadas, serviços stateless |
 | **Manutenibilidade** | Facilitar evolução e correções | Código limpo, padrões de design, documentação |
 | **Performance** | Tempo de resposta < 3s | Cache, processamento assíncrono, otimizações |
-| **Confiabilidade** | Alta disponibilidade e recuperação de falhas | Tratamento de erros, fallbacks, logs |
+| **Confiabilidade** | Alta disponibilidade e recuperação de falhas | Tratamento de erros, logging, mensagens genéricas |
 | **Extensibilidade** | Adicionar novas features sem reescrita | Interfaces bem definidas, baixo acoplamento |
 
 ### 1.3. Decisões Arquiteturais Principais
@@ -57,7 +57,7 @@ A arquitetura foi projetada para atender os seguintes objetivos:
 │  3. AGENT ROUTER PATTERN                                        │
 │     Decisão: Centralizar roteamento de mensagens               │
 │     Justificativa: Facilita extensão e debugging                │
-│     Trade-off: Ponto único de falha (mitigado com fallbacks)   │
+│     Trade-off: Ponto único de falha (mitigado com tratamento de erros) │
 │                                                                  │
 │  4. MÁQUINA DE ESTADOS PERSISTIDA                               │
 │     Decisão: Estado em banco de dados, não em memória          │
@@ -353,8 +353,8 @@ class IntentDetector:
 - `insurance`: Tipo de convênio
 
 **Técnicas**:
-- Gemini AI (principal)
-- Regex fallback (datas, horários)
+- Gemini AI (único método)
+- Regex para parsing de datas e horários (complementar)
 - Validação contra BD
 
 **Interfaces Principais**:

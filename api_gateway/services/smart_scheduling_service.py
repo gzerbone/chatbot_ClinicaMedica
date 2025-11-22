@@ -313,6 +313,13 @@ class SmartSchedulingService:
             return None
 
 
+    def _get_weekday_name_from_date(self, date_obj: date) -> str:
+        """
+        Retorna o nome do dia da semana para uma data
+        """
+        days = ['Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado', 'Domingo']
+        return days[date_obj.weekday()]
+    
     def _parse_date(self, date_str: str) -> Optional[date]:
         """
         Converte string de data para objeto date
@@ -446,14 +453,14 @@ Entre em contato conosco para mais informações."""
             
             message = ""
             if include_header:
-                message = "👨‍⚕️ **Nossos médicos disponíveis:**\n\n"
+                message = "👨‍⚕️ *Nossos médicos disponíveis:*\n\n"
             
             for medico in medicos:
                 nome = medico.get('nome', 'Médico')
                 especialidades = medico.get('especialidades_display', 'Especialidade não informada')
                 preco = medico.get('preco_particular')
                 
-                message += f"**{nome}**\n"
+                message += f"*{nome}*\n"
                 message += f"🩺 {especialidades}\n"
                 message += f"💰 Consulta particular: {self._format_doctor_price(preco)}\n\n"
             
@@ -500,6 +507,43 @@ Para qual médico gostaria de consultar os horários?"""
         # Formatar preço usando função auxiliar (lida com None, Decimal, int, float, string)
         price_formatted = self._format_doctor_price(price)
         
+        # Verificar se o motivo da indisponibilidade é fim de semana
+        if availability.get('reason') == 'weekend':
+            # Caso especial: data é fim de semana
+            error_message = availability.get('message', 'Não há atendimento aos fins de semana.')
+            
+            # Consultar horários disponíveis em dias úteis
+            general_availability = self.get_doctor_availability(doctor_name, days_ahead=7, date_filter=None)
+            
+            message = f"""👨‍⚕️ **{doctor_name}**
+🩺 {specialties}
+💰 Consulta particular: {price_formatted}
+
+{error_message}
+
+📅 **Horários disponíveis em outros dias:**
+
+"""
+            if general_availability.get('available'):
+                days_info = general_availability.get('days', [])
+                for day in days_info[:3]:  # Mostrar até 3 dias
+                    date_str = day.get('date', '')
+                    weekday = day.get('weekday', '')
+                    available_times = day.get('available_times', [])
+                    
+                    if available_times:
+                        message += f"**{weekday} ({date_str}):** {', '.join(available_times[:4])}\n"
+                
+                message += f"""
+📞 **Se quiser pode agendar ligando para:**
+(73) 3613-5380"""
+            else:
+                message += f"""
+📞 Entre em contato conosco para mais informações ligando para:
+(73) 3613-5380"""
+            
+            return message
+        
         if not availability.get('available'):
             # Se não há horários para o dia específico, consultar outros dias
             general_availability = self.get_doctor_availability(doctor_name, days_ahead=7, date_filter=None)
@@ -513,13 +557,13 @@ Para qual médico gostaria de consultar os horários?"""
                     date_display = date_filter.title() if isinstance(date_filter, str) else str(date_filter)
                     date_message = f" para {date_display}"
                 
-                message = f"""👨‍⚕️ **{doctor_name}**
+                message = f"""👨‍⚕️ *{doctor_name}*
 🩺 {specialties}
 💰 Consulta particular: {price_formatted}
 
 ❌ Não há horários disponíveis{date_message}.
 
-📅 **Mas temos horários disponíveis em outros dias:**
+📅 *Mas temos horários disponíveis em outros dias:*
 
 """
                 for day in days_info[:3]:  # Mostrar até 3 dias
@@ -528,15 +572,15 @@ Para qual médico gostaria de consultar os horários?"""
                     available_times = day.get('available_times', [])
                     
                     if available_times:
-                        message += f"**{weekday} ({date_str}):** {', '.join(available_times[:4])}\n"
+                        message += f"*{weekday} ({date_str}):* {', '.join(available_times[:4])}\n"
                 
                 message += f"""
-📞 **Se quiser pode agendar ligando para:**
+📞 *Se quiser pode agendar ligando para:*
 (73) 3613-5380"""
                 
                 return message
             else:
-                return f"""👨‍⚕️ **{doctor_name}**
+                return f"""👨‍⚕️ *{doctor_name}*
 🩺 {specialties}
 💰 Consulta particular: {price_formatted}
 
@@ -554,7 +598,7 @@ Entre em contato conosco para mais informações ligando para:
             date_display = date_filter.title() if isinstance(date_filter, str) else str(date_filter)
             availability_header = f"*Horários disponíveis para {date_display}:*"
         
-        message = f"""👨‍⚕️ **{doctor_name}**
+        message = f"""👨‍⚕️ *{doctor_name}*
 🩺 {specialties}
 💰 Consulta particular: {price_formatted}
 
@@ -640,6 +684,25 @@ Entre em contato conosco para mais informações ligando para:
             if date_filter:
                 target_date = self._parse_date(date_filter)
                 if target_date:
+                    # Validar se a data é fim de semana ANTES de consultar o calendário
+                    if target_date.weekday() >= 5:  # Sábado=5, Domingo=6
+                        weekday_name = self._get_weekday_name_from_date(target_date)
+                        logger.warning(f"⚠️ Data solicitada é fim de semana: {target_date.strftime('%d/%m/%Y')} ({weekday_name})")
+                        return {
+                            'success': False,
+                            'available': False,
+                            'doctor_name': doctor_name,
+                            'doctor': doctor_name,
+                            'days_ahead': days_ahead,
+                            'days_info': [],
+                            'available_slots': 0,
+                            'has_availability': False,
+                            'total_days': 0,
+                            'reason': 'weekend',
+                            'message': f'Não há atendimento aos fins de semana. A data {target_date.strftime("%d/%m/%Y")} ({weekday_name}) não está disponível.',
+                            'error': f'Data é fim de semana: {target_date.strftime("%d/%m/%Y")}'
+                        }
+                    
                     # Filtrar apenas o dia solicitado
                     filtered_days = [day for day in days_info 
                                    if datetime.strptime(day['date'], '%d/%m/%Y').date() == target_date]

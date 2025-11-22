@@ -152,11 +152,15 @@ class GeminiChatbotService:
                 # Só pausa se estiver no MEIO do agendamento (não no início nem no fim)
                 pausable_states = ['collecting_patient_info', 'selecting_specialty', 'selecting_doctor', 'choosing_schedule', 'confirming_name']
                 if session['current_state'] in pausable_states:
-                    # Pausar agendamento e atualizar sessão em memória
+                    # IMPORTANTE: Salvar o estado anterior ANTES de pausar
+                    # (porque pause_for_question já muda o current_state no banco)
+                    previous_state_before_pause = session['current_state']
+                    
+                    # Pausar agendamento (salva no banco)
                     paused = conversation_service.pause_for_question(phone_number)
                     if paused:
                         # Atualizar variável session em memória para refletir a mudança
-                        session['previous_state'] = session['current_state']
+                        session['previous_state'] = previous_state_before_pause
                         session['current_state'] = 'answering_questions'
                         logger.info(f"⏸️ Sessão em memória atualizada: current_state={session['current_state']}, previous_state={session['previous_state']}")
 
@@ -220,7 +224,7 @@ class GeminiChatbotService:
                                     return response_result
                         else:
                             # Se não tem data específica, mostrar todos os dias disponíveis
-                            response_text = f"📅 **Horários disponíveis para o Dr. {doctor_name.split()[-1] if ' ' in doctor_name else doctor_name}:**\n\n"
+                            response_text = f"📅 *Horários disponíveis para o Dr. {doctor_name.split()[-1] if ' ' in doctor_name else doctor_name}:*\n\n"
                             
                             for day in days_info[:5]:  # Mostrar até 5 dias
                                 date_str = day.get('date', '')
@@ -307,29 +311,9 @@ class GeminiChatbotService:
                         # Se temos informações de disponibilidade, usar na resposta
                         analysis_result['scheduling_info'] = scheduling_analysis
             
-            # 7.7. Retomar automaticamente se usuário fornecer informações de agendamento enquanto está em answering_questions
-            # Isso permite que o usuário continue o agendamento sem precisar dizer "continuar"
-            if session.get('current_state') == 'answering_questions' and session.get('previous_state'):
-                entities = analysis_result.get('entities', {})
-                # Verificar se há entidades de agendamento sendo fornecidas
-                has_appointment_entities = any([
-                    entities.get('nome_paciente'),
-                    entities.get('medico'),
-                    entities.get('especialidade'),
-                    entities.get('data'),
-                    entities.get('horario')
-                ])
-                
-                # Se a intenção é agendar ou há entidades de agendamento, retomar automaticamente
-                if analysis_result['intent'] in ['agendar_consulta', 'confirmar_agendamento', 'selecionar_especialidade', 'confirming_name'] or has_appointment_entities:
-                    restored_state = session.get('previous_state')
-                    session['current_state'] = restored_state
-                    session['previous_state'] = None
-                    # Atualizar no banco também
-                    conversation_service.get_or_create_session(phone_number).current_state = restored_state
-                    conversation_service.get_or_create_session(phone_number).previous_state = None
-                    conversation_service.get_or_create_session(phone_number).save()
-                    logger.info(f"🔄 Retomada automática do agendamento: answering_questions → {restored_state} (usuário forneceu informações de agendamento)")
+            # 7.7. NÃO retomar aqui - será feito DEPOIS da geração da resposta
+            # A retomada automática foi movida para depois da geração da resposta (linha ~860)
+            # para garantir que dúvidas sejam respondidas antes de retomar o agendamento
             
             # 7.8. Validar se usuário está tentando fornecer data/horário sem ter médico e especialidade
             entities = analysis_result.get('entities', {})
@@ -788,6 +772,18 @@ Nossa secretaria entrará em contato em breve para finalizar seu agendamento."""
                     analysis_result['intent'] = 'agendar_consulta'
                     analysis_result['missing_info'] = missing_info_result['missing_info']
             
+            # 9.5. Obter missing_info quando o estado é collecting_patient_info
+            # ═══════════════════════════════════════════════════════════════════════════════
+            # Quando o estado é collecting_patient_info (ex: após saudação), precisamos
+            # obter as informações faltantes para que o response_generator saiba o que perguntar
+            # ═══════════════════════════════════════════════════════════════════════════════
+            current_state = session.get('current_state', 'idle')
+            if current_state == 'collecting_patient_info' and 'missing_info' not in analysis_result:
+                logger.info(f"📋 Obtendo informações faltantes para estado collecting_patient_info")
+                missing_info_result = conversation_service.get_missing_appointment_info(phone_number)
+                analysis_result['missing_info'] = missing_info_result.get('missing_info', [])
+                logger.info(f"📋 Informações faltantes: {analysis_result['missing_info']}")
+            
             # 10. Gerar resposta se ainda não foi gerada
             if not response_result.get('response'):
                 response_result = self.response_generator.generate_response(
@@ -844,6 +840,50 @@ Nossa secretaria entrará em contato em breve para finalizar seu agendamento."""
                     phone_number, session, analysis_result, response_result
                 )
 
+            # 10.5. Retomar automaticamente se usuário fornecer informações de agendamento enquanto está em answering_questions
+            # IMPORTANTE: Isso é feito DEPOIS da geração da resposta para garantir que dúvidas sejam respondidas primeiro
+            if session.get('current_state') == 'answering_questions' and session.get('previous_state'):
+                entities = analysis_result.get('entities', {})
+                
+                # Verificar se há entidades NOVAS de agendamento sendo fornecidas
+                # NÃO considerar nome_paciente se já estava na sessão (sempre é extraído)
+                has_new_appointment_entities = any([
+                    entities.get('medico') and entities.get('medico') != session.get('selected_doctor'),
+                    entities.get('especialidade') and entities.get('especialidade') != session.get('selected_specialty'),
+                    entities.get('data'),
+                    entities.get('horario')
+                ])
+                
+                intent = analysis_result.get('intent', '')
+                
+                # LÓGICA DE RETOMADA:
+                # 1. Se há entidades NOVAS de agendamento (data, horário, médico, especialidade), 
+                #    retomar SEMPRE, mesmo que a intenção seja buscar_info ou duvida
+                #    (porque o usuário está fornecendo informações, não apenas perguntando)
+                # 2. Se a intenção é explicitamente de agendamento, retomar
+                # 3. NÃO retomar se é apenas uma pergunta sem entidades de agendamento
+                should_resume = False
+                
+                if has_new_appointment_entities:
+                    # Se há entidades de agendamento, retomar independente da intenção
+                    # (usuário está fornecendo informações, não apenas perguntando)
+                    should_resume = True
+                    logger.info(f"🔄 Retomada automática detectada: há entidades de agendamento (data/horário/médico/especialidade) mesmo com intent={intent}")
+                elif intent in ['agendar_consulta', 'confirmar_agendamento', 'selecionar_especialidade', 'confirming_name']:
+                    # Se a intenção é explicitamente de agendamento, retomar
+                    should_resume = True
+                
+                if should_resume:
+                    restored_state = session.get('previous_state')
+                    session['current_state'] = restored_state
+                    session['previous_state'] = None
+                    # Atualizar no banco também
+                    db_session = conversation_service.get_or_create_session(phone_number)
+                    db_session.current_state = restored_state
+                    db_session.previous_state = None
+                    db_session.save()
+                    logger.info(f"🔄 Retomada automática do agendamento: answering_questions → {restored_state} (usuário forneceu informações de agendamento)")
+
             # 11. Salvar mensagens no histórico
             self.session_manager.save_messages(
                 phone_number, message, response_result['response'], analysis_result
@@ -880,24 +920,36 @@ Nossa secretaria entrará em contato em breve para finalizar seu agendamento."""
             
             # Se temos informações suficientes para consultar disponibilidade
             if scheduling_analysis.get('response_type') == 'availability_info':
+                # Preservar a mensagem formatada que já vem do analyze_scheduling_request
+                formatted_message = scheduling_analysis.get('message')
+                availability = scheduling_analysis.get('availability', {})
+                
                 doctor_info = scheduling_analysis.get('doctor_info')
                 if doctor_info and doctor_info.get('nome'):
                     doctor_name = doctor_info['nome']
                     logger.info(f"👨‍⚕️ Consultando disponibilidade para: {doctor_name}")
                     
-                    # Consultar horários disponíveis no Google Calendar
-                    availability = smart_scheduling_service.get_doctor_availability(
-                        doctor_name=doctor_name,
-                        days_ahead=7  # Próximos 7 dias
-                    )
+                    # Se já temos disponibilidade do analyze_scheduling_request, usar ela
+                    # Caso contrário, fazer nova consulta
+                    if not availability:
+                        availability = smart_scheduling_service.get_doctor_availability(
+                            doctor_name=doctor_name,
+                            days_ahead=7  # Próximos 7 dias
+                        )
                     
                     if availability.get('has_availability'):
                         scheduling_analysis['calendar_availability'] = availability
                         scheduling_analysis['has_availability_info'] = True
+                        # Preservar mensagem formatada se existir
+                        if formatted_message:
+                            scheduling_analysis['formatted_availability_message'] = formatted_message
                         logger.info(f"✅ Encontrados {availability['available_slots']} horários disponíveis")
                     else:
                         logger.warning(f"⚠️ Nenhum horário disponível encontrado para {doctor_name}")
                         scheduling_analysis['has_availability_info'] = False
+                        # Preservar mensagem formatada mesmo sem disponibilidade
+                        if formatted_message:
+                            scheduling_analysis['formatted_availability_message'] = formatted_message
             
             return scheduling_analysis
             

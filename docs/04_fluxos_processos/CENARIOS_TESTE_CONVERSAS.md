@@ -50,7 +50,7 @@ Usuário realiza um agendamento completo do início ao fim, seguindo todas as et
 
 🤖 BOT: Perfeito, João Silva Santos! Para continuarmos, qual especialidade você deseja consultar?
        
-       [Estado: collecting_info]
+       [Estado: selecting_specialty]
        [Intent: confirmar_nome]
        [Sessão: patient_name="João Silva Santos", name_confirmed=True]
 
@@ -180,7 +180,7 @@ Usuário está no meio do agendamento e faz uma pergunta. O sistema pausa o agen
 
 🤖 BOT: Perfeito, Maria Silva! Para continuarmos, qual especialidade você deseja consultar?
        
-       [Estado: collecting_info]
+       [Estado: selecting_specialty]
        [Sessão: patient_name="Maria Silva", name_confirmed=True]
 
 ─────────────────────────────────────────────────────────────
@@ -190,9 +190,9 @@ Usuário está no meio do agendamento e faz uma pergunta. O sistema pausa o agen
 🤖 BOT: O valor da consulta particular é R$ 150,00.
        
        [Estado: answering_questions]
-       [Previous State: collecting_info]
+       [Previous State: selecting_specialty]
        [Intent: buscar_info]
-       [Sessão: previous_state="collecting_info"]
+       [Sessão: previous_state="selecting_specialty"]
        [Nota: Sistema pausa silenciosamente - não há mensagem de aviso automática]
 
 ─────────────────────────────────────────────────────────────
@@ -206,16 +206,30 @@ Usuário está no meio do agendamento e faz uma pergunta. O sistema pausa o agen
        
        [Estado: answering_questions]
        [Intent: buscar_info]
+       [Nota: Continua respondendo dúvidas - sem entidades de agendamento]
 
 ─────────────────────────────────────────────────────────────
 
-👤 USUÁRIO: Entendi, quero continuar
+OPÇÃO 1: RETOMADA AUTOMÁTICA (Recomendada)
+─────────────────────────────────────────────────────────────
+👤 USUÁRIO: Pneumologia  ← FORNECEU ESPECIALIDADE (entidade de agendamento)
+
+🤖 BOT: Com a especialidade de Pneumologia escolhida, temos o Dr. Gustavo Magno...
+       
+       [Estado: selecting_doctor] ← RETOMADO AUTOMATICAMENTE! ✅
+       [Previous State: None]
+       [Intent: agendar_consulta]
+       [Nota: Sistema detectou entidade "especialidade" e retomou automaticamente]
+
+OPÇÃO 2: RETOMADA MANUAL (Palavras-chave)
+─────────────────────────────────────────────────────────────
+👤 USUÁRIO: Entendi, quero continuar  ← Palavra-chave de retomada
 
 🤖 BOT: ✅ Certo! Vamos continuar com seu agendamento. Onde paramos?
        
        Para continuarmos, qual especialidade você deseja consultar?
        
-       [Estado: collecting_info]
+       [Estado: selecting_specialty]
        [Previous State: None]
        [Intent: resume_appointment]
        [Sessão: previous_state=None]
@@ -391,7 +405,7 @@ Usuário tenta confirmar agendamento sem todas as informações. Sistema solicit
 
 🤖 BOT: Perfeito, João Silva! Para continuarmos, qual especialidade você deseja consultar?
        
-       [Estado: collecting_info]
+       [Estado: selecting_specialty]
 
 ─────────────────────────────────────────────────────────────
 
@@ -401,7 +415,7 @@ Usuário tenta confirmar agendamento sem todas as informações. Sistema solicit
        
        Qual especialidade médica você procura?
        
-       [Estado: collecting_info]
+       [Estado: selecting_specialty]
        [Intent: confirmar_agendamento]
        [Validação: Faltam especialidade, médico, data, horário]
        [Handoff NÃO gerado ❌]
@@ -508,11 +522,10 @@ Usuário menciona especialidade que não existe na clínica. Sistema informa e l
        • Medicina do Sono
        • Pneumologia
        • Endocrinologia
-       • Cardiologia
        
        Qual dessas especialidades você gostaria de consultar?
        
-       [Estado: collecting_info]
+       [Estado: selecting_specialty]
        [Intent: agendar_consulta]
        [Validação: Especialidade não encontrada]
        [Lista especialidades disponíveis]
@@ -527,59 +540,208 @@ Usuário menciona especialidade que não existe na clínica. Sistema informa e l
 
 ---
 
-## 🎯 Cenário 8: Múltiplas Dúvidas Durante Agendamento
+## 🎯 Cenário 8: Múltiplas Dúvidas Durante Agendamento (com Retomada Automática)
 
 ### **Descrição**
-Usuário faz várias perguntas durante o agendamento. Sistema pausa, responde todas e permite retomar.
+Usuário faz várias perguntas durante o agendamento. Sistema pausa, responde todas e **retoma automaticamente** quando o usuário fornece informações de agendamento, sem necessidade de dizer "continuar" a cada etapa.
 
 ### **Conversa Completa**
 
 ```
-[... agendamento em andamento, estado: selecting_doctor ...]
+[... agendamento em andamento, estado: selecting_specialty ...]
 
-👤 USUÁRIO: Quanto custa uma consulta?
+👤 USUÁRIO: você aceitam convenio do bradesco?
 
-🤖 BOT: O valor da consulta particular é R$ 150,00.
+🤖 BOT: Sim, aceitamos o convênio Bradesco.
+       
+       Para qual especialidade você gostaria de agendar? Temos disponíveis:
+       • Endocrinologia
+       • Medicina do Sono
+       • Pneumologia
        
        [Estado: answering_questions]
-       [Previous State: selecting_doctor]
-       [Nota: Sistema pausa silenciosamente - usuário precisa saber que pode usar "continuar"]
+       [Previous State: selecting_specialty]
+       [Nota: Sistema pausa silenciosamente para responder dúvida]
 
 ─────────────────────────────────────────────────────────────
 
-👤 USUÁRIO: E vocês aceitam Unimed?
+👤 USUÁRIO: qual a localização da clinica?
 
-🤖 BOT: Sim! Aceitamos Unimed e outros convênios.
+🤖 BOT: A Clínica PneumoSono está localizada na Rua Miguel Calmon, 225 - Centro, Itabuna/BA.
+       
+       Para qual especialidade você gostaria de agendar sua consulta? Temos:
+       • Endocrinologia
+       • Medicina do Sono
+       • Pneumologia
        
        [Estado: answering_questions]
+       [Nota: Continua respondendo dúvidas - sem entidades de agendamento]
 
 ─────────────────────────────────────────────────────────────
 
-👤 USUÁRIO: Qual o horário de funcionamento?
+👤 USUÁRIO: pneumologia  ← FORNECEU ESPECIALIDADE (entidade de agendamento)
 
-🤖 BOT: Nosso horário de funcionamento é de segunda a sexta, das 8h às 18h.
+🤖 BOT: Com a especialidade de Pneumologia escolhida, temos o Dr. Gustavo Magno disponível para consulta.
+       Com qual desses médicos você gostaria de agendar?
        
-       [Estado: answering_questions]
-
-─────────────────────────────────────────────────────────────
-
-👤 USUÁRIO: Continuar
-
-🤖 BOT: ✅ Certo! Vamos continuar com seu agendamento. Onde paramos?
-       
-       Com qual médico você gostaria de agendar?
-       
-       [Estado: selecting_doctor]
+       [Estado: selecting_doctor] ← RETOMADO AUTOMATICAMENTE! ✅
        [Previous State: None]
-       [Agendamento retomado ✅]
+       [Nota: Sistema detectou entidade "especialidade" e retomou automaticamente]
+
+─────────────────────────────────────────────────────────────
+
+👤 USUÁRIO: dr gustavo  ← FORNECEU MÉDICO (entidade de agendamento)
+
+🤖 BOT: Com o Dr. Gustavo Magno selecionado, em qual data e horário você gostaria de agendar sua consulta? 🗓️⏰
+       
+       [Estado: choosing_schedule] ← AVANÇOU AUTOMATICAMENTE! ✅
+       [Nota: Sistema detectou entidade "médico" e avançou automaticamente]
+
+─────────────────────────────────────────────────────────────
+
+👤 USUÁRIO: 24/11 as 08:00  ← FORNECEU DATA E HORÁRIO (entidades de agendamento)
+
+🤖 BOT: Para confirmar, o agendamento seria para 24 de novembro de 2025 às 08:00 com Dr. Gustavo Magno...
+       
+       [Estado: choosing_schedule → confirming] ← AVANÇOU AUTOMATICAMENTE! ✅
+       [Nota: Sistema detectou entidades "data" e "horário" e avançou automaticamente]
 
 ```
 
 ### **Validações do Cenário**
 - ✅ Sistema permite múltiplas dúvidas durante pausa
-- ✅ Mantém estado anterior salvo
-- ✅ Retoma corretamente após "continuar"
+- ✅ Mantém estado anterior salvo em `previous_state`
+- ✅ **Retoma automaticamente quando usuário fornece informações de agendamento** (especialidade, médico, data, horário)
+- ✅ **Fluxo fluido e natural**, sem necessidade de dizer "continuar" a cada etapa
 - ✅ Preserva informações já coletadas
+- ✅ Funciona mesmo quando a intenção é `buscar_info` ou `duvida` mas há entidades de agendamento
+
+---
+
+## 🎯 Cenário 9: Consulta de Preço e Mudança de Especialidade
+
+### **Descrição**
+Usuário pergunta sobre preço de uma especialidade (Endocrinologia), mas depois escolhe outra especialidade (Pneumologia) e completa o agendamento. Demonstra a flexibilidade do sistema em lidar com mudanças de escolha e coleta de informações fora da ordem tradicional.
+
+### **Conversa Completa**
+
+```
+👤 USUÁRIO: boa tarde, gostaria de saber quanto custa a consulta com o endocrinologista?
+
+🤖 BOT: O valor da consulta com o Dr. Gleyton Porto, especialista em Endocrinologia, é de R$ 300,00.
+
+Com qual desses médicos você gostaria de agendar?
+• Dr. Gleyton Porto (Endocrinologia)
+
+       [Estado: idle → selecting_doctor]
+       [Intent: buscar_info]
+       [Entidades: especialidade="Endocrinologia"]
+       [Sessão: selected_specialty="Endocrinologia"]
+       [Nota: Sistema extraiu especialidade da pergunta e já salvou na sessão]
+
+─────────────────────────────────────────────────────────────
+
+👤 USUÁRIO: gostaria de uma consulta pneumologica
+
+🤖 BOT: Com qual desses médicos você gostaria de agendar?
+
+*   **Dr. Gustavo Magno** (Medicina do Sono, Pneumologia) - Consulta particular: R$ 350,00
+
+       [Estado: selecting_doctor]
+       [Intent: agendar_consulta]
+       [Entidades: especialidade="Pneumologia"]
+       [Sessão: selected_specialty="Pneumologia"]
+       [Nota: Sistema substituiu especialidade anterior pela nova escolha]
+
+─────────────────────────────────────────────────────────────
+
+👤 USUÁRIO: dr gustavo
+
+🤖 BOT: Para agendar sua consulta com o Dr. Gustavo Magno, qual seria a sua data e horário de preferência?
+
+       [Estado: selecting_doctor → choosing_schedule]
+       [Intent: agendar_consulta]
+       [Entidades: medico="Dr. Gustavo Magno", especialidade="Pneumologia"]
+       [Sessão: selected_doctor="Dr. Gustavo Magno", selected_specialty="Pneumologia"]
+
+─────────────────────────────────────────────────────────────
+
+👤 USUÁRIO: segunda as 09
+
+🤖 BOT: Para confirmar, o agendamento seria para 24 de novembro de 2025 às 09:00 com Dr. Gustavo Magno, especialista em Pneumologia. Tudo certo?
+
+       [Estado: choosing_schedule]
+       [Intent: agendar_consulta]
+       [Entidades: data="segunda", horario="09:00"]
+       [Sessão: preferred_date="2025-11-24", preferred_time="09:00:00"]
+       [Validação: Horário 09:00 disponível ✅]
+
+─────────────────────────────────────────────────────────────
+
+👤 USUÁRIO: sim
+
+🤖 BOT: Para agendarmos sua consulta com o Dr. Gustavo Magno na especialidade de Pneumologia para o dia 24 de novembro de 2025 às 09:00, preciso do seu nome completo, por favor.
+
+       [Estado: choosing_schedule → collecting_patient_info]
+       [Intent: confirmar_agendamento]
+       [Validação: Faltam informações - patient_name]
+       [Nota: Sistema detectou que falta nome e solicita antes de gerar handoff]
+
+─────────────────────────────────────────────────────────────
+
+👤 USUÁRIO: joao da silva
+
+🤖 BOT: Entendi. Confirma se seu nome completo é Joao Da Silva? Se estiver correto, responda com 'sim'. Caso contrário, digite novamente seu nome completo.
+
+       [Estado: collecting_patient_info → confirming_name]
+       [Intent: confirmar_agendamento]
+       [Entidades: nome_paciente="Joao Da Silva"]
+       [Sessão: pending_name="Joao Da Silva"]
+
+─────────────────────────────────────────────────────────────
+
+👤 USUÁRIO: sim
+
+🤖 BOT: ✅ *Perfeito! Vamos confirmar seu pré-agendamento:*
+
+📋 *RESUMO:*
+👤 Paciente: Joao Da Silva
+👨‍⚕️ Médico: Dr. Gustavo Magno
+🧠 Especialidade: Pneumologia
+📅 Data: 2025-11-24
+🕐 Horário: 09:00:00
+
+*📞 Clique no link abaixo para falar diretamente com nossa equipe:*
+https://api.whatsapp.com/send?phone=5573988221003&text=Agendamento%20via%20Chatbot%3A%0APaciente%3A%20Joao%20Da%20Silva%0AM%C3%A9dico%3A%20Gustavo%20Magno%0AEspecialidade%3A%20Pneumologia%0AData/Hor%C3%A1rio%3A%202025-11-24%20%C3%A0s%2009%3A00%3A00
+
+       [Estado: confirming_name → confirming]
+       [Intent: confirmar_agendamento]
+       [Sessão: patient_name="Joao Da Silva", name_confirmed=True]
+       [Handoff gerado ✅]
+       [Validação: Todas as informações completas - handoff gerado com sucesso]
+
+```
+
+### **Validações do Cenário**
+- ✅ Sistema responde pergunta sobre preço corretamente
+- ✅ Extrai especialidade da pergunta sobre preço e salva na sessão
+- ✅ Permite mudança de especialidade (Endocrinologia → Pneumologia)
+- ✅ Substitui especialidade anterior pela nova escolha
+- ✅ Coleta informações fora da ordem tradicional (especialidade/médico/data/horário antes do nome)
+- ✅ Valida informações antes de gerar handoff
+- ✅ Solicita nome quando falta, mesmo após confirmar agendamento
+- ✅ Confirma nome antes de gerar handoff final
+- ✅ Handoff gerado com todas as informações corretas
+- ✅ Estados transicionam corretamente: idle → selecting_doctor → choosing_schedule → collecting_patient_info → confirming_name → confirming
+
+### **Pontos de Destaque**
+1. **Flexibilidade na Ordem de Coleta**: O sistema permite que o usuário forneça informações em ordem diferente da tradicional (especialidade/médico/data/horário antes do nome).
+
+2. **Mudança de Escolha**: Sistema lida naturalmente com mudança de especialidade, substituindo a anterior pela nova escolha.
+
+3. **Validação Inteligente**: Mesmo após o usuário confirmar o agendamento, o sistema detecta que falta o nome e solicita antes de gerar o handoff.
+
+4. **Extração de Entidades em Perguntas**: Sistema extrai especialidade mesmo quando o usuário apenas pergunta sobre preço, demonstrando capacidade de entender contexto.
 
 ---
 
@@ -587,14 +749,15 @@ Usuário faz várias perguntas durante o agendamento. Sistema pausa, responde to
 
 | Cenário | Estados Envolvidos | Funcionalidades Testadas |
 |---------|-------------------|-------------------------|
-| 1. Agendamento Completo | idle → collecting_patient_info → confirming_name → collecting_info → selecting_doctor → choosing_schedule → confirming | Fluxo completo, handoff |
-| 2. Pausar para Dúvidas | collecting_info → answering_questions → collecting_info | Pausar, retomar |
+| 1. Agendamento Completo | idle → collecting_patient_info → confirming_name → selecting_specialty → selecting_doctor → choosing_schedule → confirming | Fluxo completo, handoff |
+| 2. Pausar para Dúvidas | selecting_specialty → answering_questions → selecting_specialty | Pausar, retomar |
 | 3. Apenas Dúvidas | idle → answering_questions → idle | Resposta direta, sem agendamento |
 | 4. Confirmação Duplicada | confirming → confirming | Prevenção handoff duplicado |
-| 5. Informações Faltantes | collecting_info → selecting_doctor | Validação, solicitação sequencial |
+| 5. Informações Faltantes | selecting_specialty → selecting_doctor | Validação, solicitação sequencial |
 | 6. Confirmação por Pronome | selecting_doctor → choosing_schedule | Resolução de pronome |
-| 7. Especialidade Inválida | collecting_info | Validação especialidade |
+| 7. Especialidade Inválida | selecting_specialty | Validação especialidade |
 | 8. Múltiplas Dúvidas | selecting_doctor → answering_questions → selecting_doctor | Múltiplas pausas |
+| 9. Consulta de Preço e Mudança de Especialidade | idle → selecting_doctor → choosing_schedule → collecting_patient_info → confirming_name → confirming | Mudança de escolha, coleta fora de ordem, validação inteligente |
 
 ---
 
@@ -614,6 +777,6 @@ Para cada cenário, validar:
 
 ---
 
-**Última Atualização:** Janeiro 2025  
-**Versão:** 1.0
+**Última Atualização:** Novembro 2025  
+**Versão:** 1.1
 

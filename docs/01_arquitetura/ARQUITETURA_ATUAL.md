@@ -329,7 +329,6 @@ SessionManager → Conversation Service → WhatsApp Service → Paciente
 STATES = [
     'idle',                    # Ocioso
     'collecting_patient_info', # Coletando dados do paciente
-    'collecting_info',         # Coletando informações
     'answering_questions',     # Respondendo dúvidas do paciente
     'confirming_name',         # Confirmando nome
     'selecting_specialty',     # Selecionando especialidade médica

@@ -117,6 +117,21 @@ class ConversationService:
     def _update_session_state(self, session: ConversationSession, intent: str, entities: Dict):
         """
         Atualiza estado da sessão baseado na intenção
+        
+        INTENÇÕES PRINCIPAIS (definidas no IntentDetector):
+        1. saudacao - Cumprimentos iniciais
+        2. buscar_info - Perguntas sobre a clínica (apenas dúvidas)
+        3. agendar_consulta - Solicitar agendamento
+        4. confirmar_agendamento - Confirmar dados do agendamento
+        5. duvida - Não compreendeu, pedir ajuda
+        
+        INTENÇÕES INTERNAS (usadas no core_service.py):
+        - retomar_agendamento - Retomar agendamento pausado
+        - selecionar_especialidade - Selecionar especialidade
+        - confirmar_nome - Confirmar nome do paciente
+        - solicitar_data_numerica - Solicitar data em formato numérico
+        - informar_horario_indisponivel - Informar que horário está indisponível
+        - error - Erro no processamento
         """
         if not intent:
             return
@@ -125,16 +140,36 @@ class ConversationService:
         intent_to_state = {
             'saudacao': 'collecting_patient_info',
             'buscar_info': 'answering_questions',  # Apenas para tirar dúvidas
-            'agendar_consulta': 'choosing_schedule',  # Inclui seleção de médico/especialidade
+            'duvida': 'answering_questions',
             'confirmar_agendamento': 'confirming',
-            'duvida': 'answering_questions'
         }
         
-        # Se o intent existir no dicionário: retorna o valor correspondente (o estado)
-        # Ex: intent_to_state.get('saudacao') → retorna 'collecting_patient_info'
-        # Se o intent não existir no dicionário: retorna None
-        # Ex: intent_to_state.get('buscar_exame') → retorna None
-        new_state = intent_to_state.get(intent)
+        # Para agendar_consulta, determinar o estado baseado nas informações já coletadas
+        # ORDEM OBRIGATÓRIA: nome → especialidade → médico → data/horário
+        if intent == 'agendar_consulta':
+            # Verificar o que falta para determinar o próximo estado
+            missing_info_result = self.get_missing_appointment_info(session.phone_number)
+            missing_info = missing_info_result.get('missing_info', [])
+            
+            # Determinar próximo estado baseado na ordem obrigatória
+            if 'patient_name' in missing_info:
+                # Se não tem nome, pode estar coletando ou confirmando
+                if session.pending_name:
+                    new_state = 'confirming_name'
+                else:
+                    new_state = 'collecting_patient_info'
+            elif 'selected_specialty' in missing_info:
+                new_state = 'selecting_specialty'
+            elif 'selected_doctor' in missing_info:
+                new_state = 'selecting_doctor'
+            elif 'preferred_date' in missing_info or 'preferred_time' in missing_info:
+                new_state = 'choosing_schedule'
+            else:
+                # Todas as informações coletadas, pode ir para confirmação
+                new_state = 'choosing_schedule'  # Mantém escolhendo horário até confirmar
+        else:
+            # Para outras intenções, usar mapeamento direto
+            new_state = intent_to_state.get(intent)
         
         # Verifica se o novo estado é diferente do estado atual da sessão. Se for, atualiza o estado da sessão.
         if new_state and new_state != session.current_state:

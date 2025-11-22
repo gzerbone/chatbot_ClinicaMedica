@@ -107,7 +107,6 @@ WhatsApp → WhatsAppService → GeminiChatbotService
 
 - `idle`
 - `collecting_patient_info`
-- `collecting_info`
 - `answering_questions`
 - `confirming_name`
 - `selecting_specialty`

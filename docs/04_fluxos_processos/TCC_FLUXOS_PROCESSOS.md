@@ -97,10 +97,6 @@ O sistema implementa **9 estados principais**, cada um com um propósito especí
 │     • Usuário tem dúvida durante processo                       │
 │     • Sistema salva contexto para retomar depois               │
 │                                                                  │
-│  9. collecting_info (Coletando Informações)                     │
-│     • Estado genérico para informações adicionais               │
-│     • Usado em casos específicos                                │
-│                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -208,7 +204,6 @@ class ConversationSession(models.Model):
         choices=[
             ('idle', 'Ocioso'),
             ('collecting_patient_info', 'Coletando Dados do Paciente'),
-            ('collecting_info', 'Coletando Informações'),
             ('answering_questions', 'Respondendo Dúvidas'),
             ('confirming_name', 'Confirmando Nome do Paciente'),
             ('selecting_specialty', 'Selecionando Especialidade'),
@@ -432,7 +427,7 @@ def validate_appointment_completeness(session: ConversationSession) -> Dict:
         first_missing = missing_fields[0]
         next_action, next_state = priority_map.get(
             first_missing,
-            ('ask_general', 'collecting_info')
+            ('ask_general', 'selecting_specialty')
         )
         
         return {
@@ -482,10 +477,19 @@ O **sistema de pausar/retomar** permite que o bot responda essas dúvidas **sem 
 │     • pause_for_question(phone_number)                          │
 │     • resume_appointment(phone_number)                          │
 │     • has_paused_appointment(phone_number)                      │
+│     • is_in_question_mode(phone_number)                         │
 │                                                                  │
-│  4. Detecção de Palavras-chave de Retomada                      │
+│  4. Retomada Automática Inteligente                              │
+│     • Detecta entidades de agendamento (especialidade, médico, │
+│       data, horário)                                             │
+│     • Retoma automaticamente quando usuário fornece informações │
+│     • Funciona mesmo com intent buscar_info ou duvida           │
+│     • Fluxo natural e fluido, sem palavras-chave                │
+│                                                                  │
+│  5. Retomada Manual (Palavras-chave)                            │
 │     • "continuar", "retomar", "voltar"                          │
 │     • "prosseguir", "seguir", "agendamento"                     │
+│     • Usado quando usuário não fornece informações              │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -532,10 +536,66 @@ def pause_for_question(phone_number: str) -> bool:
 
 ### 4.4. Fluxo de Retomada
 
+O sistema possui **duas formas de retomada**: automática (inteligente) e manual (palavras-chave).
+
+#### 4.4.1. Retomada Automática (Inteligente)
+
+**Arquivo:** `api_gateway/services/gemini/core_service.py` (linhas 843-879)
+
+O sistema detecta automaticamente quando o usuário fornece informações de agendamento durante `answering_questions` e retoma o fluxo automaticamente, mesmo que a intenção seja `buscar_info` ou `duvida`.
+
+```python
+# Retomada automática após geração da resposta
+if session.get('current_state') == 'answering_questions' and session.get('previous_state'):
+    entities = analysis_result.get('entities', {})
+    
+    # Verificar se há entidades NOVAS de agendamento sendo fornecidas
+    has_new_appointment_entities = any([
+        entities.get('medico') and entities.get('medico') != session.get('selected_doctor'),
+        entities.get('especialidade') and entities.get('especialidade') != session.get('selected_specialty'),
+        entities.get('data'),
+        entities.get('horario')
+    ])
+    
+    intent = analysis_result.get('intent', '')
+    
+    # LÓGICA DE RETOMADA:
+    # 1. Se há entidades NOVAS de agendamento, retomar SEMPRE
+    #    (mesmo que a intenção seja buscar_info ou duvida)
+    # 2. Se a intenção é explicitamente de agendamento, retomar
+    # 3. NÃO retomar se é apenas uma pergunta sem entidades
+    should_resume = False
+    
+    if has_new_appointment_entities:
+        # Retomar independente da intenção
+        should_resume = True
+    elif intent in ['agendar_consulta', 'confirmar_agendamento', 'selecionar_especialidade', 'confirming_name']:
+        should_resume = True
+    
+    if should_resume:
+        restored_state = session.get('previous_state')
+        session['current_state'] = restored_state
+        session['previous_state'] = None
+        # Atualizar no banco também
+        db_session = conversation_service.get_or_create_session(phone_number)
+        db_session.current_state = restored_state
+        db_session.previous_state = None
+        db_session.save()
+        logger.info(f"🔄 Retomada automática: answering_questions → {restored_state}")
+```
+
+**Comportamento:**
+- ✅ Retoma automaticamente quando detecta entidades de agendamento (especialidade, médico, data, horário)
+- ✅ Funciona mesmo com intent `buscar_info` ou `duvida` (usuário está fornecendo informações)
+- ✅ A retomada acontece **DEPOIS** da geração da resposta (dúvidas são respondidas primeiro)
+- ✅ Fluxo natural e fluido, sem necessidade de palavras-chave
+
+#### 4.4.2. Retomada Manual (Palavras-chave)
+
 ```python
 def resume_appointment(phone_number: str) -> Dict:
     """
-    Retoma o agendamento após responder dúvidas
+    Retoma o agendamento após responder dúvidas (retomada manual)
     
     Exemplo de uso:
         Estado atual: answering_questions (previous_state = "selecting_doctor")
@@ -582,6 +642,9 @@ def resume_appointment(phone_number: str) -> Dict:
             'message': 'Ocorreu um erro ao retomar o agendamento.'
         }
 ```
+
+**Palavras-chave reconhecidas:**
+- "continuar", "retomar", "voltar", "prosseguir", "seguir", "agendamento"
 
 ### 4.5. Exemplo Completo de Uso
 
@@ -638,7 +701,27 @@ USUÁRIO PODE FAZER MAIS PERGUNTAS:
       Tem mais alguma dúvida?
       """
 
-RETOMADA DO AGENDAMENTO:
+RETOMADA DO AGENDAMENTO (2 FORMAS):
+─────────────────────────────────────────────────────────────────
+
+OPÇÃO 1: RETOMADA AUTOMÁTICA (Recomendada)
+─────────────────────────────────────────────────────────────────
+👤 Usuário: "Pneumologia"  ← Forneceu especialidade (entidade de agendamento)
+
+🤖 Sistema:
+   │
+   ├─ Detecta: Entidade "especialidade" = "Pneumologia"
+   ├─ Verifica: has_new_appointment_entities = True
+   ├─ Ação: Retomada automática
+   │  ├─ current_state = "selecting_doctor"  ✅ RESTAURADO AUTOMATICAMENTE
+   │  └─ previous_state = None
+   ├─ Processa: Especialidade atualizada na sessão
+   └─ Resposta: """
+      Com a especialidade de Pneumologia escolhida, temos o Dr. Gustavo Magno...
+      [Continua naturalmente o fluxo]
+      """
+
+OPÇÃO 2: RETOMADA MANUAL (Palavras-chave)
 ─────────────────────────────────────────────────────────────────
 👤 Usuário: "Não, pode continuar"
 

@@ -639,7 +639,6 @@ O sistema mantém um **estado** para cada conversa, controlando em que etapa do 
 | **choosing_schedule** | Escolhendo data e horário | Confirmar agendamento |
 | **confirming** | Confirmando dados finais | Gerar handoff |
 | **answering_questions** | Respondendo dúvidas | Retomar ou continuar |
-| **collecting_info** | Fornecendo informações | Próxima ação |
 
 ### 🔄 Sistema de Pausa/Retomada
 

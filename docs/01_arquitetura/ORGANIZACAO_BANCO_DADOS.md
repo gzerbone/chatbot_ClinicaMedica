@@ -72,7 +72,6 @@ Armazena o estado da conversa de cada paciente.
   └─ Opções:
       • idle: Ocioso (estado inicial)
       • collecting_patient_info: Coletando dados do paciente
-      • collecting_info: Coletando informações gerais
       • answering_questions: Respondendo dúvidas do paciente
       • confirming_name: Confirmando nome do paciente
       • selecting_specialty: Selecionando especialidade médica

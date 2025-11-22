@@ -178,7 +178,6 @@ IMPORTANTE - DISTINÇÃO ENTRE DÚVIDAS E AGENDAMENTO:
    - selecting_doctor: Escolhendo médico
    - choosing_schedule: Escolhendo data/horário
    - confirming: Confirmando dados finais do agendamento
-   - collecting_info: Fornecendo informações solicitadas
    - answering_questions: Respondendo dúvidas do paciente
 
 3. CONFIANÇA: Nível de confiança na análise (0.0 a 1.0)
@@ -215,7 +214,7 @@ Responda APENAS com um JSON válido no formato:
             # CORREÇÃO: Não permitir que o Gemini defina estado 'confirming'
             # Este estado deve ser definido apenas pelo core_service quando o handoff for gerado
             if analysis['next_state'] == 'confirming':
-                analysis['next_state'] = 'collecting_info'
+                analysis['next_state'] = 'choosing_schedule'
             
             # Garantir que confidence existe
             if 'confidence' not in analysis:

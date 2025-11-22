@@ -143,9 +143,9 @@ Atualizar e profissionalizar a documentação dos diretórios `08_agent_router` 
 - Notação: <<component>>, <<service>>, <<external>>
 - Inclui: Tabela de comunicação entre componentes
 
-**✅ Diagrama 7: Sistema de Fallback**
+**✅ Diagrama 7: Tratamento de Erros**
 - Tipo: UML Activity Diagram
-- Mostra: 6 níveis de fallback
+- Mostra: Fluxo de tratamento de erros e exceções
 - Notação: UML Activity (●, ╔╗, decisões)
 - Inclui: Matriz de recuperação de falhas
 
@@ -307,7 +307,7 @@ Atualizar e profissionalizar a documentação dos diretórios `08_agent_router` 
 4. ✅ **Ciclo de Vida de uma Mensagem** (Timing Diagram)
 5. ✅ **Máquina de Estados Completa** (State Machine)
 6. ✅ **Arquitetura em Camadas** (Component Diagram) - NOVO
-7. ✅ **Sistema de Fallback** (Activity Diagram) - NOVO
+7. ✅ **Tratamento de Erros** (Activity Diagram) - NOVO
 8. ✅ **Integração de Serviços** (Component & Connector) - NOVO
 9. ✅ **Fluxo de Agendamento Completo** (Activity + Sequence) - NOVO
 10. ✅ **Pipeline de Processamento** (Pipeline + Deployment) - NOVO
@@ -705,5 +705,6 @@ A documentação foi **completamente atualizada e profissionalizada** para uso e
 **Responsável**: Assistente IA  
 **Revisão**: Pendente (validar com orientador)  
 **Status**: ✅ **COMPLETO E PRONTO PARA USO**
+
 
 

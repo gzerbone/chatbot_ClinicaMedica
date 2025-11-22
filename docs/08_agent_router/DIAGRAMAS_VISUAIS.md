@@ -1128,7 +1128,7 @@ PADRÕES DE INTEGRAÇÃO:
        │                   ┌────▼─────────────┐               │
        │                   │ Estado: idle     │               │
        │                   │      ↓           │               │
-       │                   │ collecting_info  │               │
+       │                   │ selecting_specialty│             │
        │                   └────┬─────────────┘               │
        │                        │                              │
        │  "Qual seu nome?"      │                              │
@@ -1836,21 +1836,19 @@ choosing_schedule → Consultar Google Calendar → Listar horários reais → A
 NÃO aceita data/horário se especialidade OU médico não estão selecionados
 ```
 
-### Diferença entre `answering_questions` e `collecting_info`
+### Sistema de Pausa/Retomada com `answering_questions`
 
-**Problema Resolvido:** Clarificação da diferença entre estados de pausa e coleta ativa.
+**Problema Resolvido:** Clarificação do estado de pausa para responder dúvidas.
 
 **Melhorias:**
 - ✅ `answering_questions`: Estado de PAUSA (salva `previous_state`)
-- ✅ `collecting_info`: Estado ATIVO (continua fluxo normalmente)
 - ✅ Retomada automática quando usuário fornece informações de agendamento
 - ✅ Mensagem "Para voltar..." apenas quando realmente pausado
 
-**Diferença:**
+**Características:**
 | Estado | Tipo | Quando Usar | Retomada |
 |--------|------|-------------|----------|
 | `answering_questions` | PAUSA | Usuário faz pergunta durante agendamento | Manual ("continuar") ou automática (fornece info) |
-| `collecting_info` | ATIVO | Coletando informações faltantes | Automática (continua fluxo) |
 
 ### Prevenção de Repetição de Listas
 
@@ -1915,7 +1913,7 @@ Para mais detalhes, consulte:
 - ✅ Adicionada seção de Melhorias Recentes
 - ✅ Atualizada Máquina de Estados com validações de data/horário
 - ✅ Atualizado Fluxo de Agendamento com validações imediatas
-- ✅ Clarificada diferença entre `answering_questions` e `collecting_info`
+- ✅ Clarificado sistema de pausa/retomada com `answering_questions`
 - ✅ Adicionada ordem obrigatória de coleta de informações
 - ✅ Documentada listagem de horários reais do Google Calendar
 

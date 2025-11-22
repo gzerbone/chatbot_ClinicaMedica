@@ -945,7 +945,7 @@ Mensagem → WhatsApp API → Django View → Agent Router (CoreService)
 2. **Processamento Assíncrono**: Webhooks processados em background
 3. **Modularização**: Facilita manutenção e escalabilidade
 4. **Gestão Inteligente de Tokens**: Otimiza uso da API do Gemini
-5. **Sistema de Fallback**: Garante respostas mesmo em caso de falha
+5. **Tratamento de Erros**: Sistema robusto de logging e mensagens genéricas em caso de falha
 
 ---
 
