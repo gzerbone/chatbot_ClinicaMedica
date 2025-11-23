@@ -461,10 +461,7 @@ WhatsApp → WhatsAppService → GeminiChatbotService
 - `buscar_info`
 - `agendar_consulta`
 - `confirmar_agendamento`
-- `buscar_medico`
-- `buscar_exame`
 - `buscar_horarios`
-- `despedida`
 - `duvida`
 
 ## Estados da Conversa Persistidos

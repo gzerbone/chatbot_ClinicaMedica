@@ -344,25 +344,32 @@ class SessionManager:
             # 3. Se tem ambos, deve estar em choosing_schedule
             # ═══════════════════════════════════════════════════════════════════════════════
             
+            has_name = bool(session.get('patient_name'))
             has_doctor = bool(session.get('selected_doctor'))
             has_specialty = bool(session.get('selected_specialty'))
             
-            if has_doctor and not has_specialty:
-                # Tem médico mas falta especialidade - deve perguntar especialidade
-                if session.get('current_state') != 'selecting_specialty':
-                    session['current_state'] = 'selecting_specialty'
-                    logger.info(f"🔄 Estado corrigido: {session.get('current_state')} → selecting_specialty (tem médico mas falta especialidade)")
-            elif has_specialty and not has_doctor:
-                # Tem especialidade mas falta médico - deve perguntar médico
-                if session.get('current_state') != 'selecting_doctor':
-                    session['current_state'] = 'selecting_doctor'
-                    logger.info(f"🔄 Estado corrigido: {session.get('current_state')} → selecting_doctor (tem especialidade mas falta médico)")
-            elif has_doctor and has_specialty:
-                # Tem ambos - pode perguntar data/horário
-                if session.get('current_state') in ['selecting_doctor', 'selecting_specialty']:
-                    session['current_state'] = 'choosing_schedule'
-                    logger.info(f"🔄 Estado avançado automaticamente: {session.get('current_state')} → choosing_schedule (médico e especialidade já selecionados)")
-            
+            # Se não tem nome, mas tem medico e especialidade, deve estar em collecting_patient_info
+            if not has_name:
+                if session.get('current_state') != 'collecting_patient_info':
+                    session['current_state'] = 'collecting_patient_info'
+                    logger.info(f"🔄 Estado corrigido: {session.get('current_state')} → collecting_patient_info (não tem nome)")
+            else:
+                if has_doctor and not has_specialty:
+                    # Tem médico mas falta especialidade - deve perguntar especialidade
+                    if session.get('current_state') != 'selecting_specialty':
+                        session['current_state'] = 'selecting_specialty'
+                        logger.info(f"🔄 Estado corrigido: {session.get('current_state')} → selecting_specialty (tem médico mas falta especialidade)")
+                elif has_specialty and not has_doctor:
+                    # Tem especialidade mas falta médico - deve perguntar médico
+                    if session.get('current_state') != 'selecting_doctor':
+                        session['current_state'] = 'selecting_doctor'
+                        logger.info(f"🔄 Estado corrigido: {session.get('current_state')} → selecting_doctor (tem especialidade mas falta médico)")
+                elif has_doctor and has_specialty:
+                    # Tem ambos - pode perguntar data/horário
+                    if session.get('current_state') in ['selecting_doctor', 'selecting_specialty']:
+                        session['current_state'] = 'choosing_schedule'
+                        logger.info(f"🔄 Estado avançado automaticamente: {session.get('current_state')} → choosing_schedule (médico e especialidade já selecionados)")
+                
             # ═══════════════════════════════════════════════════════════════════════════════
             # NOTA IMPORTANTE: ESTADO 'confirming' NÃO É DEFINIDO AQUI
             # ═══════════════════════════════════════════════════════════════════════════════
