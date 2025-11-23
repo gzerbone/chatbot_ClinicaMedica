@@ -1081,7 +1081,6 @@ Nossa secretaria entrará em contato em breve para finalizar seu agendamento."""
                 extracted_name = entities['nome_paciente'].strip()
             else:
                 # Se entity_extractor não extraiu, pedir nome novamente
-                # (EntityExtractor já tentou Gemini + regex interno)
                 logger.warning("⚠️ Nome não extraído - solicitando novamente")
                 analysis_result['intent'] = 'confirmar_nome'
                 analysis_result['next_state'] = 'collecting_patient_info'

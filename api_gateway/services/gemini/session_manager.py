@@ -324,7 +324,8 @@ class SessionManager:
             # ═══════════════════════════════════════════════════════════════════════════════
             # LOG DO STATUS DAS INFORMAÇÕES COLETADAS
             # ═══════════════════════════════════════════════════════════════════════════════
-            # Mostra quais informações já foram coletadas para facilitar debug
+            # Registra no log quais informações já foram coletadas na sessão atual.
+            # Isso facilita o debug e permite verificar o progresso do agendamento.
             # ═══════════════════════════════════════════════════════════════════════════════
             
             info_status = {
@@ -337,53 +338,66 @@ class SessionManager:
             logger.info(f"📋 Status das informações: {info_status}")
             
             # ═══════════════════════════════════════════════════════════════════════════════
-            # CORREÇÃO DO ESTADO: Ajustar estado baseado nas informações coletadas
+            # CORREÇÃO AUTOMÁTICA DO ESTADO DA SESSÃO
             # ═══════════════════════════════════════════════════════════════════════════════
-            # 1. Se tem médico mas NÃO tem especialidade, deve estar em selecting_specialty
-            # 2. Se tem especialidade mas NÃO tem médico, deve estar em selecting_doctor
-            # 3. Se tem ambos, deve estar em choosing_schedule
+            # Este bloco garante que o estado da sessão sempre reflita corretamente o que
+            # falta coletar, mesmo quando o usuário fornece informações fora de ordem.
+            #
+            # REGRAS DE CORREÇÃO (ordem de prioridade):
+            # 1. NOME É OBRIGATÓRIO PRIMEIRO: Se não tem nome confirmado, o estado deve
+            #    ser 'collecting_patient_info', independente de outras informações coletadas.
+            #    Isso garante que o sistema sempre peça o nome antes de continuar.
+            #
+            # 2. ORDEM APÓS NOME CONFIRMADO:
+            #    - Se tem médico mas NÃO tem especialidade → 'selecting_specialty'
+            #      (caso: usuário mencionou médico antes da especialidade)
+            #    - Se tem especialidade mas NÃO tem médico → 'selecting_doctor'
+            #      (caso normal: especialidade primeiro, depois médico)
+            #    - Se tem ambos (médico E especialidade) → 'choosing_schedule'
+            #      (pode avançar para escolher data/horário)
+            #
+            # IMPORTANTE: Esta correção é necessária porque o usuário pode fornecer
+            # informações em qualquer ordem (ex: "Quero agendar com Dr. João" antes de
+            # informar o nome). O sistema salva essas informações, mas garante que o
+            # estado reflita corretamente o próximo passo necessário.
             # ═══════════════════════════════════════════════════════════════════════════════
             
             has_name = bool(session.get('patient_name'))
             has_doctor = bool(session.get('selected_doctor'))
             has_specialty = bool(session.get('selected_specialty'))
             
-            # Se não tem nome, mas tem medico e especialidade, deve estar em collecting_patient_info
+            # PRIORIDADE 1: Nome é obrigatório primeiro
+            # Se não tem nome confirmado, o estado DEVE ser 'collecting_patient_info',
+            # mesmo que médico ou especialidade já tenham sido fornecidos.
+            # Isso garante que o sistema sempre peça o nome antes de continuar.
             if not has_name:
                 if session.get('current_state') != 'collecting_patient_info':
                     session['current_state'] = 'collecting_patient_info'
                     logger.info(f"🔄 Estado corrigido: {session.get('current_state')} → collecting_patient_info (não tem nome)")
             else:
+                # PRIORIDADE 2: Após nome confirmado, ajustar estado baseado no que falta
+                
+                # Caso 1: Tem médico mas falta especialidade
+                # Exemplo: Usuário disse "Quero agendar com Dr. João" mas não mencionou especialidade
                 if has_doctor and not has_specialty:
-                    # Tem médico mas falta especialidade - deve perguntar especialidade
                     if session.get('current_state') != 'selecting_specialty':
                         session['current_state'] = 'selecting_specialty'
                         logger.info(f"🔄 Estado corrigido: {session.get('current_state')} → selecting_specialty (tem médico mas falta especialidade)")
+                
+                # Caso 2: Tem especialidade mas falta médico
+                # Exemplo: Usuário escolheu "Cardiologia" mas ainda não escolheu o médico
                 elif has_specialty and not has_doctor:
-                    # Tem especialidade mas falta médico - deve perguntar médico
                     if session.get('current_state') != 'selecting_doctor':
                         session['current_state'] = 'selecting_doctor'
                         logger.info(f"🔄 Estado corrigido: {session.get('current_state')} → selecting_doctor (tem especialidade mas falta médico)")
+                
+                # Caso 3: Tem médico E especialidade - pode avançar para escolher data/horário
+                # Exemplo: Todas as informações básicas coletadas, pode perguntar quando
                 elif has_doctor and has_specialty:
-                    # Tem ambos - pode perguntar data/horário
+                    # Só avança se ainda estiver em estados anteriores (evita retrocesso)
                     if session.get('current_state') in ['selecting_doctor', 'selecting_specialty']:
                         session['current_state'] = 'choosing_schedule'
                         logger.info(f"🔄 Estado avançado automaticamente: {session.get('current_state')} → choosing_schedule (médico e especialidade já selecionados)")
-                
-            # ═══════════════════════════════════════════════════════════════════════════════
-            # NOTA IMPORTANTE: ESTADO 'confirming' NÃO É DEFINIDO AQUI
-            # ═══════════════════════════════════════════════════════════════════════════════
-            # O estado 'confirming' deve ser definido APENAS pelo core_service.py
-            # quando o handoff for efetivamente gerado (primeira confirmação do usuário).
-            # 
-            # ❌ ANTES: SessionManager mudava automaticamente para 'confirming' quando
-            #          todas as informações estavam completas (causava bug)
-            # 
-            # ✅ AGORA: core_service controla quando mudar para 'confirming'
-            #          (somente após gerar o handoff com sucesso)
-            # 
-            # Razão: Evitar que o sistema trate a PRIMEIRA confirmação como duplicada
-            # ═══════════════════════════════════════════════════════════════════════════════
             
             # Salvar sessão no cache
             cache_key = f"gemini_session_{phone_number}"

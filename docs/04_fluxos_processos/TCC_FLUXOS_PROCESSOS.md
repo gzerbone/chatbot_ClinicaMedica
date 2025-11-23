@@ -256,187 +256,322 @@ class ConversationSession(models.Model):
 
 O **fluxo de pré-agendamento** é o processo principal do sistema, conduzindo o usuário da solicitação inicial até a geração do handoff para a secretária. É chamado de "pré-agendamento" porque a confirmação final é feita por um humano.
 
-### 3.2. Etapas do Fluxo
+### 3.2. Diagrama Simplificado do Fluxo
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│            FLUXO COMPLETO DE PRÉ-AGENDAMENTO                     │
-├─────────────────────────────────────────────────────────────────┤
-│                                                                  │
-│  ETAPA 1: Iniciação                                             │
-│  ═══════════════════════════════════════════════════════════   │
-│  👤 Usuário: "Quero agendar uma consulta"                       │
-│  🤖 Sistema: Detecta intent "agendar_consulta"                  │
-│            Estado: idle → collecting_patient_info               │
-│            Resposta: "Qual é seu nome completo?"                │
-│                                                                  │
-│  ETAPA 2: Coleta de Nome                                        │
-│  ═══════════════════════════════════════════════════════════   │
-│  👤 Usuário: "Meu nome é João Silva"                            │
-│  🤖 Sistema: Extrai nome com EntityExtractor                    │
-│            Técnicas: Regex + Gemini AI                          │
-│            Salva em: session.pending_name                       │
-│            Estado: collecting_patient_info → confirming_name    │
-│            Resposta: "Confirma se seu nome é João Silva?"       │
-│                                                                  │
-│  ETAPA 3: Confirmação de Nome                                   │
-│  ═══════════════════════════════════════════════════════════   │
-│  👤 Usuário: "Sim" / "Correto" / "Isso"                         │
-│  🤖 Sistema: Detecta confirmação positiva                       │
-│            Ações:                                               │
-│            • session.patient_name = session.pending_name        │
-│            • session.name_confirmed = True                      │
-│            • session.pending_name = None                        │
-│            Estado: confirming_name → selecting_specialty        │
-│            Resposta: "Perfeito, João Silva!                     │
-│                      Qual especialidade você procura?"          │
-│                                                                  │
-│  👤 Alternativa: "Não" / "Errado"                               │
-│  🤖 Sistema: Detecta negação                                    │
-│            Ações:                                               │
-│            • session.pending_name = None                        │
-│            Estado: confirming_name → collecting_patient_info    │
-│            Resposta: "Por favor, digite seu nome novamente."    │
-│                                                                  │
-│  ETAPA 4: Seleção de Especialidade                             │
-│  ═══════════════════════════════════════════════════════════   │
-│  👤 Usuário: "Preciso de um cardiologista"                      │
-│  🤖 Sistema: Extrai especialidade                               │
-│            Valida contra banco de dados:                        │
-│            • Consulta tabela Specialty                          │
-│            • Normaliza nome (Cardiologia)                       │
-│            Salva: session.selected_specialty = "Cardiologia"    │
-│            Consulta médicos da especialidade                    │
-│            Estado: selecting_specialty → selecting_doctor       │
-│            Resposta: Lista de médicos disponíveis               │
-│                                                                  │
-│  ETAPA 5: Seleção de Médico                                     │
-│  ═══════════════════────────────────────────────────────════── │
-│  👤 Usuário: "Quero consultar com Dr. Carlos"                   │
-│  🤖 Sistema: Identifica médico                                  │
-│            Valida contra banco de dados                         │
-│            Salva: session.selected_doctor = "Dr. Carlos"        │
-│            Integração com Google Calendar:                      │
-│            • GoogleCalendarService.get_availability()           │
-│            • Busca eventos próximos 7 dias                      │
-│            • Calcula slots livres                               │
-│            Estado: selecting_doctor → choosing_schedule         │
-│            Resposta: Horários disponíveis formatados            │
-│                                                                  │
-│  ETAPA 6: Escolha de Data e Horário                            │
-│  ═══════════════════════════════════════════════════════════   │
-│  👤 Usuário: "Quero segunda às 14h"                             │
-│  🤖 Sistema: Extrai data e horário                              │
-│            Processamento de data:                               │
-│            • "segunda" → próxima segunda-feira                  │
-│            • Conversão para formato YYYY-MM-DD                  │
-│            • Validação: data futura                             │
-│            Processamento de horário:                            │
-│            • "14h" → "14:00"                                    │
-│            • Validação: dentro horário comercial                │
-│            Salva:                                               │
-│            • session.preferred_date = "2025-11-18"              │
-│            • session.preferred_time = "14:00"                   │
-│            Estado: choosing_schedule → confirming               │
-│            Resposta: Resumo completo do agendamento             │
-│                                                                  │
-│  ETAPA 7: Confirmação Final                                     │
-│  ═══════════════════════════════════════════════════════════   │
-│  👤 Usuário: "Sim, confirmo"                                    │
-│  🤖 Sistema: Valida completude dos dados                        │
-│            Checklist de validação:                              │
-│            ✅ patient_name preenchido e confirmado              │
-│            ✅ selected_specialty preenchido                     │
-│            ✅ selected_doctor preenchido                        │
-│            ✅ preferred_date preenchido e válido                │
-│            ✅ preferred_time preenchido e válido                │
-│                                                                  │
-│            Se TUDO OK:                                          │
-│            • HandoffService.generate_link()                     │
-│            • Cria registro no banco                             │
-│            • Gera link único WhatsApp                           │
-│            • Envia link na resposta                             │
-│            Estado: confirming → (completo)                      │
-│                                                                  │
-│            Se ALGUM DADO FALTANDO:                              │
-│            • Identifica primeira informação faltante            │
-│            • Retorna ao estado apropriado                       │
-│            • Solicita informação faltante                       │
-│                                                                  │
-└─────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│              FLUXO DE PRÉ-AGENDAMENTO                        │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  IDLE                                                        │
+│   │  "Quero agendar consulta"                               │
+│   ▼                                                          │
+│  COLETANDO NOME                                              │
+│   │  "Meu nome é João Silva"                                │
+│   ▼                                                          │
+│  CONFIRMANDO NOME                                            │
+│   │  "Sim"                                                   │
+│   ▼                                                          │
+│  SELECIONANDO ESPECIALIDADE                                  │
+│   │  "Cardiologia"                                           │
+│   ▼                                                          │
+│  SELECIONANDO MÉDICO                                         │
+│   │  "Dr. Carlos"                                            │
+│   ▼                                                          │
+│  ESCOLHENDO HORÁRIO                                          │
+│   │  "Segunda às 14h"                                        │
+│   ▼                                                          │
+│  CONFIRMANDO                                                 │
+│   │  "Sim, confirmo"                                         │
+│   ▼                                                          │
+│  HANDOFF GERADO                                              │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-### 3.3. Algoritmo de Validação de Completude
+### 3.3. Processamento Detalhado de Cada Etapa
+
+Cada mensagem do usuário passa por um processo estruturado de análise e processamento que determina como o sistema deve responder e qual será o próximo estado da conversa. Este processo é composto por três elementos fundamentais que trabalham em conjunto: **identificação de intenção**, **extração de entidades** e **gerenciamento de estados**.
+
+#### 3.3.1. Processo de Análise de Mensagens
+
+Quando uma mensagem chega ao sistema, ela passa por um processo de análise em três etapas principais que ocorrem de forma sequencial e integrada:
+
+**Etapa 1: Identificação de Intenção**
+
+A identificação de intenção é o primeiro passo para compreender o propósito da mensagem do usuário. Este processo utiliza inteligência artificial para analisar o conteúdo textual e o contexto da conversa, determinando qual é a ação ou objetivo que o usuário deseja realizar.
+
+O sistema classifica a mensagem em uma das seguintes categorias de intenção:
+
+- **Saudação**: Quando o usuário cumprimenta ou inicia uma conversa casual ("olá", "bom dia", "tudo bem?")
+- **Agendar Consulta**: Quando o usuário expressa desejo de marcar uma consulta médica ("quero agendar", "preciso marcar consulta")
+- **Buscar Informação**: Quando o usuário quer apenas obter dados sobre a clínica, médicos, preços ou serviços ("quanto custa?", "vocês aceitam convênio?")
+- **Confirmar Agendamento**: Quando o usuário confirma ou aprova informações apresentadas ("sim, está correto", "confirmo")
+- **Dúvida**: Quando o usuário não compreendeu algo ou precisa de ajuda ("não entendi", "pode repetir?")
+
+A identificação de intenção considera não apenas as palavras da mensagem atual, mas também o estado atual da conversa, o histórico de mensagens recentes e os dados já coletados na sessão. Por exemplo, se o sistema está no estado "selecting_doctor" (selecionando médico) e o usuário envia "Sim", o sistema compreende que a intenção é confirmar, não saudar.
+
+Esta análise gera um nível de confiança numérico que indica quão certa o sistema está sobre a intenção detectada, permitindo que decisões sejam tomadas de forma mais segura quando há alta confiança, ou solicitando esclarecimento quando há incerteza.
+
+**Etapa 2: Extração de Entidades**
+
+A extração de entidades é o processo de identificar e extrair informações específicas e estruturadas presentes na mensagem do usuário. Enquanto a identificação de intenção responde "o que o usuário quer fazer", a extração de entidades responde "quais informações o usuário forneceu".
+
+O sistema busca extrair as seguintes entidades nas mensagens:
+
+- **Nome do Paciente**: Identifica quando o usuário informa seu nome completo ou parcial
+- **Especialidade Médica**: Detecta menções a especialidades como "Cardiologia", "Ortopedia", "Pediatria"
+- **Médico**: Identifica nomes de médicos mencionados, seja de forma completa ("Dr. Carlos Alberto") ou parcial ("Dr. Carlos")
+- **Data**: Extrai referências temporais tanto absolutas ("15/11/2025") quanto relativas ("amanhã", "segunda-feira")
+- **Horário**: Identifica momentos do dia mencionados ("14h", "14:00", "duas da tarde")
+
+A extração de entidades é realizada de forma inteligente, considerando o contexto da conversa. Por exemplo, se o usuário diz "preciso de um cardiologista", o sistema não apenas extrai a especialidade "Cardiologia", mas também compreende que isso está relacionado ao agendamento. Se o usuário menciona "segunda às 14h" em uma única frase, o sistema extrai tanto a data quanto o horário simultaneamente.
+
+O processo de extração também realiza validações básicas. Por exemplo, se um nome é extraído com apenas uma palavra, o sistema pode considerar isso incompleto e solicitar o nome completo. Se uma data é mencionada mas está no passado, o sistema identifica isso como inválido e solicita uma data futura.
+
+**Etapa 3: Gerenciamento de Estados**
+
+O gerenciamento de estados é o mecanismo que controla o fluxo da conversa, garantindo que as informações sejam coletadas na ordem correta e que o sistema sempre saiba em qual etapa do processo de agendamento ele se encontra.
+
+O sistema mantém um estado atual que representa a fase específica do agendamento. Quando uma mensagem chega, o sistema primeiro analisa a intenção e extrai entidades, e então utiliza essas informações, combinadas com o estado atual, para determinar:
+
+1. **Se deve avançar para o próximo estado**: Quando o usuário fornece a informação esperada no estado atual
+2. **Se deve permanecer no mesmo estado**: Quando a informação fornecida está incompleta ou inválida
+3. **Se deve retornar a um estado anterior**: Quando o usuário quer corrigir informações já fornecidas
+4. **Se deve pausar o fluxo**: Quando o usuário faz uma pergunta ou busca informação não relacionada ao agendamento
+
+Por exemplo, quando o sistema está no estado "selecting_specialty" (selecionando especialidade) e o usuário informa "Cardiologia", o sistema extrai essa entidade, identifica que a intenção é de agendamento, valida que a especialidade existe no banco de dados, salva essa informação na sessão e então avança para o estado "selecting_doctor" (selecionando médico), pois a próxima etapa lógica é escolher qual cardiologista o usuário prefere.
+
+#### 3.3.2. Processamento de Cada Etapa do Fluxo
+
+**Etapa 1: Iniciação (idle → collecting_patient_info)**
+
+Quando o usuário envia uma mensagem inicial solicitando agendamento, o sistema identifica a intenção como "agendar_consulta". Neste momento, nenhuma informação ainda foi coletada, então o estado muda de "idle" (ocioso) para "collecting_patient_info" (coletando dados do paciente). 
+
+O sistema solicita o nome completo do usuário. Esta etapa é fundamental porque o nome será usado para personalizar as mensagens seguintes e para gerar o registro final do agendamento.
+
+**Etapa 2: Coleta de Nome (collecting_patient_info → confirming_name)**
+
+Quando o usuário informa seu nome, o sistema utiliza a extração de entidades para identificar e extrair o nome mencionado na mensagem. O sistema valida se o nome possui pelo menos duas palavras (nome e sobrenome), garantindo que seja completo.
+
+Após a extração bem-sucedida, o sistema não avança imediatamente para a próxima etapa. Em vez disso, muda para o estado "confirming_name" (confirmando nome), onde solicita confirmação explícita ao usuário. Este passo é importante porque nomes podem ser extraídos incorretamente ou o usuário pode ter digitado errado. A confirmação reduz erros que poderiam comprometer todo o processo posterior.
+
+**Etapa 3: Confirmação de Nome (confirming_name → selecting_specialty)**
+
+Quando o usuário confirma o nome (através de "sim", "correto", "está certo"), o sistema identifica a intenção como "confirmar_agendamento", salva o nome confirmado na sessão e avança para o estado "selecting_specialty" (selecionando especialidade).
+
+Se o usuário negar a confirmação ("não", "está errado"), o sistema retorna ao estado "collecting_patient_info" e solicita que o usuário digite o nome novamente. Isso garante que o nome correto seja coletado antes de prosseguir.
+
+**Etapa 4: Seleção de Especialidade (selecting_specialty → selecting_doctor)**
+
+No estado "selecting_specialty", o sistema aguarda que o usuário informe qual especialidade médica deseja. Quando o usuário menciona uma especialidade, o sistema extrai essa entidade e valida se a especialidade existe no banco de dados da clínica.
+
+A validação é importante porque usuários podem mencionar especialidades que não existem, usar sinônimos ou grafias alternativas. O sistema normaliza a especialidade extraída e verifica se corresponde a alguma especialidade cadastrada. Se válida, a especialidade é salva na sessão e o sistema avança para "selecting_doctor" (selecionando médico).
+
+Neste novo estado, o sistema consulta o banco de dados para listar todos os médicos que atendem aquela especialidade, apresentando-os ao usuário de forma organizada e clara.
+
+**Etapa 5: Seleção de Médico (selecting_doctor → choosing_schedule)**
+
+Quando o usuário escolhe um médico, o sistema extrai o nome do médico mencionado. Este processo pode ser desafiador porque usuários podem mencionar o médico de diferentes formas: pelo nome completo ("Dr. Carlos Alberto"), apenas pelo primeiro nome ("Dr. Carlos"), ou até pelo último nome ("Dr. Alberto").
+
+O sistema compara o nome extraído com os médicos disponíveis para aquela especialidade, utilizando técnicas de correspondência flexível para encontrar o médico correto mesmo com variações no nome. Uma vez identificado e validado, o médico é salva na sessão e o sistema avança para "choosing_schedule" (escolhendo horário).
+
+**Etapa 6: Escolha de Data e Horário (choosing_schedule → confirming)**
+
+Esta é uma das etapas mais complexas, pois envolve a integração com sistemas externos e múltiplas validações. Quando o usuário menciona uma data e horário, o sistema extrai ambas as entidades simultaneamente.
+
+A data é normalizada e convertida para um formato padrão, processando tanto datas absolutas ("15/11/2025") quanto relativas ("amanhã", "próxima segunda"). O sistema valida que a data é futura e não está no passado.
+
+O horário é extraído e normalizado para o formato padrão (HH:MM), processando variações como "14h", "14:00", "duas da tarde", "14 horas". O sistema valida que o horário está dentro do horário comercial da clínica.
+
+Após extrair e validar data e horário, o sistema consulta a disponibilidade do médico selecionado no Google Calendar. Esta consulta verifica se o médico realmente está disponível naquele dia e horário específicos. Se disponível, os dados são salvos na sessão e o sistema avança para "confirming" (confirmando). Se não disponível, o sistema informa ao usuário e solicita que escolha outro horário, permanecendo no estado "choosing_schedule".
+
+**Etapa 7: Confirmação Final (confirming → handoff)**
+
+No estado "confirming", o sistema apresenta um resumo completo de todas as informações coletadas: nome do paciente, especialidade, médico, data e horário. O sistema aguarda a confirmação explícita do usuário.
+
+Quando o usuário confirma, o sistema realiza uma validação final completa de todos os dados. Esta validação verifica:
+
+1. Se todas as informações obrigatórias foram coletadas
+2. Se o nome foi confirmado pelo usuário
+3. Se a especialidade ainda existe e é válida
+4. Se o médico ainda está ativo e atende aquela especialidade
+5. Se a data e horário ainda estão disponíveis no Google Calendar
+
+Esta revalidação é importante porque informações podem ter mudado entre o momento em que foram coletadas e o momento da confirmação final. Por exemplo, o horário pode ter sido ocupado por outro paciente no intervalo.
+
+Se todas as validações passam, o sistema gera o handoff, que é um link direto para WhatsApp da secretária contendo todas as informações do pré-agendamento formatadas. O usuário recebe uma mensagem final confirmando que o pré-agendamento foi realizado com sucesso, incluindo o resumo completo e o link para contato direto com a secretária.
+
+#### 3.3.3. Interação entre Intenção, Entidades e Estados
+
+O poder do sistema reside na interação dinâmica entre os três componentes de análise. Eles não funcionam de forma isolada, mas trabalham juntos para tomar decisões inteligentes sobre como processar cada mensagem.
+
+**Cenário 1: Fluxo Normal**
+
+Quando um usuário segue o fluxo esperado, informando cada dado quando solicitado, a identificação de intenção detecta que o usuário está colaborando com o agendamento, a extração de entidades captura a informação específica mencionada, e o gerenciamento de estados avança para a próxima etapa. Por exemplo: sistema pede especialidade (estado "selecting_specialty"), usuário responde "Cardiologia" (intenção: agendar_consulta, entidade: especialidade="Cardiologia"), sistema avança para "selecting_doctor".
+
+**Cenário 2: Informação Fornecida Antecipadamente**
+
+Usuários experientes ou ansiosos podem fornecer múltiplas informações em uma única mensagem. Por exemplo, quando o sistema pede o nome, o usuário pode responder "Meu nome é João Silva e quero consulta com cardiologista". Neste caso, o sistema extrai tanto o nome quanto a especialidade, identifica a intenção de agendamento, e processa ambas as informações sequencialmente: primeiro salva o nome e pede confirmação, mas já tem a especialidade registrada para quando chegar nessa etapa.
+
+**Cenário 3: Dúvida Durante o Agendamento**
+
+Quando o usuário está em qualquer etapa do agendamento e faz uma pergunta não relacionada ("quanto custa a consulta?"), o sistema identifica a intenção como "buscar_info". Como essa intenção não corresponde ao estado atual (que está focado em coletar dados), o sistema pausa temporariamente o fluxo de agendamento, muda para o estado "answering_questions" (respondendo dúvidas), salva o estado anterior, responde a dúvida do usuário, e depois retoma o agendamento no ponto onde parou quando o usuário estiver pronto para continuar.
+
+**Cenário 4: Correção de Informação**
+
+Se o usuário quer corrigir uma informação já fornecida, o sistema identifica a intenção e as entidades na mensagem. Por exemplo, se o usuário já escolheu Ortopedia mas depois diz "na verdade quero Cardiologia", o sistema detecta a nova especialidade mencionada, identifica que é uma correção, e atualiza a informação na sessão, ajustando o estado apropriadamente (pode voltar para "selecting_doctor" se já havia escolhido um médico).
+
+**Cenário 5: Informação Inválida**
+
+Quando o usuário fornece uma informação que não pode ser validada (por exemplo, uma especialidade que não existe na clínica), o sistema extrai a entidade mas falha na validação. O estado permanece o mesmo, e o sistema informa ao usuário que a informação não é válida, solicitando que forneça novamente. Isso garante que apenas dados corretos sejam salvos.
+
+#### 3.3.4. Validação e Completude de Dados
+
+O sistema possui um mecanismo de validação contínua que verifica, após cada interação, se todas as informações necessárias para gerar o handoff já foram coletadas. Este mecanismo analisa a sessão atual e identifica quais informações estão faltando.
+
+A validação segue uma ordem obrigatória de coleta: primeiro o nome (com confirmação), depois a especialidade, em seguida o médico, depois a data, e por fim o horário. Esta ordem não é arbitrária - ela existe porque algumas informações dependem de outras. Por exemplo, não faz sentido consultar a disponibilidade de horários de um médico se o médico ainda não foi selecionado.
+
+Se o sistema detecta que todas as informações foram coletadas e validadas, ele automaticamente sugere avançar para a etapa de confirmação final, mesmo que o estado atual não seja exatamente o esperado. Isso permite que o sistema se auto-corrija se houver alguma inconsistência e garante que o fluxo sempre avance quando todas as condições forem atendidas.
+
+Esta validação contínua também permite que o sistema seja resiliente a interrupções. Se um usuário para no meio do processo e retorna depois, o sistema verifica o que já foi coletado e continua a partir do ponto onde parou, sem precisar recomeçar do zero.
+
+### 3.4. Algoritmo de Validação de Completude
 
 ```python
-def validate_appointment_completeness(session: ConversationSession) -> Dict:
+def get_missing_appointment_info(phone_number: str) -> Dict:
     """
     Valida se todas as informações necessárias foram coletadas
+    
+    ⚠️ ATUALIZADO: Agora verifica name_confirmed e preferred_time
     
     Returns:
         {
             'is_complete': bool,
-            'missing_fields': List[str],
-            'next_action': str,
-            'next_state': str
+            'missing_info': List[str],
+            'next_action': str  # Usado para mapear next_state
         }
     """
     
-    missing_fields = []
+    session = get_or_create_session(phone_number)
+    missing_info = []
     
-    # Validação 1: Nome do paciente
-    if not session.patient_name or not session.name_confirmed:
-        missing_fields.append('patient_name')
+    # ═══════════════════════════════════════════════════════════════
+    # VALIDAÇÃO 1: Nome do Paciente
+    # ═══════════════════════════════════════════════════════════════
+    # ⚠️ NOTA: A validação de name_confirmed é feita no core_service
+    # (linha 516-520) antes de chamar get_missing_appointment_info
+    # Aqui apenas verifica se patient_name existe
+    if not session.patient_name:
+        missing_info.append('patient_name')
     
-    # Validação 2: Especialidade
+    # ═══════════════════════════════════════════════════════════════
+    # VALIDAÇÃO 2: Especialidade (com validação no banco)
+    # ═══════════════════════════════════════════════════════════════
     if not session.selected_specialty:
-        missing_fields.append('selected_specialty')
-    
-    # Validação 3: Médico
-    if not session.selected_doctor:
-        missing_fields.append('selected_doctor')
-    
-    # Validação 4: Data
-    if not session.preferred_date:
-        missing_fields.append('preferred_date')
-    elif session.preferred_date < timezone.now().date():
-        missing_fields.append('preferred_date_invalid')
-    
-    # Validação 5: Horário
-    if not session.preferred_time:
-        missing_fields.append('preferred_time')
-    
-    # Determinar próxima ação
-    if not missing_fields:
-        return {
-            'is_complete': True,
-            'missing_fields': [],
-            'next_action': 'generate_handoff',
-            'next_state': 'completed'
-        }
+        missing_info.append('selected_specialty')
     else:
-        # Prioridade de coleta
-        priority_map = {
-            'patient_name': ('ask_name', 'collecting_patient_info'),
-            'selected_specialty': ('ask_specialty', 'selecting_specialty'),
-            'selected_doctor': ('ask_doctor', 'selecting_doctor'),
-            'preferred_date': ('ask_date', 'choosing_schedule'),
-            'preferred_time': ('ask_time', 'choosing_schedule'),
-        }
-        
-        first_missing = missing_fields[0]
-        next_action, next_state = priority_map.get(
-            first_missing,
-            ('ask_general', 'selecting_specialty')
-        )
-        
-        return {
-            'is_complete': False,
-            'missing_fields': missing_fields,
-            'next_action': next_action,
-            'next_state': next_state
-        }
+        # ⚠️ VALIDAÇÃO ADICIONAL: Verifica se especialidade existe no banco
+        # Pode ter sido salva incorretamente ou removida
+        if not self._validate_specialty_in_db(session.selected_specialty):
+            logger.warning(f"⚠️ Especialidade salva '{session.selected_specialty}' é inválida")
+            missing_info.append('selected_specialty')
+            session.selected_specialty = None  # Limpar inválida
+            session.save()
+    
+    # ═══════════════════════════════════════════════════════════════
+    # VALIDAÇÃO 3: Médico (com validação no banco)
+    # ═══════════════════════════════════════════════════════════════
+    if not session.selected_doctor:
+        missing_info.append('selected_doctor')
+    else:
+        # ⚠️ VALIDAÇÃO ADICIONAL: Verifica se médico existe e atende especialidade
+        if not self._validate_doctor_in_db(session.selected_doctor, session.selected_specialty):
+            logger.warning(f"⚠️ Médico salvo '{session.selected_doctor}' é inválido")
+            missing_info.append('selected_doctor')
+            session.selected_doctor = None  # Limpar inválido
+            session.save()
+    
+    # ═══════════════════════════════════════════════════════════════
+    # VALIDAÇÃO 4: Data
+    # ═══════════════════════════════════════════════════════════════
+    if not session.preferred_date:
+        missing_info.append('preferred_date')
+    
+    # ═══════════════════════════════════════════════════════════════
+    # VALIDAÇÃO 5: Horário (OBRIGATÓRIO)
+    # ═══════════════════════════════════════════════════════════════
+    # ⚠️ IMPORTANTE: Horário é obrigatório e deve estar válido
+    # Se foi rejeitado por indisponibilidade, preferred_time = None
+    # Isso é verificado no core_service antes de gerar handoff
+    if not session.preferred_time:
+        missing_info.append('preferred_time')
+    
+    # ═══════════════════════════════════════════════════════════════
+    # DETERMINAR PRÓXIMA AÇÃO (ORDEM DE PRIORIDADE OBRIGATÓRIA)
+    # ═══════════════════════════════════════════════════════════════
+    next_action = self._get_next_action(missing_info)
+    
+    return {
+        'missing_info': missing_info,
+        'next_action': next_action,
+        'is_complete': len(missing_info) == 0,
+        'current_state': session.current_state
+    }
+
+
+def _get_next_action(missing_info: List[str]) -> str:
+    """
+    Determina a próxima ação baseada nas informações faltantes
+    
+    ORDEM OBRIGATÓRIA:
+    1. Nome do paciente
+    2. Especialidade médica
+    3. Médico (obrigatório antes de data/horário)
+    4. Data
+    5. Horário
+    """
+    if not missing_info:
+        return 'generate_handoff'
+    
+    # Fluxo sequencial OBRIGATÓRIO de coleta
+    if 'patient_name' in missing_info:
+        return 'ask_name'
+    elif 'selected_specialty' in missing_info:
+        return 'ask_specialty'
+    elif 'selected_doctor' in missing_info:
+        return 'ask_doctor'  # Médico DEVE ser selecionado antes de data/horário
+    elif 'preferred_date' in missing_info:
+        return 'ask_date'  # Só pergunta data se já tiver especialidade E médico
+    elif 'preferred_time' in missing_info:
+        return 'ask_time'  # Só pergunta horário se já tiver data
+    else:
+        return 'ask_general'
 ```
+
+**Mapeamento de next_action para next_state:**
+
+O `next_action` retornado é mapeado para o `next_state` correto no `_handle_patient_name_flow()` (linha 996-1004):
+
+```python
+action_to_state = {
+    'ask_specialty': 'selecting_specialty',
+    'ask_doctor': 'selecting_doctor',
+    'ask_date': 'choosing_schedule',
+    'ask_time': 'choosing_schedule',
+    'generate_handoff': 'confirming',
+    'ask_general': 'idle'
+}
+next_state = action_to_state.get(next_action, 'idle')
+```
+
+**Mudanças Importantes na Implementação:**
+
+1. ✅ **Validação de especialidade/médico no banco**: Verifica se dados salvos ainda são válidos
+2. ✅ **Limpeza automática de dados inválidos**: Remove especialidade/médico inválidos da sessão
+3. ✅ **Verificação de `preferred_time` no core_service**: Antes de gerar handoff, verifica se horário está válido (linha 516-520)
+4. ✅ **Ordem obrigatória**: `_get_next_action()` garante ordem: nome → especialidade → médico → data → horário
+5. ✅ **Retorna `current_state`**: Incluído no retorno para facilitar debug
 
 ---
 

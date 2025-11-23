@@ -121,6 +121,227 @@ Este documento descreve **detalhadamente e visualmente** o fluxo completo do sis
 
 ## 🔄 Fluxo de Dados Completo
 
+### Fluxo Simplificado: Da Mensagem à Resposta
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    FLUXO SIMPLIFICADO DO SISTEMA                    │
+└─────────────────────────────────────────────────────────────────────┘
+
+📱 MENSAGEM DO USUÁRIO
+   │
+   │ "Olá, quero agendar uma consulta"
+   │
+   ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ ETAPA 1: RECEPÇÃO E PREPARAÇÃO                                     │
+├─────────────────────────────────────────────────────────────────────┤
+│ • Recebe mensagem via WhatsApp Webhook                              │
+│ • Extrai número do telefone e texto da mensagem                     │
+│ • Busca ou cria sessão de conversa no banco de dados               │
+│ • Carrega histórico de mensagens anteriores (últimas 10)           │
+│ • Carrega dados da clínica (médicos, especialidades, etc.)        │
+└─────────────────────────────────────────────────────────────────────┘
+   │
+   ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ ETAPA 2: ANÁLISE INTELIGENTE DA MENSAGEM                           │
+├─────────────────────────────────────────────────────────────────────┤
+│ • Identifica a intenção do usuário (agendar, perguntar, etc.)      │
+│ • Extrai informações relevantes (nome, especialidade, médico, data, horário)       │
+│ • Determina qual deve ser o próximo passo da conversa              │
+└─────────────────────────────────────────────────────────────────────┘
+   │
+   ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ ETAPA 3: PROCESSAMENTO ESPECIALIZADO                                │
+├─────────────────────────────────────────────────────────────────────┤
+│ • Verifica se precisa confirmar nome do paciente                    │
+│ • Detecta se usuário quer tirar dúvidas (pausa agendamento)        │
+│ • Valida horários fornecidos contra Google Calendar                 │
+│ • Verifica se todas informações estão completas para confirmar     │
+└─────────────────────────────────────────────────────────────────────┘
+   │
+   ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ ETAPA 4: ATUALIZAÇÃO E PERSISTÊNCIA                                │
+├─────────────────────────────────────────────────────────────────────┤
+│ • Atualiza informações coletadas na sessão                         │
+│ • Corrige estado da conversa automaticamente                       │
+│ • Salva mensagens no histórico do banco de dados                    │
+│ • Sincroniza dados entre cache e banco                               │
+└─────────────────────────────────────────────────────────────────────┘
+   │
+   ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ ETAPA 5: GERAÇÃO DA RESPOSTA                                       │
+├─────────────────────────────────────────────────────────────────────┤
+│ • Gera resposta contextualizada baseada na análise                  │
+│ • Inclui informações relevantes (horários, médicos, etc.)          │
+│ • Formata mensagem de forma amigável e profissional                 │
+└─────────────────────────────────────────────────────────────────────┘
+   │
+   ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│ ETAPA 6: ENVIO E FINALIZAÇÃO                                       │
+├─────────────────────────────────────────────────────────────────────┤
+│ • Envia resposta via WhatsApp Business API                          │
+│ • Registra conclusão do processamento                               │
+└─────────────────────────────────────────────────────────────────────┘
+   │
+   ▼
+📱 RESPOSTA PARA O USUÁRIO
+   "Olá! Qual é o seu nome completo?"
+```
+
+---
+
+### Explicação Detalhada de Cada Etapa
+
+#### ETAPA 1: RECEPÇÃO E PREPARAÇÃO
+
+Quando uma mensagem chega ao sistema, o primeiro passo é preparar o ambiente para processá-la adequadamente. O sistema precisa recuperar o contexto da conversa e os dados necessários para entender e responder corretamente.
+
+**Recuperação da Sessão de Conversa**
+
+O sistema identifica o usuário pelo número de telefone e busca sua sessão de conversa no banco de dados. Se é a primeira vez que o usuário interage, uma nova sessão é criada com estado inicial "ocioso". A sessão armazena todas as informações coletadas durante o processo de agendamento, como nome do paciente, especialidade escolhida, médico selecionado, data e horário preferidos, além do estado atual da conversa.
+
+O sistema também mantém uma cópia da sessão em memória (cache) para acesso rápido, sincronizando periodicamente com o banco de dados para garantir persistência. Isso permite que mesmo se o sistema reiniciar, a conversa possa ser retomada de onde parou.
+
+**Carregamento do Histórico de Conversa**
+
+Para entender o contexto da mensagem atual, o sistema recupera as últimas 10 mensagens trocadas com o usuário. Isso permite que o sistema compreenda referências a mensagens anteriores, como quando o usuário diz "esse médico" ou "naquela data". O histórico inclui tanto as mensagens do usuário quanto as respostas do sistema, permitindo uma compreensão completa do diálogo.
+
+**Carregamento dos Dados da Clínica**
+
+O sistema carrega informações atualizadas sobre a clínica, incluindo lista de médicos disponíveis, suas especialidades, horários de funcionamento, valores de consultas, convênios aceitos e outras informações relevantes. Esses dados são armazenados em cache para evitar consultas repetidas ao banco de dados, melhorando a performance do sistema. Os dados são atualizados automaticamente quando há mudanças no cadastro da clínica.
+
+---
+
+#### ETAPA 2: ANÁLISE INTELIGENTE DA MENSAGEM
+
+Esta etapa utiliza inteligência artificial para compreender profundamente o que o usuário está comunicando, tanto em termos de intenção quanto de informações específicas.
+
+**Identificação da Intenção**
+
+O sistema analisa a mensagem do usuário para determinar qual é sua intenção principal. As intenções possíveis incluem: agendar uma consulta, buscar informações sobre a clínica, confirmar dados fornecidos, tirar dúvidas, ou simplesmente cumprimentar. Esta análise considera não apenas as palavras usadas, mas também o contexto da conversa atual e o histórico de mensagens anteriores.
+
+Por exemplo, se o usuário está no meio de um agendamento e pergunta "Quanto custa?", o sistema entende que a intenção é buscar informação, mas mantém o contexto de que está no processo de agendamento. Se o usuário diz "Sim, está correto" após ver um resumo, o sistema identifica a intenção como confirmação.
+
+**Extração de Informações Relevantes**
+
+Paralelamente à identificação da intenção, o sistema extrai informações específicas mencionadas na mensagem. Isso inclui o nome do paciente (quando fornecido), a especialidade médica desejada, o nome do médico escolhido, datas e horários mencionados. A extração é feita de forma inteligente, reconhecendo diferentes formas de expressar a mesma informação.
+
+Por exemplo, o sistema reconhece que "segunda-feira", "segunda", "próxima segunda" e "18/11" podem se referir à mesma data. Da mesma forma, "14h", "14:00", "duas da tarde" e "14 horas" são todas reconhecidas como o mesmo horário. O sistema também é capaz de lidar com referências relativas, como "amanhã", "depois de amanhã" ou "próxima semana".
+
+**Determinação do Próximo Passo**
+
+Com base na intenção identificada, nas informações extraídas e no estado atual da conversa, o sistema determina qual deve ser o próximo passo. Se o usuário está iniciando um agendamento, o próximo passo é coletar o nome. Se já tem o nome mas falta a especialidade, o próximo passo é perguntar sobre a especialidade desejada. O sistema sempre segue uma ordem lógica: primeiro o nome, depois a especialidade, em seguida o médico, e por fim a data e horário.
+
+---
+
+#### ETAPA 3: PROCESSAMENTO ESPECIALIZADO
+
+Esta etapa contém lógicas específicas para situações particulares que podem ocorrer durante a conversa, garantindo que o sistema responda adequadamente a cada cenário.
+
+**Confirmação do Nome do Paciente**
+
+Quando o sistema detecta que o usuário está fornecendo ou confirmando seu nome, um processo especial é acionado. Se o nome foi mencionado pela primeira vez, ele é extraído da mensagem e armazenado temporariamente, aguardando confirmação. O sistema então pergunta ao usuário se o nome está correto, evitando erros de interpretação.
+
+Se o usuário confirma o nome (dizendo "sim", "correto", "isso", etc.), o nome é definitivamente salvo e marcado como confirmado. O sistema então verifica quais informações ainda faltam para o agendamento e direciona automaticamente para a próxima etapa necessária. Se o usuário rejeita o nome, o sistema solicita que ele digite novamente.
+
+Este processo de confirmação é feito de forma otimizada, gerando respostas diretamente sem precisar consultar a inteligência artificial novamente, economizando recursos e garantindo respostas mais rápidas.
+
+**Sistema de Pausar e Retomar**
+
+Durante o processo de agendamento, o usuário pode ter dúvidas que precisam ser esclarecidas antes de continuar. O sistema detecta quando o usuário está fazendo uma pergunta (como "Quanto custa?" ou "Vocês aceitam meu convênio?") e pausa temporariamente o fluxo de agendamento.
+
+Quando isso acontece, o sistema salva o estado atual do agendamento (por exemplo, "escolhendo médico") e muda para um estado especial de "respondendo dúvidas". O sistema então responde a dúvida do usuário utilizando sua base de conhecimento sobre a clínica.
+
+Após responder, o sistema pode retomar automaticamente o agendamento de duas formas: se o usuário fornece informações de agendamento (como mencionar uma especialidade ou médico), o sistema detecta isso e retoma automaticamente. Alternativamente, se o usuário diz palavras como "continuar" ou "retomar", o sistema restaura o estado anterior e continua de onde parou.
+
+**Validação de Horários em Tempo Real**
+
+Quando o usuário fornece uma data e horário desejados, o sistema imediatamente consulta o calendário do médico no Google Calendar para verificar se aquele horário específico está realmente disponível. Esta validação acontece assim que a informação é fornecida, não esperando até a confirmação final.
+
+Se o horário solicitado não está disponível, o sistema informa isso ao usuário e sugere automaticamente horários alternativos disponíveis no mesmo dia ou em outros dias próximos. Isso evita que o usuário confirme um agendamento para um horário que não está livre, melhorando a experiência e evitando retrabalho.
+
+A validação também acontece novamente no momento da confirmação final, pois o horário pode ter sido ocupado entre o momento em que foi sugerido e o momento da confirmação. Isso garante que apenas horários realmente disponíveis sejam confirmados.
+
+**Verificação de Completude**
+
+Antes de gerar o link de confirmação para a secretária, o sistema verifica se todas as informações necessárias foram coletadas: nome do paciente confirmado, especialidade escolhida, médico selecionado, data e horário válidos. Se alguma informação estiver faltando, o sistema identifica qual é a primeira informação faltante na ordem de prioridade e solicita essa informação ao usuário, retornando ao estado apropriado da conversa.
+
+---
+
+#### ETAPA 4: ATUALIZAÇÃO E PERSISTÊNCIA
+
+Após processar a mensagem e extrair as informações, o sistema atualiza a sessão de conversa e garante que todos os dados sejam persistidos corretamente.
+
+**Atualização da Sessão**
+
+As informações extraídas da mensagem são salvas na sessão do usuário. Se o usuário mencionou uma especialidade, ela é validada contra o banco de dados para garantir que existe e está ativa, e então é salva. O mesmo acontece com o médico mencionado: o sistema verifica se o médico existe, se atende a especialidade escolhida, e então salva a informação.
+
+O sistema também atualiza o estado da conversa para refletir o progresso. Por exemplo, quando o nome é confirmado e a especialidade é escolhida, o estado muda para "selecionando médico". Esta atualização de estado é feita automaticamente pelo sistema, garantindo que sempre reflita corretamente em que etapa do processo o usuário se encontra.
+
+**Correção Automática de Estado**
+
+O sistema possui uma lógica inteligente que corrige automaticamente o estado da conversa baseado nas informações já coletadas. Por exemplo, se o usuário forneceu o médico antes da especialidade (fora da ordem normal), o sistema salva ambas as informações e ajusta o estado para refletir que agora precisa apenas da data e horário, mesmo que o estado anterior indicasse que estava coletando especialidade.
+
+Esta correção garante que o sistema sempre saiba exatamente o que falta coletar, independentemente da ordem em que o usuário fornece as informações, tornando o processo mais flexível e natural.
+
+**Persistência no Banco de Dados**
+
+Todas as informações são salvas no banco de dados para garantir persistência. A sessão é atualizada com as novas informações, e as mensagens trocadas (tanto do usuário quanto do sistema) são registradas no histórico. Isso permite que o sistema possa recuperar o contexto completo da conversa a qualquer momento, mesmo após reinicializações.
+
+O sistema também mantém uma cópia em cache (memória) para acesso rápido, sincronizando periodicamente com o banco de dados. Esta estratégia de dupla persistência garante tanto performance quanto confiabilidade.
+
+---
+
+#### ETAPA 5: GERAÇÃO DA RESPOSTA
+
+Com todas as informações processadas e a sessão atualizada, o sistema gera uma resposta apropriada para o usuário.
+
+**Geração Contextualizada**
+
+A resposta é gerada considerando múltiplos fatores: a intenção identificada, o estado atual da conversa, as informações já coletadas, o que ainda falta coletar, e o contexto do histórico de mensagens. O sistema utiliza inteligência artificial para criar respostas naturais e conversacionais, adaptando o tom e o conteúdo conforme a situação.
+
+Por exemplo, se o usuário está no início do processo, a resposta será uma saudação e uma solicitação do nome. Se já tem várias informações coletadas, a resposta será mais direta e focada no que falta. Se o usuário está confirmando dados, a resposta será um resumo claro e uma solicitação de confirmação.
+
+**Inclusão de Informações Relevantes**
+
+Quando apropriado, a resposta inclui informações úteis para o usuário. Se está escolhendo especialidade, a resposta lista as especialidades disponíveis. Se está escolhendo médico, lista os médicos da especialidade escolhida com suas informações. Se está escolhendo horário, mostra os horários disponíveis consultados do Google Calendar.
+
+O sistema também inclui informações contextuais, como valores de consultas quando relevante, ou lembretes sobre o que já foi escolhido para ajudar o usuário a manter o contexto da conversa.
+
+**Formatação e Apresentação**
+
+A resposta é formatada de forma clara e amigável, utilizando emojis moderadamente para tornar a comunicação mais próxima e fácil de ler. O sistema evita repetir informações já fornecidas e mantém um tom profissional mas acessível.
+
+Em situações especiais, como quando um horário não está disponível, a resposta é formatada de forma clara para informar o problema e apresentar alternativas de forma organizada e fácil de entender.
+
+---
+
+#### ETAPA 6: ENVIO E FINALIZAÇÃO
+
+A resposta gerada é enviada ao usuário e o processamento é finalizado.
+
+**Envio via WhatsApp**
+
+A resposta é enviada através da API do WhatsApp Business, que se encarrega de entregar a mensagem ao usuário no aplicativo WhatsApp. O sistema aguarda confirmação de que a mensagem foi enviada com sucesso.
+
+**Registro e Logging**
+
+O sistema registra todas as etapas do processamento em logs detalhados, incluindo a intenção identificada, as entidades extraídas, o estado da conversa, e a resposta gerada. Isso permite monitoramento, análise e depuração quando necessário.
+
+O tempo total de processamento também é registrado, permitindo identificar gargalos e otimizar a performance do sistema. Em caso de erros, informações detalhadas são registradas para análise posterior.
+
+**Finalização**
+
+Após o envio bem-sucedido, o processamento é finalizado e o sistema aguarda a próxima mensagem do usuário. A sessão permanece ativa e todas as informações coletadas estão disponíveis para a próxima interação, permitindo que a conversa continue de forma natural e contextualizada.
+
+---
+
 ### Sequência Detalhada: Da Mensagem à Resposta
 
 ```
@@ -182,12 +403,12 @@ Este documento descreve **detalhadamente e visualmente** o fluxo completo do sis
    │
    ├─ PASSO 1: Obter/Criar Sessão
    │  │
-   │  ├─ session = _get_or_create_session(phone_number)
+   │  ├─ session = session_manager.get_or_create_session(phone_number)
    │  │  │
    │  │  ├─ Busca em cache: gemini_session_5573988221003
    │  │  │
    │  │  ├─ Se não existe:
-   │  │  │  └─ Cria nova sessão:
+   │  │  │  └─ Busca no banco ou cria nova sessão:
    │  │  │     {
    │  │  │       'phone_number': '5573988221003',
    │  │  │       'current_state': 'idle',
@@ -199,218 +420,244 @@ Este documento descreve **detalhadamente e visualmente** o fluxo completo do sis
    │  │  │
    │  │  └─ Salva em cache (15 min)
    │  │
-   │  └─ Log: ✅ Sessão obtida - Estado: idle
+   │  └─ Log: 📊 Estado atual da sessão: idle
    │
-   ├─ PASSO 2: Obter Dados da Clínica (Otimizado)
+   ├─ PASSO 2: Verificar Agendamento Pausado (Sistema de Dúvidas)
+   │  │
+   │  ├─ if conversation_service.has_paused_appointment(phone_number):
+   │  │  │
+   │  │  ├─ Detecta palavras-chave: ['continuar', 'retomar', 'voltar']
+   │  │  │
+   │  │  ├─ Se detectado:
+   │  │  │  └─ conversation_service.resume_appointment()
+   │  │  │     ├─ Restaura estado anterior
+   │  │  │     └─ Retorna resposta de retomada
+   │  │  │
+   │  │  └─ Log: ▶️ Sessão retomada
+   │  │
+   │  └─ (Neste caso: não há agendamento pausado)
+   │
+   ├─ PASSO 3: Obter Histórico e Dados da Clínica
+   │  │
+   │  ├─ conversation_history = session_manager.get_conversation_history()
+   │  │  └─ Retorna últimas 10 mensagens do banco
    │  │
    │  ├─ clinic_data = _get_clinic_data_optimized()
    │  │  │
    │  │  ├─ Verifica cache: gemini_clinic_data
    │  │  │
    │  │  ├─ Se cache vazio:
-   │  │  │  └─ RAGService.get_all_clinic_data()
-   │  │  │     ├─ Consulta banco de dados
-   │  │  │     ├─ Retorna:
-   │  │  │     │  {
-   │  │  │     │    'clinica_info': {...},
-   │  │  │     │    'medicos': [...],
-   │  │  │     │    'especialidades': [...],
-   │  │  │     │    'convenios': [...],
-   │  │  │     │    'exames': [...]
-   │  │  │     │  }
-   │  │  │     └─ Salva em cache (15 min normal, dinâmico)
+   │  │  │  └─ RAGService obtém dados do banco
+   │  │  │     └─ Salva em cache (15-60 min dinâmico)
    │  │  │
    │  │  └─ Se cache existe: retorna do cache
    │  │
    │  └─ Log: 📋 Dados da clínica obtidos (cache: sim/não)
    │
-   ├─ PASSO 3: Obter Histórico da Conversa
+   ├─ PASSO 4: Detectar Intenção (IntentDetector)
    │  │
-   │  ├─ conversation_history = _get_conversation_history(phone_number, limit=10)
-   │  │  │
-   │  │  ├─ conversation_service.get_conversation_history()
-   │  │  │  │
-   │  │  │  ├─ Consulta banco:
-   │  │  │  │  ConversationMessage.objects.filter(
-   │  │  │  │    session__phone_number=phone_number
-   │  │  │  │  ).order_by('-timestamp')[:5]
-   │  │  │  │
-   │  │  │  └─ Retorna últimas 10 mensagens
-   │  │  │
-   │  │  └─ Retorna: [
-   │  │       {'content': '...', 'message_type': 'user', ...},
-   │  │       {'content': '...', 'message_type': 'bot', ...}
-   │  │     ]
-   │  │
-   │  └─ Log: 📜 Histórico obtido: 0 mensagens (primeira conversa)
-   │
-   ├─ PASSO 4: Verificar se é Solicitação de Horários
-   │  │
-   │  ├─ is_scheduling = _is_scheduling_request(message)
-   │  │  │
-   │  │  ├─ Verifica palavras-chave:
-   │  │  │  - horário, agendar, marcar, consulta
-   │  │  │  - disponível, quando, que horas
-   │  │  │
-   │  │  └─ Retorna: True (contém "agendar")
-   │  │
-   │  └─ Log: 🔍 Solicitação de agendamento detectada
-   │
-   ├─ PASSO 5: Análise com Gemini AI
-   │  │
-   │  ├─ analysis_result = _analyze_message_with_gemini(
-   │  │      message, session, history, clinic_data
+   │  ├─ intent_result = intent_detector.analyze_message(
+   │  │      message, session, conversation_history, clinic_data
    │  │    )
    │  │  │
-   │  │  ├─ Construir prompt de análise:
-   │  │  │  │
-   │  │  │  └─ prompt = """
-   │  │  │      Você é assistente da Clínica PneumoSono.
-   │  │  │      
-   │  │  │      MENSAGEM: "Olá, gostaria de agendar uma consulta"
-   │  │  │      ESTADO: idle
-   │  │  │      HISTÓRICO: (vazio)
-   │  │  │      
-   │  │  │      ANALISE:
-   │  │  │      - Qual a intenção?
-   │  │  │      - Próximo estado?
-   │  │  │      - Entidades extraídas?
-   │  │  │      
-   │  │  │      Responda em JSON.
-   │  │  │      """
+   │  │  ├─ Construir prompt de análise com Gemini AI
    │  │  │
-   │  │  ├─ Enviar para Gemini:
-   │  │  │  │
-   │  │  │  ├─ model.generate_content(
-   │  │  │  │    prompt,
-   │  │  │  │    generation_config={
-   │  │  │  │      "temperature": 0.1,
-   │  │  │  │      "max_output_tokens": 300
-   │  │  │  │    }
-   │  │  │  │  )
-   │  │  │  │
-   │  │  │  └─ Resposta Gemini:
-   │  │  │      {
-   │  │  │        "intent": "agendar_consulta",
-   │  │  │        "next_state": "collecting_patient_info",
-   │  │  │        "entities": {},
-   │  │  │        "confidence": 0.95
-   │  │  │      }
+   │  │  ├─ Enviar para Gemini API
    │  │  │
-   │  │  ├─ token_monitor.log_token_usage("ANÁLISE", ...)
-   │  │  │  │
-   │  │  │  └─ Log: 📊 TOKENS - ANÁLISE: 
-   │  │  │           Input=1,245, Output=156, Total=1,401
-   │  │  │
-   │  │  └─ Retorna análise parseada
+   │  │  └─ Retorna:
+   │  │     {
+   │  │       "intent": "agendar_consulta",
+   │  │       "next_state": "collecting_patient_info",
+   │  │       "confidence": 0.95,
+   │  │       "reasoning": "..."
+   │  │     }
    │  │
-   │  └─ Log: 🔍 Intenção: agendar_consulta (0.95)
+   │  └─ Log: 🔍 Intent detectado: agendar_consulta, Confiança: 0.95
    │
-   ├─ PASSO 6: Gerar Resposta com Gemini
+   ├─ PASSO 5: Extrair Entidades (EntityExtractor)
    │  │
-   │  ├─ response_result = _generate_response_with_gemini(
-   │  │      message, analysis_result, session, history, clinic_data
+   │  ├─ entities_result = entity_extractor.extract_entities(
+   │  │      message, session, conversation_history, clinic_data
    │  │    )
    │  │  │
-   │  │  ├─ Construir prompt de resposta:
-   │  │  │  │
-   │  │  │  └─ prompt = """
-   │  │  │      INTENÇÃO: agendar_consulta
-   │  │  │      PRÓXIMO ESTADO: collecting_patient_info
-   │  │  │      
-   │  │  │      Gere uma resposta cordial solicitando 
-   │  │  │      o nome completo do paciente.
-   │  │  │      """
+   │  │  ├─ Usa Gemini AI para extrair entidades
+   │  │  │  - nome_paciente, medico, especialidade, data, horario
    │  │  │
-   │  │  ├─ Enviar para Gemini:
-   │  │  │  │
-   │  │  │  └─ Resposta: "Olá! 😊 Fico feliz em ajudar 
-   │  │  │                 com seu agendamento. Para 
-   │  │  │                 começar, qual é o seu nome 
-   │  │  │                 completo?"
-   │  │  │
-   │  │  ├─ token_monitor.log_token_usage("RESPOSTA", ...)
-   │  │  │  │
-   │  │  │  └─ Log: 📊 TOKENS - RESPOSTA:
-   │  │  │           Input=2,134, Output=287, Total=2,421
-   │  │  │
-   │  │  └─ Retorna resposta formatada
+   │  │  └─ Retorna: {'nome_paciente': None, 'medico': None, ...}
    │  │
-   │  └─ Log: 💬 Resposta gerada (287 tokens)
+   │  └─ Log: 📦 Entidades extraídas: {}
    │
-   ├─ PASSO 7: Verificar Confirmação de Agendamento
+   ├─ PASSO 6: Combinar Resultados
    │  │
-   │  ├─ if analysis_result['intent'] == 'confirmar_agendamento':
-   │  │    └─ (Neste caso: não, é 'agendar_consulta')
+   │  ├─ analysis_result = {
+   │  │      'intent': intent_result['intent'],
+   │  │      'next_state': intent_result['next_state'],
+   │  │      'confidence': intent_result['confidence'],
+   │  │      'entities': entities_result,
+   │  │      'reasoning': intent_result.get('reasoning', ''),
+   │  │      'raw_message': message
+   │  │    }
    │  │
-   │  └─ Pula validação de handoff
+   │  └─ (Preparado para próximos passos)
    │
-   ├─ PASSO 8: Atualizar Sessão
+   ├─ PASSO 6.1: Fluxo Dedicado de Confirmação do Nome ⚠️ NOVO
    │  │
-   │  ├─ _update_session(phone_number, session, 
-   │  │                  analysis_result, response_result)
-   │  │  │
-   │  │  ├─ Atualiza estado:
-   │  │  │  session['current_state'] = 'collecting_patient_info'
-   │  │  │  session['last_activity'] = now()
-   │  │  │
-   │  │  ├─ Extrai entidades (neste caso: nenhuma)
-   │  │  │
-   │  │  ├─ Salva em cache
-   │  │  │
-   │  │  └─ Sincroniza com banco:
-   │  │     _sync_session_to_database(phone_number, session)
-   │  │     │
-   │  │     ├─ ConversationSession.objects.update_or_create(
-   │  │     │    phone_number=phone_number,
-   │  │     │    defaults={...}
-   │  │     │  )
-   │  │     │
-   │  │     └─ Log: 💾 Sessão sincronizada - ID: 1
-   │  │
-   │  └─ Log: ✅ Sessão atualizada - Estado: collecting_patient_info
-   │
-   ├─ PASSO 9: Salvar Mensagens no Banco
-   │  │
-   │  ├─ _save_conversation_messages(
-   │  │      phone_number, message, response, analysis
+   │  ├─ manual_name_response = _handle_patient_name_flow(
+   │  │      phone_number, session, message, analysis_result
    │  │    )
    │  │  │
-   │  │  ├─ Salvar mensagem do usuário:
-   │  │  │  │
-   │  │  │  ├─ ConversationMessage.objects.create(
-   │  │  │  │    session=session,
-   │  │  │  │    message_type='user',
-   │  │  │  │    content="Olá, gostaria de agendar...",
-   │  │  │  │    intent='agendar_consulta',
-   │  │  │  │    confidence=0.95,
-   │  │  │  │    entities={}
-   │  │  │  │  )
-   │  │  │  │
-   │  │  │  └─ Log: 💾 Mensagem usuário salva - ID: 1
+   │  │  ├─ Verifica se nome já está confirmado
+   │  │  │  └─ Se sim: retorna None (continua fluxo)
    │  │  │
-   │  │  └─ Salvar resposta do bot:
-   │  │     │
-   │  │     ├─ ConversationMessage.objects.create(
-   │  │     │    session=session,
-   │  │     │    message_type='bot',
-   │  │     │    content="Olá! 😊 Fico feliz...",
-   │  │     │    intent='bot_response',
-   │  │     │    entities={}
-   │  │     │  )
-   │  │     │
-   │  │     └─ Log: 💾 Mensagem bot salva - ID: 2
+   │  │  ├─ Se há pending_name:
+   │  │  │  └─ Valida confirmação/rejeição do usuário
+   │  │  │     ├─ Se confirmado: salva nome e avança estado
+   │  │  │     └─ Se rejeitado: solicita nome novamente
+   │  │  │
+   │  │  ├─ Se não há nome e mensagem indica nome:
+   │  │  │  └─ Extrai nome das entidades
+   │  │  │     ├─ Salva em pending_name
+   │  │  │     └─ Solicita confirmação
+   │  │  │
+   │  │  └─ Se retorna resposta: interrompe fluxo aqui
    │  │
-   │  └─ Log: 💾 Conversa persistida no banco
+   │  └─ (Neste caso: retorna None, continua fluxo)
    │
-   └─ PASSO 10: Retornar Resultado
+   ├─ PASSO 7: Detectar Dúvidas Durante Agendamento ⚠️ NOVO
+   │  │
+   │  ├─ if intent in ['buscar_info', 'duvida']:
+   │  │  │
+   │  │  ├─ Verifica se está em estado pausável:
+   │  │  │  ['collecting_patient_info', 'selecting_specialty', 
+   │  │  │   'selecting_doctor', 'choosing_schedule', 'confirming_name']
+   │  │  │
+   │  │  ├─ Se sim:
+   │  │  │  └─ conversation_service.pause_for_question()
+   │  │  │     ├─ Salva estado anterior
+   │  │  │     ├─ Muda para 'answering_questions'
+   │  │  │     └─ Permite responder dúvidas
+   │  │  │
+   │  │  └─ Log: ⏸️ Agendamento pausado para responder dúvida
+   │  │
+   │  └─ (Neste caso: não é dúvida)
+   │
+   ├─ PASSO 7.5: Verificar Disponibilidade (se aplicável) ⚠️ NOVO
+   │  │
+   │  ├─ Se usuário pergunta sobre horários disponíveis:
+   │  │  └─ smart_scheduling_service.get_doctor_availability()
+   │  │     ├─ Consulta Google Calendar
+   │  │     └─ Retorna horários livres
+   │  │
+   │  └─ (Neste caso: não aplicável)
+   │
+   ├─ PASSO 8: Atualizar Sessão ANTES de Gerar Resposta ⚠️ ATUALIZADO
+   │  │
+   │  ├─ session_manager.update_session(
+   │  │      phone_number, session, analysis_result, {'response': ''}
+   │  │    )
+   │  │  │
+   │  │  ├─ Salva entidades extraídas na sessão
+   │  │  ├─ Valida médico/especialidade no banco
+   │  │  ├─ Corrige estado automaticamente se necessário
+   │  │  └─ Sincroniza com banco de dados
+   │  │
+   │  └─ Log: ✅ Sessão atualizada
+   │
+   ├─ PASSO 8.1: Validar Data Inválida ⚠️ NOVO
+   │  │
+   │  ├─ if session.get('invalid_date_provided'):
+   │  │  │
+   │  │  └─ Retorna resposta solicitando data em formato numérico
+   │  │
+   │  └─ (Neste caso: não aplicável)
+   │
+   ├─ PASSO 8.5: Validar Horário Fornecido ⚠️ NOVO
+   │  │
+   │  ├─ Se usuário forneceu data E horário:
+   │  │  └─ smart_scheduling_service.is_time_slot_available()
+   │  │     ├─ Verifica disponibilidade no Google Calendar
+   │  │     ├─ Se indisponível: sugere alternativas
+   │  │     └─ Se disponível: continua fluxo
+   │  │
+   │  └─ (Neste caso: não aplicável)
+   │
+   ├─ PASSO 9: Verificar Confirmação e Gerar Handoff ⚠️ ATUALIZADO
+   │  │
+   │  ├─ if intent == 'confirmar_agendamento':
+   │  │  │
+   │  │  ├─ Verifica informações faltantes
+   │  │  │
+   │  │  ├─ Valida disponibilidade do horário específico
+   │  │  │
+   │  │  ├─ Se completo E horário disponível:
+   │  │  │  └─ _handle_appointment_confirmation()
+   │  │  │     ├─ Gera link de handoff
+   │  │  │     ├─ Cria mensagem formatada
+   │  │  │     └─ Muda estado para 'confirming'
+   │  │  │
+   │  │  └─ Se já confirmado anteriormente:
+   │  │     └─ Retorna resumo sem gerar novo handoff
+   │  │
+   │  └─ (Neste caso: não é confirmação)
+   │
+   ├─ PASSO 9.5: Obter Missing Info (se necessário) ⚠️ NOVO
+   │  │
+   │  ├─ if current_state == 'collecting_patient_info':
+   │  │  │
+   │  │  └─ missing_info = conversation_service.get_missing_appointment_info()
+   │  │     └─ Adiciona ao analysis_result para ResponseGenerator
+   │  │
+   │  └─ (Neste caso: aplicável)
+   │
+   ├─ PASSO 10: Gerar Resposta (ResponseGenerator)
+   │  │
+   │  ├─ if not response_result.get('response'):
+   │  │  │
+   │  │  ├─ response_result = response_generator.generate_response(
+   │  │  │      message, analysis_result, session, 
+   │  │  │      conversation_history, clinic_data
+   │  │  │    )
+   │  │  │  │
+   │  │  │  ├─ Construir prompt contextualizado
+   │  │  │  ├─ Enviar para Gemini AI
+   │  │  │  └─ Retorna resposta formatada
+   │  │  │
+   │  │  ├─ Verificação final: interceptar se Gemini perguntou
+   │  │  │    data/horário sem especialidade/médico ⚠️ NOVO
+   │  │  │
+   │  │  └─ Atualizar sessão com resposta final
+   │  │
+   │  └─ Log: 💬 Resposta gerada
+   │
+   ├─ PASSO 10.5: Retomada Automática (se aplicável) ⚠️ NOVO
+   │  │
+   │  ├─ if current_state == 'answering_questions':
+   │  │  │
+   │  │  ├─ Verifica se usuário forneceu entidades de agendamento
+   │  │  │
+   │  │  ├─ Se sim:
+   │  │  │  └─ Restaura estado anterior automaticamente
+   │  │  │     └─ Log: 🔄 Retomada automática do agendamento
+   │  │
+   │  └─ (Neste caso: não aplicável)
+   │
+   ├─ PASSO 11: Salvar Mensagens no Banco
+   │  │
+   │  ├─ session_manager.save_messages(
+   │  │      phone_number, message, response, analysis_result
+   │  │    )
+   │  │  │
+   │  │  ├─ Salva mensagem do usuário
+   │  │  └─ Salva resposta do bot
+   │  │
+   │  └─ Log: 💾 Mensagens salvas
+   │
+   └─ PASSO 12: Retornar Resultado
       │
       └─ return {
            'response': "Olá! 😊 Fico feliz em ajudar...",
            'intent': 'agendar_consulta',
-           'confidence': 0.95,
-           'state': 'collecting_patient_info',
-           'agent': 'gemini'
+           'confidence': 0.95
          }
 
 
@@ -459,11 +706,16 @@ Este documento descreve **detalhadamente e visualmente** o fluxo completo do sis
 ┌──────────────────────────────────────┐
 │ PROCESSAMENTO                         │
 ├──────────────────────────────────────┤
-│ Intent: agendar_consulta             │
-│ Confidence: 0.95                     │
-│ Estado Atual: idle                   │
-│ Próximo Estado: collecting_patient_info│
-│ Entidades: {}                        │
+│ IntentDetector:                      │
+│ ├─ Intent: agendar_consulta         │
+│ ├─ Confidence: 0.95                 │
+│ └─ Next State: collecting_patient_info│
+│                                      │
+│ EntityExtractor:                     │
+│ └─ Entidades: {}                    │
+│                                      │
+│ _handle_patient_name_flow():        │
+│ └─ Retorna: None (não há nome ainda)│
 └──────────────────────────────────────┘
 
 ┌──────────────────────────────────────┐
@@ -471,11 +723,14 @@ Este documento descreve **detalhadamente e visualmente** o fluxo completo do sis
 ├──────────────────────────────────────┤
 │ ConversationSession #1:              │
 │ ├─ phone: 5573988221003              │
-│ ├─ state: collecting_patient_info    │
+│ ├─ current_state: collecting_patient_info│
 │ ├─ patient_name: null                │
+│ ├─ name_confirmed: false             │
+│ ├─ pending_name: null                │
 │ ├─ selected_doctor: null             │
+│ ├─ selected_specialty: null          │
 │ ├─ preferred_date: null              │
-│ └─ preferred_time: null              │
+│ └─ preferred_time: null             │
 │                                      │
 │ ConversationMessage #1:              │
 │ ├─ type: user                        │
@@ -503,36 +758,41 @@ Este documento descreve **detalhadamente e visualmente** o fluxo completo do sis
 ┌──────────────────────────────────────┐
 │ PROCESSAMENTO                         │
 ├──────────────────────────────────────┤
-│ Intent: fornecer_nome                │
-│ Confidence: 0.98                     │
-│ Estado Atual: collecting_patient_info│
-│ Próximo Estado: confirming_name      │
-│ Entidades: {                         │
-│   nome_paciente: "João Silva Santos" │
-│ }                                    │
+│ IntentDetector:                      │
+│ └─ Intent: agendar_consulta          │
+│                                      │
+│ EntityExtractor:                     │
+│ ├─ Usa Gemini AI para extrair        │
+│ └─ Entidades: {                      │
+│      nome_paciente: "João Silva Santos"│
+│    }                                 │
+│                                      │
+│ _handle_patient_name_flow():        │
+│ ├─ Detecta: expecting_name = True   │
+│ ├─ Extrai nome das entidades         │
+│ ├─ Salva em: pending_name            │
+│ ├─ Sincroniza com banco              │
+│ └─ Retorna resposta de confirmação   │
 └──────────────────────────────────────┘
 
 ┌──────────────────────────────────────┐
-│ EXTRAÇÃO DE ENTIDADES (Gemini)       │
+│ FLUXO DE NOME (Interceptado)         │
 ├──────────────────────────────────────┤
-│ Regex Patterns aplicados:           │
-│ ✓ "meu nome é ([A-Z][a-z]+ ...)"    │
+│ ⚠️ IMPORTANTE: Fluxo interceptado     │
+│    antes de gerar resposta com Gemini│
 │                                      │
-│ Gemini Analysis:                     │
-│ {                                    │
-│   "nome_paciente": "João Silva Santos"│
-│ }                                    │
-│                                      │
-│ Validação:                           │
-│ ✓ Nome tem >= 2 palavras            │
-│ ✓ Formato válido                    │
+│ 1. Nome extraído: "João Silva Santos"│
+│ 2. Salvo em: session['pending_name'] │
+│ 3. Estado: confirming_name           │
+│ 4. Resposta gerada manualmente       │
+│    (economiza tokens)                │
 └──────────────────────────────────────┘
 
 ┌──────────────────────────────────────┐
 │ BANCO DE DADOS (Atualizado)          │
 ├──────────────────────────────────────┤
 │ ConversationSession #1:              │
-│ ├─ state: confirming_name            │
+│ ├─ current_state: confirming_name    │
 │ ├─ pending_name: "João Silva Santos" │← Aguardando confirmação
 │ ├─ patient_name: null                │
 │ ├─ name_confirmed: false             │
@@ -546,8 +806,9 @@ Este documento descreve **detalhadamente e visualmente** o fluxo completo do sis
 │ │  }                                 │
 └──────────────────────────────────────┘
 
-🤖 BOT: "Prazer em conhecê-lo! Só para confirmar, seu nome é 
-        João Silva Santos? (Sim/Não)"
+🤖 BOT: "Entendi. Confirma se seu nome completo é João Silva Santos? 
+        Se estiver correto, responda com 'sim'. Caso contrário, 
+        digite novamente seu nome completo."
 
 ═══════════════════════════════════════════════════════════════════════
 
@@ -561,38 +822,65 @@ Este documento descreve **detalhadamente e visualmente** o fluxo completo do sis
 ┌──────────────────────────────────────┐
 │ PROCESSAMENTO                         │
 ├──────────────────────────────────────┤
-│ Intent: confirmar                    │
-│ Confidence: 1.0                      │
-│ Estado Atual: confirming_name        │
-│ Próximo Estado: selecting_specialty  │
-│ Entidades: {}                        │
+│ IntentDetector:                      │
+│ └─ Intent: confirmar_agendamento    │
 │                                      │
-│ Lógica de Confirmação:               │
-│ ├─ Palavras detectadas: ["sim"]     │
-│ ├─ pending_name existe: ✓            │
-│ └─ Ação: Confirmar nome              │
+│ EntityExtractor:                     │
+│ └─ Entidades: {}                    │
+│                                      │
+│ _handle_patient_name_flow():        │
+│ ├─ Detecta: pending_name existe     │
+│ ├─ Chama: confirm_patient_name()    │
+│ ├─ Status: 'confirmed'              │
+│ ├─ Salva: patient_name              │
+│ ├─ Limpa: pending_name              │
+│ ├─ Define: name_confirmed = True    │
+│ ├─ Determina próximo estado         │
+│ └─ Retorna resposta com follow-up   │
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│ LÓGICA DE CONFIRMAÇÃO                │
+├──────────────────────────────────────┤
+│ conversation_service.confirm_patient_ │
+│   name():                            │
+│                                      │
+│ 1. Verifica pending_name existe      │
+│ 2. Detecta palavras: ["sim", "s",    │
+│    "yes", "confirmo", "correto"]     │
+│ 3. Salva: patient_name = pending_name│
+│ 4. Limpa: pending_name = None        │
+│ 5. Define: name_confirmed = True     │
+│ 6. Retorna: status = 'confirmed'     │
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│ DETERMINAÇÃO DO PRÓXIMO ESTADO       │
+├──────────────────────────────────────┤
+│ get_missing_appointment_info():     │
+│ └─ next_action: 'ask_specialty'     │
+│                                      │
+│ Mapeamento:                          │
+│ ask_specialty → selecting_specialty │
+│                                      │
+│ _build_follow_up_after_name():      │
+│ └─ "Para continuarmos, qual         │
+│     especialidade você deseja..."    │
 └──────────────────────────────────────┘
 
 ┌──────────────────────────────────────┐
 │ BANCO DE DADOS (Atualizado)          │
 ├──────────────────────────────────────┤
 │ ConversationSession #1:              │
-│ ├─ state: selecting_specialty        │
+│ ├─ current_state: selecting_specialty│
 │ ├─ patient_name: "João Silva Santos" │← CONFIRMADO!
 │ ├─ pending_name: null                │← Limpo
 │ ├─ name_confirmed: true              │← Flag ativada
 │ └─ ...                               │
 └──────────────────────────────────────┘
 
-🤖 BOT: "Perfeito, João Silva Santos! 👏
-        
-        Agora, qual especialidade médica você precisa?
-        
-        Nossas especialidades:
-        🩺 Medicina do Sono
-        🫁 Pneumologia
-        🩺 Endocrinologia
-        🩺 Cardiologia"
+🤖 BOT: "Perfeito, João Silva Santos! Para continuarmos, qual 
+        especialidade você deseja consultar?"
 
 ═══════════════════════════════════════════════════════════════════════
 
@@ -606,79 +894,60 @@ Este documento descreve **detalhadamente e visualmente** o fluxo completo do sis
 ┌──────────────────────────────────────┐
 │ PROCESSAMENTO                         │
 ├──────────────────────────────────────┤
-│ Intent: selecionar_especialidade     │
-│ Confidence: 0.97                     │
-│ Estado Atual: selecting_specialty    │
-│ Próximo Estado: selecting_doctor     │
-│ Entidades: {                         │
-│   especialidade: "Pneumologia"       │
-│ }                                    │
+│ IntentDetector:                      │
+│ └─ Intent: agendar_consulta          │
+│                                      │
+│ EntityExtractor:                     │
+│ ├─ Extrai: especialidade = "Pneumologia"│
+│ ├─ Valida no banco de dados          │
+│ └─ Entidades: {                      │
+│      especialidade: "Pneumologia"    │
+│    }                                 │
+│                                      │
+│ SessionManager.update_session():     │
+│ ├─ Valida especialidade no banco     │
+│ ├─ Salva: selected_specialty         │
+│ ├─ Corrige estado automaticamente    │
+│ └─ Sincroniza com banco              │
 └──────────────────────────────────────┘
 
 ┌──────────────────────────────────────┐
 │ VALIDAÇÃO DE ESPECIALIDADE           │
 ├──────────────────────────────────────┤
-│ EntityExtractor:                     │
-│ ├─ _validate_specialty("Pneumologia")│
-│ │  │                                 │
-│ │  ├─ Query: Especialidade.objects. │
-│ │  │   filter(nome__icontains="pneumo")│
-│ │  │ )                               │
-│ │  │                                 │
-│ │  └─ Resultado: ✓ Especialidade    │
-│ │     encontrada                     │
-│ │     {                              │
-│ │       id: 2,                       │
-│ │       nome: "Pneumologia",         │
-│ │       ativa: true                  │
-│ │     }                              │
-│ │                                    │
-│ └─ Buscar médicos da especialidade:  │
-│    Medico.objects.filter(            │
-│      especialidades__nome="Pneumologia"│
-│    )                                 │
+│ EntityExtractor._validate_specialty():│
+│                                      │
+│ 1. Query: Especialidade.objects.    │
+│    filter(nome__icontains="pneumo") │
+│                                      │
+│ 2. Resultado: ✓ Encontrada          │
+│    {                                 │
+│      id: 2,                          │
+│      nome: "Pneumologia",            │
+│      ativa: true                     │
+│    }                                 │
+│                                      │
+│ 3. Busca médicos da especialidade    │
 └──────────────────────────────────────┘
 
 ┌──────────────────────────────────────┐
-│ CONSULTA GOOGLE CALENDAR              │
+│ CORREÇÃO AUTOMÁTICA DE ESTADO        │
 ├──────────────────────────────────────┤
-│ API Call:                            │
-│ calendar.events().list(              │
-│   calendarId='primary',              │
-│   timeMin='2024-10-09T00:00:00Z',    │
-│   timeMax='2024-10-16T23:59:59Z',    │
-│   q='Dr. Gustavo'                    │
-│ )                                    │
+│ SessionManager (linha 357):          │
 │                                      │
-│ Resultado:                           │
-│ {                                    │
-│   "days": [                          │
-│     {                                │
-│       "date": "14/10/2024",          │
-│       "weekday": "Segunda-feira",    │
-│       "available_times": [           │
-│         "08:00", "09:00", "10:00",   │
-│         "14:00", "15:00", "16:00"    │
-│       ]                              │
-│     },                               │
-│     {                                │
-│       "date": "16/10/2024",          │
-│       "weekday": "Quarta-feira",     │
-│       "available_times": [           │
-│         "08:00", "09:00", "14:00"    │
-│       ]                              │
-│     }                                │
-│   ]                                  │
-│ }                                    │
+│ Se tem especialidade mas não médico: │
+│ └─ Estado: selecting_doctor           │
+│                                      │
+│ ✅ Estado corrigido automaticamente   │
 └──────────────────────────────────────┘
 
 ┌──────────────────────────────────────┐
 │ BANCO DE DADOS (Atualizado)          │
 ├──────────────────────────────────────┤
 │ ConversationSession #1:              │
-│ ├─ state: selecting_doctor           │
+│ ├─ current_state: selecting_doctor   │
 │ ├─ patient_name: "João Silva Santos" │
 │ ├─ selected_specialty: "Pneumologia" │← ATUALIZADO!
+│ ├─ name_confirmed: true              │
 │ └─ ...                               │
 └──────────────────────────────────────┘
 
@@ -704,44 +973,82 @@ Este documento descreve **detalhadamente e visualmente** o fluxo completo do sis
 ┌──────────────────────────────────────┐
 │ PROCESSAMENTO                         │
 ├──────────────────────────────────────┤
-│ Intent: selecionar_medico            │
-│ Confidence: 0.97                     │
-│ Estado Atual: selecting_doctor       │
-│ Próximo Estado: choosing_schedule    │
-│ Entidades: {                         │
-│   medico: "Dr. Gustavo"              │
-│ }                                    │
+│ IntentDetector:                      │
+│ └─ Intent: agendar_consulta          │
+│                                      │
+│ EntityExtractor:                     │
+│ ├─ Extrai: medico = "Dr. Gustavo"    │
+│ ├─ Valida no banco de dados          │
+│ └─ Entidades: {                      │
+│      medico: "Dr. Gustavo"           │
+│    }                                 │
+│                                      │
+│ SessionManager.update_session():     │
+│ ├─ Valida médico no banco            │
+│ ├─ Salva: selected_doctor            │
+│ ├─ Corrige estado automaticamente   │
+│ └─ Sincroniza com banco              │
 └──────────────────────────────────────┘
 
 ┌──────────────────────────────────────┐
 │ VALIDAÇÃO DE MÉDICO                  │
 ├──────────────────────────────────────┤
+│ SessionManager._validate_doctor():   │
+│                                      │
+│ 1. Query: Medico.objects.filter(     │
+│    nome__icontains="gustavo")       │
+│                                      │
+│ 2. Verifica especialidade compatível │
+│                                      │
+│ 3. Resultado: ✓ Médico encontrado    │
+│    {                                 │
+│      id: 1,                          │
+│      nome: "Dr. Gustavo",            │
+│      especialidades: ["Medicina do   │
+│        Sono", "Pneumologia"]         │
+│    }                                 │
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│ CONSULTA GOOGLE CALENDAR              │
+├──────────────────────────────────────┤
 │ SmartSchedulingService:              │
-│ ├─ _validate_doctor("Dr. Gustavo")   │
-│ │  │                                 │
-│ │  ├─ Query: Medico.objects.filter( │
-│ │  │   nome__icontains="gustavo"    │
-│ │  │ )                               │
-│ │  │                                 │
-│ │  └─ Resultado: ✓ Médico encontrado│
-│ │     {                              │
-│ │       id: 1,                       │
-│ │       nome: "Dr. Gustavo",         │
-│ │       especialidades: ["Medicina   │
-│ │         do Sono", "Pneumologia"],  │
-│ │       preco_particular: 150.00     │
-│ │     }                              │
-│ │                                    │
-│ └─ Buscar horários disponíveis:      │
-│    GoogleCalendarService.get_doctor_ │
-│      availability("Dr. Gustavo", 7)  │
+│ └─ get_doctor_availability():       │
+│    ├─ Consulta Google Calendar API  │
+│    ├─ Filtra eventos do médico       │
+│    └─ Calcula horários livres        │
+│                                      │
+│ Resultado:                           │
+│ {                                    │
+│   "days": [                          │
+│     {                                │
+│       "date": "14/10/2024",          │
+│       "weekday": "Segunda-feira",    │
+│       "available_times": [           │
+│         "08:00", "09:00", "10:00",   │
+│         "14:00", "15:00", "16:00"    │
+│       ]                              │
+│     }                                │
+│   ]                                  │
+│ }                                    │
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│ CORREÇÃO AUTOMÁTICA DE ESTADO        │
+├──────────────────────────────────────┤
+│ SessionManager (linha 367):          │
+│                                      │
+│ Se tem médico E especialidade:      │
+│ └─ Estado: choosing_schedule          │
+│                                      │
+│ ✅ Estado avançado automaticamente   │
 └──────────────────────────────────────┘
 
 ┌──────────────────────────────────────┐
 │ BANCO DE DADOS (Atualizado)          │
 ├──────────────────────────────────────┤
 │ ConversationSession #1:              │
-│ ├─ state: choosing_schedule          │
+│ ├─ current_state: choosing_schedule   │
 │ ├─ patient_name: "João Silva Santos" │
 │ ├─ selected_specialty: "Pneumologia" │
 │ ├─ selected_doctor: "Dr. Gustavo"    │← ATUALIZADO!
@@ -763,14 +1070,78 @@ Este documento descreve **detalhadamente e visualmente** o fluxo completo do sis
         ✅ 08:00, 09:00, 14:00
         
         Qual data e horário seria melhor para você?"
-        
-        Está tudo correto? (Sim/Não)"
 
 ═══════════════════════════════════════════════════════════════════════
 
 
 ┌─────────────────────────────────────────────────────────────────────┐
-│ MENSAGEM 6: CONFIRMAÇÃO FINAL E HANDOFF                             │
+│ MENSAGEM 6: FORNECIMENTO DE DATA E HORÁRIO                          │
+└─────────────────────────────────────────────────────────────────────┘
+
+👤 PACIENTE: "14 de outubro às 14 horas"
+
+┌──────────────────────────────────────┐
+│ PROCESSAMENTO                         │
+├──────────────────────────────────────┤
+│ IntentDetector:                      │
+│ └─ Intent: agendar_consulta          │
+│                                      │
+│ EntityExtractor:                     │
+│ ├─ Extrai: data = "2024-10-14"      │
+│ ├─ Extrai: horario = "14:00"         │
+│ └─ Entidades: {                      │
+│      data: "2024-10-14",             │
+│      horario: "14:00"                │
+│    }                                 │
+│                                      │
+│ ⚠️ VALIDAÇÃO IMEDIATA DE HORÁRIO     │
+│ (linha 380-492):                     │
+│ ├─ Verifica disponibilidade          │
+│ ├─ Se indisponível: sugere alternativas│
+│ └─ Se disponível: salva na sessão   │
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│ VALIDAÇÃO DE HORÁRIO (Antecipada)    │
+├──────────────────────────────────────┤
+│ SmartSchedulingService:              │
+│ └─ is_time_slot_available():        │
+│    ├─ Consulta Google Calendar        │
+│    ├─ Verifica se horário está livre │
+│    └─ Retorna:                       │
+│       {                              │
+│         available: true,             │
+│         date_formatted: "14/10/2024",│
+│         time_formatted: "14:00"      │
+│       }                              │
+│                                      │
+│ ✅ Horário disponível!               │
+│ Salva na sessão                       │
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│ BANCO DE DADOS (Atualizado)          │
+├──────────────────────────────────────┤
+│ ConversationSession #1:              │
+│ ├─ current_state: choosing_schedule   │
+│ ├─ patient_name: "João Silva Santos" │
+│ ├─ selected_specialty: "Pneumologia" │
+│ ├─ selected_doctor: "Dr. Gustavo"    │
+│ ├─ preferred_date: 2024-10-14        │← ATUALIZADO!
+│ ├─ preferred_time: 14:00:00          │← ATUALIZADO!
+│ └─ ...                               │
+└──────────────────────────────────────┘
+
+🤖 BOT: "Perfeito! Agendamento para Segunda-feira, 14/10/2024 às 14:00 
+        com o Dr. Gustavo.
+        
+        Deseja confirmar este agendamento? (Sim/Não)"
+
+═══════════════════════════════════════════════════════════════════════
+
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ MENSAGEM 7: CONFIRMAÇÃO FINAL E HANDOFF                             │
 └─────────────────────────────────────────────────────────────────────┘
 
 👤 PACIENTE: "Sim, está correto"
@@ -778,23 +1149,31 @@ Este documento descreve **detalhadamente e visualmente** o fluxo completo do sis
 ┌──────────────────────────────────────┐
 │ PROCESSAMENTO                         │
 ├──────────────────────────────────────┤
-│ Intent: confirmar_agendamento        │← GATILHO!
-│ Confidence: 0.99                     │
-│ Estado Atual: confirming             │
-│ Próximo Estado: confirming           │
-│ Entidades: {}                        │
+│ IntentDetector:                      │
+│ └─ Intent: confirmar_agendamento     │← GATILHO!
+│                                      │
+│ EntityExtractor:                     │
+│ └─ Entidades: {}                    │
+│                                      │
+│ ⚠️ VERIFICAÇÕES ANTES DO HANDOFF:    │
+│ ├─ 1. Verifica informações faltantes│
+│ ├─ 2. Valida horário novamente      │
+│ ├─ 3. Verifica se já foi confirmado │
+│ └─ 4. Gera handoff (se primeira vez)│
 └──────────────────────────────────────┘
 
 ┌──────────────────────────────────────┐
 │ VALIDAÇÃO DE INFORMAÇÕES              │
 ├──────────────────────────────────────┤
-│ _validate_appointment_info():        │
+│ conversation_service.get_missing_    │
+│   appointment_info():                │
 │                                      │
 │ Verificando campos obrigatórios:     │
-│ ✓ Nome: "João Silva Santos"         │
-│ ✓ Médico: "Dr. Gustavo"              │
-│ ✓ Data: 2024-10-14                   │
-│ ✓ Horário: 14:00                     │
+│ ✓ patient_name: "João Silva Santos" │
+│ ✓ selected_doctor: "Dr. Gustavo"     │
+│ ✓ selected_specialty: "Pneumologia"  │
+│ ✓ preferred_date: 2024-10-14        │
+│ ✓ preferred_time: 14:00:00          │
 │                                      │
 │ Resultado:                           │
 │ {                                    │
@@ -803,7 +1182,31 @@ Este documento descreve **detalhadamente e visualmente** o fluxo completo do sis
 │ }                                    │
 │                                      │
 │ ✅ TODAS INFORMAÇÕES PRESENTES!      │
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│ VALIDAÇÃO FINAL DE HORÁRIO           │
+├──────────────────────────────────────┤
+│ SmartSchedulingService:              │
+│ └─ is_time_slot_available():        │
+│    ├─ Verifica disponibilidade      │
+│    └─ Resultado: available = true   │
+│                                      │
+│ ✅ Horário ainda disponível!         │
 │ Prosseguir com handoff...            │
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│ VERIFICAÇÃO DE CONFIRMAÇÃO DUPLICADA │
+├──────────────────────────────────────┤
+│ Se current_state == 'confirming':    │
+│ └─ ⚠️ Já foi confirmado anteriormente│
+│    └─ Retorna resumo sem gerar      │
+│       novo handoff                   │
+│                                      │
+│ Se current_state != 'confirming':    │
+│ └─ ✅ Primeira confirmação           │
+│    └─ Gera handoff                   │
 └──────────────────────────────────────┘
 
 ┌──────────────────────────────────────┐
@@ -815,6 +1218,7 @@ Este documento descreve **detalhadamente e visualmente** o fluxo completo do sis
 │ 1. Coletar informações:              │
 │    ├─ patient: "João Silva Santos"   │
 │    ├─ doctor: "Dr. Gustavo"          │
+│    ├─ specialty: "Pneumologia"       │
 │    ├─ date: "14/10/2024"             │
 │    └─ time: "14:00"                  │
 │                                      │
@@ -829,35 +1233,29 @@ Este documento descreve **detalhadamente e visualmente** o fluxo completo do sis
 │    🕐 Horário: 14:00                 │
 │    """                               │
 │                                      │
-│ 3. URL encode:                       │
-│    encoded = urllib.parse.quote(     │
-│      base_message                    │
-│    )                                 │
-│                                      │
-│ 4. Gerar link WhatsApp:              │
-│    link = f"https://wa.me/           │
-│      5573988221003?text={encoded}"   │
-│                                      │
-│ 5. Resultado:                        │
-│    "https://wa.me/5573988221003?     │
-│     text=Ol%C3%A1%2C%20gostaria%..." │
+│ 3. URL encode e gerar link:          │
+│    link = "https://wa.me/            │
+│      5573988221003?text=..."         │
 └──────────────────────────────────────┘
 
 ┌──────────────────────────────────────┐
 │ BANCO DE DADOS (Final)               │
 ├──────────────────────────────────────┤
 │ ConversationSession #1:              │
-│ ├─ state: confirming                 │
+│ ├─ current_state: confirming         │← Mudado após handoff
 │ ├─ patient_name: "João Silva Santos" │
+│ ├─ name_confirmed: true              │
 │ ├─ selected_doctor: "Dr. Gustavo"    │
+│ ├─ selected_specialty: "Pneumologia" │
 │ ├─ preferred_date: 2024-10-14        │
 │ ├─ preferred_time: 14:00:00          │
+│ ├─ handoff_link: "https://wa.me/..." │
 │ ├─ created_at: 2024-10-09 14:30      │
-│ ├─ updated_at: 2024-10-09 14:35      │
-│ └─ last_activity: 2024-10-09 14:35   │
+│ ├─ updated_at: 2024-10-09 14:45      │
+│ └─ last_activity: 2024-10-09 14:45   │
 │                                      │
-│ Total Mensagens: 12                  │
-│ (6 do usuário + 6 do bot)            │
+│ Total Mensagens: 14                  │
+│ (7 do usuário + 7 do bot)            │
 └──────────────────────────────────────┘
 
 🤖 BOT: "✅ Perfeito! Vamos confirmar seu pré-agendamento:
@@ -865,6 +1263,7 @@ Este documento descreve **detalhadamente e visualmente** o fluxo completo do sis
         📋 RESUMO:
         👤 Paciente: João Silva Santos
         👨‍⚕️ Médico: Dr. Gustavo
+        🩺 Especialidade: Pneumologia
         📅 Data: Segunda-feira, 14/10/2024
         🕐 Horário: 14:00
         
@@ -897,6 +1296,7 @@ Este documento descreve **detalhadamente e visualmente** o fluxo completo do sis
 
 👤 Paciente: João Silva Santos
 👨‍⚕️ Médico: Dr. Gustavo
+🩺 Especialidade: Pneumologia
 📅 Data: 14/10/2024
 🕐 Horário: 14:00"
 
@@ -911,6 +1311,36 @@ Este documento descreve **detalhadamente e visualmente** o fluxo completo do sis
    ↓
 
 📅 Agendamento inserido no Google Calendar
+
+═══════════════════════════════════════════════════════════════════════
+
+NOTAS IMPORTANTES SOBRE O FLUXO ATUALIZADO:
+═══════════════════════════════════════════════════════════════════════
+
+1. ⚠️ FLUXO DE NOME INTERCEPTADO:
+   - _handle_patient_name_flow() intercepta antes do ResponseGenerator
+   - Economiza tokens do Gemini
+   - Garante confirmação do nome antes de continuar
+
+2. ✅ CORREÇÃO AUTOMÁTICA DE ESTADO:
+   - SessionManager corrige estado automaticamente
+   - Baseado nas informações coletadas
+   - Garante ordem correta: nome → especialidade → médico → data/horário
+
+3. 🔍 VALIDAÇÃO ANTECIPADA DE HORÁRIO:
+   - Valida horário assim que fornecido (não espera confirmação)
+   - Se indisponível: sugere alternativas imediatamente
+   - Evita confirmar horário que não está disponível
+
+4. 🛡️ VALIDAÇÃO DUPLA NA CONFIRMAÇÃO:
+   - Valida horário novamente antes de gerar handoff
+   - Verifica se já foi confirmado anteriormente
+   - Evita gerar handoff duplicado
+
+5. 📊 PERSISTÊNCIA COMPLETA:
+   - Todas as informações salvas no banco
+   - Sincronização cache + banco
+   - Histórico completo de mensagens
 
 ═══════════════════════════════════════════════════════════════════════
 ```

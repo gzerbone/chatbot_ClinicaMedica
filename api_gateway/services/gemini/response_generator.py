@@ -451,7 +451,7 @@ DISPONIBILIDADE REAL DO GOOGLE CALENDAR:
 - NÃO apenas pergunte "qual data você prefere?" ou "qual seria a data e horário?"
 - OBRIGATÓRIO: LISTE os dias e horários disponíveis mostrados acima de forma clara
 - Formate assim:
-  📅 **Horários disponíveis:**
+  📅 *Horários disponíveis:*
   • {days_info[0].get('weekday', 'Dia')} ({days_info[0].get('date', '')}): {', '.join(days_info[0].get('available_times', [])[:6])}
   • {days_info[1].get('weekday', 'Dia')} ({days_info[1].get('date', '')}): {', '.join(days_info[1].get('available_times', [])[:6]) if len(days_info) > 1 else ''}
   (e assim por diante para todos os dias listados acima)
@@ -547,7 +547,7 @@ INFORMAÇÕES DA CLÍNICA (USE APENAS ESTAS INFORMAÇÕES, NÃO INVENTE):
 - Você DEVE perguntar o nome completo do paciente PRIMEIRO
 - NÃO pergunte sobre especialidade, médico, data ou horário ainda
 - A ordem obrigatória é: 1) nome → 2) especialidade → 3) médico → 4) data → 5) horário
-- Pergunte: "Para começar o agendamento, preciso saber seu nome completo. Qual é seu nome?" ou "Olá! Para começar, qual é seu nome completo?"
+- Pergunte: "Olá, sou a assistente virtual da Clínica {clinic_info.get('nome', 'Médica')}, antes de iniciar agendamento e tirar suas dúvidas, preciso saber seu nome completo. Qual é seu nome?"
 - IMPORTANTE: Aguarde o paciente informar o nome antes de perguntar sobre especialidade
 """
             else:

@@ -399,7 +399,7 @@ class ConversationService:
                     action = 'ask_specialty'
             
             action_messages = {
-                'ask_name': 'Para começar o agendamento, preciso saber seu nome completo. Qual é seu nome?',
+                'ask_name': 'Olá, sou a assistente virtual da clínica, antes de iniciar agendamento e tirar suas dúvidas, preciso saber seu nome completo. Qual é seu nome?',
                 'ask_specialty': f'Olá {patient_name}! Qual especialidade médica você procura?' if patient_name else 'Qual especialidade médica você procura?',
                 'ask_doctor': f'Perfeito {patient_name}! Temos médicos disponíveis nessa especialidade. Qual médico você prefere?' if patient_name else 'Temos médicos disponíveis nessa especialidade. Qual médico você prefere?',
                 'ask_date': f'Ótimo {patient_name}! Para qual data você gostaria de agendar?' if patient_name else 'Para qual data você gostaria de agendar?',
