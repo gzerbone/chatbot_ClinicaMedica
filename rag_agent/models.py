@@ -31,14 +31,6 @@ class ClinicaInfo(models.Model):
         help_text="Texto sobre a política de horários pré-agendados e possíveis demoras."
     )
 
-    # ID da agenda principal da clínica (Google Calendar)
-    google_calendar_id = models.CharField(
-        max_length=255,
-        blank=True,
-        null=True,
-        help_text="O ID do Google Calendar PRINCIPAL da clínica."
-    )
-
     def __str__(self):
         return self.nome
 

@@ -66,30 +66,35 @@ chatbot_ClinicaMedica/
 
 ### Componentes Principais
 
-#### 1. **Gemini Chatbot Service** 🤖 (Motor Principal)
-- **Arquivo**: `api_gateway/services/gemini/core_service.py` (modularizado)
+#### 1. **Gemini Chatbot Service** 🤖 (Motor Principal - Modularizado)
+- **Arquivo Principal**: `api_gateway/services/gemini/core_service.py`
 - **Modelo**: Google Gemini AI 2.0 Flash
-- **Estrutura Modular**:
-  - `core_service.py`: Orquestrador principal (GeminiChatbotService)
-  - `intent_detector.py`: Detecção de intenções
-  - `entity_extractor.py`: Extração de entidades
-  - `response_generator.py`: Geração de respostas
-  - `session_manager.py`: Gerenciamento de sessões
+- **Estrutura Modular (5 Componentes)**:
+  - `core_service.py`: Orquestrador principal (GeminiChatbotService) - coordena todos os módulos
+  - `intent_detector.py`: Detecção de intenções do usuário (agendar, buscar_info, etc.)
+  - `entity_extractor.py`: Extração de entidades (nome, especialidade, médico, data, horário)
+  - `response_generator.py`: Geração de respostas contextuais e naturais
+  - `session_manager.py`: Gerenciamento de sessões e histórico de conversas
 - **Responsabilidades**:
   - Gerenciamento completo do fluxo de conversação
-  - Análise de intenções e extração de entidades (nome, telefone, especialidade)
+  - Análise de intenções e extração de entidades usando Gemini AI
   - Geração de respostas contextuais e naturais
-  - Coordenação com RAG Service para contexto
-  - Controle de estados de conversação
+  - Coordenação com RAG Service para contexto da clínica
+  - Controle de estados de conversação (máquina de estados)
+  - Sistema de pausar/retomar para dúvidas
+  - Validação e correção automática de estados
 
 #### 2. **Conversation Service** 💾
 - **Arquivo**: `api_gateway/services/conversation_service.py`
 - **Responsabilidades**:
   - Persistência de sessões de conversa (modelo `ConversationSession`)
-  - Gerenciamento de estados do fluxo (idle, collecting_info, selecting_doctor, etc.)
+  - Gerenciamento de estados do fluxo (idle, collecting_patient_info, confirming_name, selecting_specialty, selecting_doctor, choosing_schedule, answering_questions, confirming)
   - Histórico completo de mensagens (modelo `ConversationMessage`)
   - Cache de dados do paciente
   - Validação de sessões ativas (timeout 24h)
+  - Sistema de pausar/retomar agendamento para dúvidas
+  - Validação de completude de informações do agendamento
+  - Correção automática de estados baseada em dados coletados
 
 #### 3. **RAG Service** 📚 (Base de Conhecimento)
 - **Arquivo**: `api_gateway/services/rag_service.py`
@@ -151,21 +156,24 @@ chatbot_ClinicaMedica/
 
 #### 1. **Conversação Inteligente com IA** 🤖
    - ✅ Análise de intenções com Gemini AI 2.0 Flash
-   - ✅ Extração automática de entidades (nome, telefone, especialidade, data)
+   - ✅ Extração automática de entidades (nome, especialidade, médico, data, horário)
    - ✅ Confirmação interativa de dados do paciente
    - ✅ Fluxo conversacional natural e contextual
    - ✅ Memória de contexto durante toda a sessão
    - ✅ Respostas personalizadas baseadas no histórico
+   - ✅ Sistema modular com 5 componentes especializados (IntentDetector, EntityExtractor, ResponseGenerator, SessionManager, CoreService)
 
 #### 2. **Sistema de Agendamento Completo** 📅
    - ✅ Coleta inteligente de informações do paciente
-   - ✅ Validação de dados (nome, telefone)
+   - ✅ Validação de dados (nome completo com confirmação obrigatória)
    - ✅ Seleção de médico por especialidade
    - ✅ Consulta de disponibilidade em tempo real no Google Calendar
    - ✅ Apresentação de horários disponíveis
-   - ✅ Geração de links de confirmação
+   - ✅ Geração de links de confirmação (handoff)
    - ✅ Pré-agendamento com validação da secretaria
    - ✅ Sincronização automática com calendário
+   - ✅ Sistema de pausar/retomar para dúvidas durante agendamento
+   - ✅ Retomada automática quando usuário fornece informações
 
 #### 3. **Integração WhatsApp Business** 💬
    - ✅ Recebimento de mensagens via webhook
@@ -204,78 +212,110 @@ chatbot_ClinicaMedica/
    - ✅ Resumo completo da conversa para a secretaria
    - ✅ Contexto preservado durante transferência
 
-### 🔄 Fluxo de Agendamento Detalhado
+### 🔄 Fluxo de Processamento de Mensagens
+
+Cada mensagem do usuário passa por um processo estruturado de análise:
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    📱 PACIENTE VIA WHATSAPP                      │
+│                    FLUXO: DA MENSAGEM À RESPOSTA                │
 └─────────────────────────────────────────────────────────────────┘
-                                ↓
+
+📱 MENSAGEM DO USUÁRIO
+   │
+   ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  1️⃣ RECEPÇÃO E ANÁLISE                                          │
+│ ETAPA 1: RECEPÇÃO E PREPARAÇÃO                                 │
 ├─────────────────────────────────────────────────────────────────┤
-│  • WhatsApp webhook envia mensagem para Django                   │
-│  • Gemini AI analisa intenção e contexto                        │
-│  • Extração automática de entidades (nome, telefone)            │
-│  • Consulta/cria sessão persistente                             │
+│ • Recebe mensagem via WhatsApp Webhook                          │
+│ • Extrai número do telefone e texto da mensagem                 │
+│ • Busca ou cria sessão de conversa no banco de dados           │
+│ • Carrega histórico de mensagens anteriores (últimas 10)       │
+│ • Carrega dados da clínica (médicos, especialidades, etc.)     │
 └─────────────────────────────────────────────────────────────────┘
-                                ↓
+   │
+   ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  2️⃣ COLETA DE INFORMAÇÕES DO PACIENTE                           │
+│ ETAPA 2: ANÁLISE INTELIGENTE DA MENSAGEM                      │
 ├─────────────────────────────────────────────────────────────────┤
-│  • Estado: collecting_patient_info → confirming_name            │
-│  • Validação de nome completo                                   │
-│  • Confirmação interativa ("Seu nome é X, está correto?")       │
-│  • Validação de telefone                                        │
-│  • Persistência em ConversationSession                          │
+│ • Identifica a intenção do usuário (agendar, perguntar, etc.)  │
+│ • Extrai informações relevantes (nome, especialidade, médico,   │
+│   data, horário)                                                │
+│ • Determina qual deve ser o próximo passo da conversa           │
 └─────────────────────────────────────────────────────────────────┘
-                                ↓
+   │
+   ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  3️⃣ SELEÇÃO DE ESPECIALIDADE                                   │
+│ ETAPA 3: PROCESSAMENTO ESPECIALIZADO                          │
 ├─────────────────────────────────────────────────────────────────┤
-│  • Consulta RAG para especialidades disponíveis                 │
-│  • Análise da necessidade do paciente                           │
-│  • Sugestão de especialidades relevantes                        │
-│  • Estado: selecting_specialty                                  │
+│ • Verifica se precisa confirmar nome do paciente                │
+│ • Detecta se usuário quer tirar dúvidas (pausa agendamento)    │
+│ • Valida horários fornecidos contra Google Calendar             │
+│ • Verifica se todas informações estão completas para confirmar │
 └─────────────────────────────────────────────────────────────────┘
-                                ↓
+   │
+   ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  4️⃣ SELEÇÃO DE MÉDICO                                           │
+│ ETAPA 4: ATUALIZAÇÃO E PERSISTÊNCIA                            │
 ├─────────────────────────────────────────────────────────────────┤
-│  • Estado: selecting_doctor                                     │
-│  • Filtragem de médicos por especialidade                       │
-│  • Apresentação de opções (nome, especialidades, CRM)           │
-│  • Seleção pelo paciente                                        │
-│  • Armazenamento em session.selected_doctor                     │
+│ • Atualiza informações coletadas na sessão                      │
+│ • Corrige estado da conversa automaticamente                    │
+│ • Salva mensagens no histórico do banco de dados               │
+│ • Sincroniza dados entre cache e banco                          │
 └─────────────────────────────────────────────────────────────────┘
-                                ↓
+   │
+   ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  5️⃣ CONSULTA DE DISPONIBILIDADE                                 │
+│ ETAPA 5: GERAÇÃO DA RESPOSTA                                   │
 ├─────────────────────────────────────────────────────────────────┤
-│  • Estado: choosing_schedule                                    │
-│  • Integração com Google Calendar API                           │
-│  • Busca de slots disponíveis em tempo real                     │
-│  • Apresentação de horários formatados                          │
-│  • Validação de regras de agendamento                           │
+│ • Gera resposta contextualizada baseada na análise             │
+│ • Inclui informações relevantes (horários, médicos, etc.)       │
+│ • Formata mensagem de forma amigável e profissional             │
 └─────────────────────────────────────────────────────────────────┘
-                                ↓
+   │
+   ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  6️⃣ CONFIRMAÇÃO E HANDOFF                                       │
+│ ETAPA 6: ENVIO E FINALIZAÇÃO                                   │
 ├─────────────────────────────────────────────────────────────────┤
-│  • Estado: confirming                                           │
-│  • Resumo completo do pré-agendamento                           │
-│  • Geração de link de confirmação WhatsApp                      │
-│  • Transferência para secretaria (Handoff Service)              ││                                                                 │
+│ • Envia resposta via WhatsApp Business API                      │
+│ • Registra conclusão do processamento                           │
 └─────────────────────────────────────────────────────────────────┘
-                                ↓
-┌─────────────────────────────────────────────────────────────────┐
-│  7️⃣ FINALIZAÇÃO                                                 │
-├─────────────────────────────────────────────────────────────────┤
-│  • Estado: retorna para idle                                    │
-│  • Notificação de conclusão ao paciente                         │
-│  • Mensagem de despedida personalizada                          │
-│  • Sessão preservada para futuras interações                    │
-└─────────────────────────────────────────────────────────────────┘
+   │
+   ▼
+📱 RESPOSTA PARA O USUÁRIO
+```
+
+### 🔄 Fluxo de Pré-Agendamento
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│              FLUXO DE PRÉ-AGENDAMENTO                        │
+├──────────────────────────────────────────────────────────────┤
+│                                                              │
+│  IDLE                                                        │
+│   │  "Quero agendar consulta"                               │
+│   ▼                                                          │
+│  COLETANDO NOME                                              │
+│   │  "Meu nome é João Silva"                                │
+│   ▼                                                          │
+│  CONFIRMANDO NOME                                            │
+│   │  "Sim"                                                   │
+│   ▼                                                          │
+│  SELECIONANDO ESPECIALIDADE                                  │
+│   │  "Cardiologia"                                           │
+│   ▼                                                          │
+│  SELECIONANDO MÉDICO                                         │
+│   │  "Dr. Carlos"                                            │
+│   ▼                                                          │
+│  ESCOLHENDO HORÁRIO                                          │
+│   │  "Segunda às 14h"                                        │
+│   ▼                                                          │
+│  CONFIRMANDO                                                 │
+│   │  "Sim, confirmo"                                         │
+│   ▼                                                          │
+│  HANDOFF GERADO                                              │
+│                                                              │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 **Estados da Sessão:**
@@ -285,7 +325,7 @@ chatbot_ClinicaMedica/
 - `selecting_specialty` → Escolhendo especialidade médica
 - `selecting_doctor` → Escolhendo médico
 - `choosing_schedule` → Selecionando data/horário
-- `answering_questions` → Respondendo dúvidas do paciente
+- `answering_questions` → Respondendo dúvidas do paciente (pausa agendamento)
 - `confirming` → Confirmando agendamento
 
 ### 🔄 Gerenciamento Dinâmico do Fluxo
@@ -307,42 +347,52 @@ next_question = conversation_service.get_next_question(phone_number)
 ```
 
 **Fluxo Sequencial Inteligente:**
-1. `ask_name` → Solicita nome do paciente
-2. `ask_specialty` → Solicita especialidade desejada
-3. `ask_doctor` → Solicita médico preferido
-4. `ask_date` → Solicita data da consulta
-5. `ask_time` → Solicita horário da consulta
-6. `generate_handoff` → Gera link de confirmação
+1. `ask_name` → Solicita nome completo do paciente
+2. `confirm_name` → Confirma nome extraído (obrigatório)
+3. `ask_specialty` → Solicita especialidade desejada
+4. `ask_doctor` → Solicita médico preferido (obrigatório antes de data/horário)
+5. `ask_date` → Solicita data da consulta
+6. `ask_time` → Solicita horário da consulta (obrigatório)
+7. `generate_handoff` → Gera link de confirmação para secretária
+
+**Validações Implementadas:**
+- ✅ Nome deve ser confirmado explicitamente pelo usuário
+- ✅ Médico deve ser selecionado antes de consultar disponibilidade
+- ✅ Horário é obrigatório e validado contra Google Calendar
+- ✅ Validação dupla: imediata ao informar + revalidação antes do handoff
+- ✅ Correção automática de estados baseada em dados coletados
 
 ### 💡 Sistema de Pausar/Retomar para Dúvidas
 
-O chatbot permite que o usuário tire dúvidas a qualquer momento, incluindo durante um agendamento:
+O chatbot permite que o usuário tire dúvidas a qualquer momento, incluindo durante um agendamento, sem perder o progresso:
 
-```python
-# Pausar agendamento para responder dúvida
-conversation_service.pause_for_question(phone_number)
-# Estado atual é salvo em previous_state
+**Como Funciona:**
+1. **Pausa Automática**: Quando o usuário faz uma pergunta durante o agendamento, o sistema automaticamente:
+   - Salva o estado atual em `previous_state`
+   - Muda para o estado `answering_questions`
+   - Responde a dúvida do usuário
+   
+2. **Retomada Automática**: O sistema detecta automaticamente quando o usuário fornece informações de agendamento (especialidade, médico, data, horário) e retoma o fluxo automaticamente, mesmo que a intenção seja `buscar_info` ou `duvida`.
 
-# Verificar se há agendamento pausado
-has_paused = conversation_service.has_paused_appointment(phone_number)
-
-# Retomar agendamento de onde parou
-resume_result = conversation_service.resume_appointment(phone_number)
-# Restaura o estado anterior e continua o fluxo
-```
+3. **Retomada Manual**: O usuário pode usar palavras-chave para retomar explicitamente:
+   - "continuar", "retomar", "voltar", "prosseguir", "seguir", "agendamento"
 
 **Cenários de Uso:**
 1. 👤 **Apenas Dúvidas**: Usuário tira dúvidas sem iniciar agendamento
 2. 🔄 **Dúvidas Antes**: Usuário tira dúvidas e depois inicia agendamento
 3. ⏸️ **Pausar Agendamento**: Usuário pausa agendamento para tirar dúvidas e depois retoma
+4. 🔄 **Retomada Automática**: Usuário fornece informações de agendamento durante dúvidas e o sistema retoma automaticamente
 
-**Palavras-chave para Retomar:**
-- "continuar"
-- "voltar"
-- "retomar"
-- "prosseguir"
-- "seguir"
-- "agendamento"
+**Exemplo de Fluxo:**
+```
+Estado: selecting_doctor
+Usuário: "Quanto custa a consulta?"
+Sistema: [PAUSA] previous_state = "selecting_doctor", current_state = "answering_questions"
+         "Consulta particular: R$ 180,00 a R$ 200,00"
+Usuário: "Cardiologia"  ← Forneceu especialidade
+Sistema: [RETOMA AUTOMATICAMENTE] current_state = "selecting_doctor"
+         "Com a especialidade de Cardiologia escolhida, temos..."
+```
 
 ## 🛠️ Tecnologias Utilizadas
 
@@ -867,9 +917,10 @@ A pasta `docs/` contém mais de 20 guias técnicos detalhados. Principais docume
 - **[Arquitetura Gemini Centralizada](docs/01_arquitetura/ARQUITETURA_GEMINI_CENTRALIZADA.md)** - Como o Gemini orquestra tudo
 
 ### 🔄 Fluxos e Lógica
+- **[Fluxos e Processos do Sistema](docs/04_fluxos_processos/TCC_FLUXOS_PROCESSOS.md)** - ⭐ **Documentação completa de fluxos para TCC**
+- **[Fluxo Completo do Projeto](docs/04_fluxos_processos/FLUXO_COMPLETO_PROJETO.md)** - Fluxo detalhado: da mensagem à resposta
 - **[Lógica de Pré-agendamento](docs/04_fluxos_processos/LOGICA_PRE_AGENDAMENTO_ATUALIZADA.md)** - Detalhes do agendamento
-- **[Fluxo Pré-agendamento Corrigido](docs/04_fluxos_processos/FLUXO_PRE_AGENDAMENTO_CORRIGIDO.md)** - Versão otimizada
-- **[Análise de Estados de Conversação](docs/04_fluxos_processos/ANALISE_ESTADOS_CONVERSACAO.md)** - Estados e transições
+- **[Ordem de Organização TCC](docs/04_fluxos_processos/ORDEM_ORGANIZACAO_TCC.md)** - Como organizar fluxos no TCC
 
 ### 🔌 Integrações
 - **[Integração de APIs](docs/02_setup_configuracao/INTEGRACAO_APIS.md)** - Como as APIs se conectam

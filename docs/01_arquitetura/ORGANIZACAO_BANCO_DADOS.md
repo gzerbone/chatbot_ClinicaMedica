@@ -1100,100 +1100,418 @@ especialidade_validada = validar_especialidade("pneumo")
                 └──────────────┘
 ```
 
-### Diagrama Entidade-Relacionamento Detalhado
+### Diagrama Entidade-Relacionamento Detalhado (Modelo Completo para TCC)
+
+Este diagrama apresenta a estrutura completa do banco de dados com todos os campos, tipos de dados, relacionamentos e cardinalidades, adequado para uso como figura explicativa no TCC.
 
 ```
-┌────────────────────────────────────────────────────────────────┐
-│                  MODELO DE DADOS COMPLETO                      │
-└────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                        DIAGRAMA ENTIDADE-RELACIONAMENTO (ER)                                 │
+│                     Sistema de Chatbot para Clínica Médica                                   │
+│                                                                                               │
+│  LEGENDA:                                                                                     │
+│  PK = Primary Key (Chave Primária)  |  FK = Foreign Key (Chave Estrangeira)                │
+│  1:N = Um-para-Muitos  |  N:M = Muitos-para-Muitos                                           │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
 
-┌──────────────────────────┐
-│   ConversationSession    │
-├──────────────────────────┤
-│ PK  phone_number         │
-│     patient_name         │
-│     pending_name         │
-│     name_confirmed       │
-│     current_state        │◄──┐
-│     previous_state       │   │ Sistema pausar/retomar
-│     insurance_type       │   │
-│     preferred_date       │   │
-│     preferred_time       │   │
-│     selected_doctor      │   │
-│     selected_specialty   │   │
-│     additional_notes     │   │
-│     created_at           │   │
-│     updated_at           │   │
-│     last_activity        │   │
-└──────────┬───────────────┘   │
-           │ 1                 │
-           │                   │
-           │ N                 │
-           ▼                   │
-┌──────────────────────────┐   │
-│   ConversationMessage    │   │
-├──────────────────────────┤   │
-│ PK  id                   │   │
-│ FK  session_id           │───┘
-│     message_type         │
-│     content              │
-│     intent               │
-│     confidence           │
-│     entities (JSON)      │
-│     timestamp            │
-└──────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                    APP: api_gateway                                          │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                              ConversationSession                                             │
+│                          (Sessão de Conversa)                                                │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────────────────────┐   │
+│  │ CHAVE PRIMÁRIA                                                                       │   │
+│  ├─────────────────────────────────────────────────────────────────────────────────────┤   │
+│  │ PK  phone_number              VARCHAR(20)      UNIQUE, NOT NULL                   │   │
+│  │                              Número do telefone do paciente (identificador único)   │   │
+│  └─────────────────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────────────────────┐   │
+│  │ DADOS DO PACIENTE                                                                  │   │
+│  ├─────────────────────────────────────────────────────────────────────────────────────┤   │
+│  │     patient_name             VARCHAR(100)      NULL                                 │   │
+│  │                              Nome completo confirmado do paciente                 │   │
+│  │                                                                                     │   │
+│  │     pending_name             VARCHAR(100)      NULL                                 │   │
+│  │                              Nome extraído aguardando confirmação                  │   │
+│  │                                                                                     │   │
+│  │     name_confirmed           BOOLEAN           DEFAULT FALSE                       │   │
+│  │                              Flag indicando se o nome foi confirmado              │   │
+│  └─────────────────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────────────────────┐   │
+│  │ GERENCIAMENTO DE ESTADOS                                                           │   │
+│  ├─────────────────────────────────────────────────────────────────────────────────────┤   │
+│  │     current_state            VARCHAR(50)       DEFAULT 'idle'                     │   │
+│  │                              Estados: idle, collecting_patient_info,              │   │
+│  │                              confirming_name, selecting_specialty,                 │   │
+│  │                              selecting_doctor, choosing_schedule,                 │   │
+│  │                              answering_questions, confirming                      │   │
+│  │                                                                                     │   │
+│  │     previous_state           VARCHAR(50)       NULL                                 │   │
+│  │                              Estado anterior (sistema pausar/retomar)              │   │
+│  └─────────────────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────────────────────┐   │
+│  │ DADOS DO AGENDAMENTO                                                               │   │
+│  ├─────────────────────────────────────────────────────────────────────────────────────┤   │
+│  │     selected_specialty        VARCHAR(100)      NULL                                 │   │
+│  │     selected_doctor           VARCHAR(100)      NULL                                 │   │
+│  │     preferred_date            DATE             NULL                                 │   │
+│  │     preferred_time            TIME             NULL                                 │   │
+│  │     insurance_type            VARCHAR(50)       NULL                                 │   │
+│  │     additional_notes          TEXT             NULL                                 │   │
+│  └─────────────────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────────────────────┐   │
+│  │ METADADOS                                                                          │   │
+│  ├─────────────────────────────────────────────────────────────────────────────────────┤   │
+│  │     created_at                DATETIME         AUTO_NOW_ADD                        │   │
+│  │     updated_at                DATETIME         AUTO_NOW                            │   │
+│  │     last_activity             DATETIME         AUTO_NOW                            │   │
+│  └─────────────────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────────────────────┐   │
+│  │ CONSTRAINTS: UNIQUE(phone_number), INDEX(last_activity), ORDERING: [-last_activity]│   │
+│  └─────────────────────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ 1 (One)
+                                    │ Uma sessão pode ter
+                                    │ múltiplas mensagens
+                                    │
+                                    │ N (Many)
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                              ConversationMessage                                             │
+│                          (Mensagem da Conversa)                                              │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────────────────────┐   │
+│  │ PK  id                       INTEGER           AUTO_INCREMENT                       │   │
+│  │ FK  session_id                INTEGER           NOT NULL, CASCADE                  │   │
+│  │     REFERENCES ConversationSession(phone_number)                                   │   │
+│  └─────────────────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────────────────────┐   │
+│  │     message_type              VARCHAR(10)       NOT NULL                            │   │
+│  │                              'user', 'bot', 'system'                                │   │
+│  │                                                                                     │   │
+│  │     content                   TEXT             NOT NULL                            │   │
+│  │     intent                    VARCHAR(50)       NULL                                 │   │
+│  │     confidence                FLOAT            NULL                                 │   │
+│  │     entities                  JSON             DEFAULT {}                           │   │
+│  │                              {nome_paciente, especialidade, medico, data, horario}│   │
+│  │     timestamp                 DATETIME         AUTO_NOW_ADD                        │   │
+│  └─────────────────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────────────────────┐   │
+│  │ CONSTRAINTS: INDEX(session_id), INDEX(timestamp), ORDERING: [timestamp]            │   │
+│  └─────────────────────────────────────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
 
 
-┌──────────────────────┐        ┌──────────────────────┐
-│   Especialidade      │   N:M  │      Medico          │
-├──────────────────────┤◄───────┤──────────────────────┤
-│ PK  id               │        │ PK  id               │
-│     nome (unique)    │        │     nome             │
-│     descricao        │        │     crm (unique)     │
-│     ativa            │        │     bio              │
-└──────────────────────┘        │     preco_particular │
-                                │     formas_pagamento │
-                                │     retorno_info     │
-                                └──────────┬───────────┘
-                                           │ 1
-                                           │
-                   ┌───────────────────────┼───────────────────────┐
-                   │ N                     │ N                     │ 1
-                   ▼                       ▼                       ▼
-        ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐
-        │    Convenio      │   │  HorarioTrabalho │   │   ClinicaInfo    │
-        ├──────────────────┤   ├──────────────────┤   ├──────────────────┤
-        │ PK  id           │   │ PK  id           │   │ PK  id           │
-        │     nome (unique)│   │ FK  medico_id    │   │     nome         │
-        │     descricao    │   │     dia_da_semana│   │     objetivo_geral│
-        └──────────────────┘   │     hora_inicio  │   │     secretaria   │
-                               │     hora_fim     │   │     telefone     │
-                               └──────────────────┘   │     whatsapp     │
-                                                      │     email        │
-                                                      │     endereco     │
-                                                      │     referencia   │
-                                                      │     politica     │
-                                                      │     calendar_id  │
-                                                      └──────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                                    APP: rag_agent                                            │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
 
-        ┌──────────────────┐
-        │      Exame       │
-        ├──────────────────┤
-        │ PK  id           │
-        │     nome         │
-        │     o_que_e      │
-        │     como_funciona│
-        │     preparacao   │
-        │     vantagem     │
-        │     preco        │
-        │     duracao      │
-        └──────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                              ClinicaInfo                                                     │
+│                          (Informações da Clínica - Singleton)                                │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│  PK  id                       INTEGER           AUTO_INCREMENT                               │
+│      nome                     VARCHAR(100)      DEFAULT "Clínica PneumoSono"                │
+│      objetivo_geral           TEXT             NOT NULL                                    │
+│      secretaria_nome          VARCHAR(100)      DEFAULT "Raro"                               │
+│      telefone_contato         VARCHAR(20)       NULL                                         │
+│      whatsapp_contato         VARCHAR(20)       NOT NULL                                    │
+│      email_contato            EMAIL             NULL                                         │
+│      endereco                 TEXT             NOT NULL                                    │
+│      referencia_localizacao   VARCHAR(200)      NOT NULL                                    │
+│      politica_agendamento     TEXT             NOT NULL                                    │
+│      google_calendar_id       VARCHAR(255)      NULL                                         │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                              Especialidade                                                   │
+│                          (Especialidades Médicas)                                            │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│  PK  id                       INTEGER           AUTO_INCREMENT                               │
+│      nome                     VARCHAR(100)      UNIQUE, NOT NULL                            │
+│      descricao                TEXT             NULL                                         │
+│      ativa                    BOOLEAN           DEFAULT TRUE                                 │
+│                                                                                               │
+│  CONSTRAINTS: UNIQUE(nome), INDEX(nome), ORDERING: [nome]                                    │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ N (Many)
+                                    │ Uma especialidade
+                                    │ pode ter múltiplos
+                                    │ médicos
+                                    │
+                                    │ M (Many)
+                                    │ Um médico pode ter
+                                    │ múltiplas especialidades
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                              Medico                                                          │
+│                          (Médicos da Clínica)                                                │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│  PK  id                       INTEGER           AUTO_INCREMENT                               │
+│      nome                     VARCHAR(100)      NOT NULL                                    │
+│      crm                      VARCHAR(100)      UNIQUE, NULL                                 │
+│      bio                      TEXT             NOT NULL                                    │
+│      preco_particular         DECIMAL(8,2)      NULL                                         │
+│      formas_pagamento         VARCHAR(200)      NOT NULL                                    │
+│      retorno_info             VARCHAR(100)      DEFAULT "Consulta de retorno..."             │
+│                                                                                               │
+│  RELACIONAMENTOS:                                                                            │
+│      ManyToMany: Especialidade (via especialidades)                                          │
+│      ManyToMany: Convenio (via convenios)                                                   │
+│                                                                                               │
+│  CONSTRAINTS: UNIQUE(crm)                                                                     │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+                                    │
+                                    │ 1 (One)
+                                    │ Um médico pode ter
+                                    │ múltiplos horários
+                                    │
+                                    │ N (Many)
+                                    │
+                                    ▼
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                              HorarioTrabalho                                                  │
+│                          (Horários de Trabalho dos Médicos)                                  │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│  PK  id                       INTEGER           AUTO_INCREMENT                               │
+│  FK  medico_id                 INTEGER           NOT NULL, CASCADE                          │
+│      REFERENCES Medico(id)                                                                   │
+│      dia_da_semana             INTEGER           NOT NULL                                    │
+│                              1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sáb, 7=Dom              │
+│      hora_inicio               TIME             NOT NULL                                    │
+│      hora_fim                  TIME             NOT NULL                                    │
+│                                                                                               │
+│  CONSTRAINTS: UNIQUE(medico_id, dia_da_semana, hora_inicio)                                  │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                              Convenio                                                        │
+│                          (Convênios Aceitos)                                                │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│  PK  id                       INTEGER           AUTO_INCREMENT                               │
+│      nome                     VARCHAR(100)      UNIQUE, NOT NULL                            │
+│      descricao                TEXT             NULL                                         │
+│                                                                                               │
+│  RELACIONAMENTOS:                                                                            │
+│      ManyToMany: Medico (via convenios)                                                      │
+│                                                                                               │
+│  CONSTRAINTS: UNIQUE(nome)                                                                    │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                              Exame                                                            │
+│                          (Exames Disponíveis)                                                │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│  PK  id                       INTEGER           AUTO_INCREMENT                               │
+│      nome                     VARCHAR(100)      NOT NULL                                    │
+│      o_que_e                  TEXT             NOT NULL                                    │
+│      como_funciona             TEXT             NOT NULL                                    │
+│      preparacao                 TEXT             NULL                                         │
+│      vantagem                   TEXT             NULL                                         │
+│      preco                     DECIMAL(8,2)      NOT NULL                                    │
+│      duracao_estimada          DURATION          NULL                                         │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                              RESUMO DOS RELACIONAMENTOS                                       │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+
+1:N (Um-para-Muitos):
+  • ConversationSession → ConversationMessage
+  • Medico → HorarioTrabalho
+
+N:M (Muitos-para-Muitos):
+  • Medico ↔ Especialidade
+  • Medico ↔ Convenio
+
+Entidades Independentes:
+  • ClinicaInfo (Singleton - apenas 1 registro)
+  • Exame (sem relacionamentos obrigatórios)
 ```
 
 ---
 
+### Diagrama ER Visual Compacto (Para Figura no TCC)
+
+Diagrama simplificado e visualmente organizado, ideal para uso como figura explicativa no TCC:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                    DIAGRAMA ENTIDADE-RELACIONAMENTO - VISÃO GERAL                           │
+│                         Sistema de Chatbot Clínica Médica                                   │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+
+                                    ┌──────────────────────────┐
+                                    │  ConversationSession     │
+                                    │  (Sessão de Conversa)    │
+                                    ├──────────────────────────┤
+                                    │ PK phone_number          │
+                                    │    patient_name          │
+                                    │    current_state         │
+                                    │    previous_state        │
+                                    │    selected_specialty    │
+                                    │    selected_doctor       │
+                                    │    preferred_date        │
+                                    │    preferred_time        │
+                                    │    + metadados           │
+                                    └───────────┬──────────────┘
+                                                │
+                                                │ 1:N
+                                                │
+                                                ▼
+                                    ┌──────────────────────────┐
+                                    │  ConversationMessage    │
+                                    │  (Mensagem)              │
+                                    ├──────────────────────────┤
+                                    │ PK id                    │
+                                    │ FK session_id            │
+                                    │    message_type          │
+                                    │    content               │
+                                    │    intent                │
+                                    │    entities (JSON)       │
+                                    │    timestamp             │
+                                    └──────────────────────────┘
+
+┌──────────────────────────┐                    ┌──────────────────────────┐
+│   Especialidade          │                    │      Medico              │
+│                          │                    │                          │
+├──────────────────────────┤                    ├──────────────────────────┤
+│ PK id                    │                    │ PK id                    │
+│    nome (UNIQUE)         │◄─────── N:M ───────│    nome                  │
+│    descricao             │                    │    crm (UNIQUE)          │
+│    ativa                 │                    │    bio                  │
+└──────────────────────────┘                    │    preco_particular     │
+                                                 │    formas_pagamento     │
+                                                 │    retorno_info         │
+                                                 └───────────┬──────────────┘
+                                                             │
+                                                             │ 1:N
+                                                             │
+                                                             ▼
+                                                 ┌──────────────────────────┐
+                                                 │  HorarioTrabalho         │
+                                                 │                          │
+                                                 ├──────────────────────────┤
+                                                 │ PK id                    │
+                                                 │ FK medico_id             │
+                                                 │    dia_da_semana         │
+                                                 │    hora_inicio           │
+                                                 │    hora_fim              │
+                                                 │ UNIQUE(medico, dia, hora)│
+                                                 └──────────────────────────┘
+
+┌──────────────────────────┐                    ┌──────────────────────────┐
+│   Convenio               │                    │   ClinicaInfo            │
+│                          │                    │   (Singleton)            │
+├──────────────────────────┤                    ├──────────────────────────┤
+│ PK id                    │                    │ PK id                    │
+│    nome (UNIQUE)         │                    │    nome                  │
+│    descricao             │◄─────── N:M ───────│    objetivo_geral         │
+└──────────────────────────┘      (via Medico)  │    secretaria_nome       │
+                                                 │    telefone_contato      │
+                                                 │    whatsapp_contato      │
+                                                 │    email_contato         │
+                                                 │    endereco              │
+                                                 │    politica_agendamento  │
+                                                 │    google_calendar_id    │
+                                                 └──────────────────────────┘
+
+                                    ┌──────────────────────────┐
+                                    │      Exame               │
+                                    │                          │
+                                    ├──────────────────────────┤
+                                    │ PK id                    │
+                                    │    nome                  │
+                                    │    o_que_e               │
+                                    │    como_funciona         │
+                                    │    preparacao            │
+                                    │    vantagem              │
+                                    │    preco                 │
+                                    │    duracao_estimada      │
+                                    └──────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│                              LEGENDA                                                          │
+├─────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────────────────────┐   │
+│  │ NOTAÇÕES:                                                                           │   │
+│  │   PK = Primary Key (Chave Primária)                                                 │   │
+│  │   FK = Foreign Key (Chave Estrangeira)                                             │   │
+│  │   UNIQUE = Constraint de unicidade                                                 │   │
+│  │   1:N = Relacionamento Um-para-Muitos                                              │   │
+│  │   N:M = Relacionamento Muitos-para-Muitos                                          │   │
+│  └─────────────────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────────────────────┐   │
+│  │ RELACIONAMENTOS:                                                                    │   │
+│  │                                                                                      │   │
+│  │   1:N (One-to-Many):                                                                │   │
+│  │   • ConversationSession → ConversationMessage                                       │   │
+│  │     (Uma sessão tem múltiplas mensagens)                                            │   │
+│  │   • Medico → HorarioTrabalho                                                        │   │
+│  │     (Um médico tem múltiplos horários)                                              │   │
+│  │                                                                                      │   │
+│  │   N:M (Many-to-Many):                                                               │   │
+│  │   • Medico ↔ Especialidade                                                          │   │
+│  │     (Um médico pode ter múltiplas especialidades)                                   │   │
+│  │     (Uma especialidade pode ter múltiplos médicos)                                  │   │
+│  │   • Medico ↔ Convenio                                                               │   │
+│  │     (Um médico pode aceitar múltiplos convênios)                                    │   │
+│  │     (Um convênio pode ser aceito por múltiplos médicos)                             │   │
+│  └─────────────────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                               │
+│  ┌─────────────────────────────────────────────────────────────────────────────────────┐   │
+│  │ APPS DO DJANGO:                                                                     │   │
+│  │                                                                                      │   │
+│  │   api_gateway:                                                                      │   │
+│  │   • ConversationSession                                                             │   │
+│  │   • ConversationMessage                                                             │   │
+│  │                                                                                      │   │
+│  │   rag_agent:                                                                        │   │
+│  │   • ClinicaInfo                                                                     │   │
+│  │   • Especialidade                                                                   │   │
+│  │   • Medico                                                                          │   │
+│  │   • Convenio                                                                        │   │
+│  │   • HorarioTrabalho                                                                 │   │
+│  │   • Exame                                                                           │   │
+│  └─────────────────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                               │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Observações para uso no TCC:**
+- Este diagrama pode ser convertido para formato visual usando ferramentas como:
+  - **dbdiagram.io** (https://dbdiagram.io)
+  - **draw.io / diagrams.net**
+  - **Lucidchart**
+  - **MySQL Workbench** (Modelo ER)
+  - **pgAdmin** (Diagrama ER)
+- Recomenda-se usar cores diferentes para distinguir os dois apps (api_gateway e rag_agent)
+- Os relacionamentos 1:N podem ser representados com setas simples
+- Os relacionamentos N:M podem ser representados com setas duplas ou através de tabelas intermediárias
+
+---
+
 **Última Atualização:** Novembro 10, 2025  
-**Versão:** 2.0  
+**Versão:** 3.0  
 **Autor:** Sistema de Documentação Automatizada  
-**Status:** ✅ Atualizado e Validado com o Código Atual
+**Status:** ✅ Atualizado e Validado com o Código Atual - Diagrama ER Detalhado para TCC
 
