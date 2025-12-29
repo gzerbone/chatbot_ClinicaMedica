@@ -1,1218 +1,600 @@
-# 🤖 Chatbot Clínica Médica - Sistema Inteligente de Agendamento
+# 🤖 Chatbot Clínica Médica - Sistema Inteligente de Agendamento com Arquitetura Híbrida
 
-## 📋 Visão Geral
+<div align="center">
 
-Sistema de chatbot inteligente desenvolvido em **Django REST Framework** para automatizar o agendamento de consultas médicas na **Clínica PneumoSono**. O sistema utiliza **Google Gemini AI 2.0 Flash** como motor principal de conversação, com integração completa ao **WhatsApp Business API** e **Google Calendar** para gerenciamento inteligente de agendamentos.
+![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
+![Django](https://img.shields.io/badge/Django-5.2.6-green.svg)
+![Gemini AI](https://img.shields.io/badge/Gemini_AI-2.0_Flash-orange.svg)
+![License](https://img.shields.io/badge/License-MIT-yellow.svg)
+
+*Sistema de agendamento médico automatizado com IA conversacional*
+
+[Funcionalidades](#-funcionalidades-principais) •
+[Como Funciona](#-como-funciona) •
+[Exemplos](#-exemplos-de-conversação) •
+[Instalação](#-instalação-rápida) •
+[Tecnologias](#-tecnologias-utilizadas)
+
+</div>
+
+---
+
+## 📋 Sobre o Projeto
+
+Sistema de chatbot inteligente desenvolvido em **Django REST Framework** que automatiza o pré-agendamento de consultas médicas através do **WhatsApp**. Utiliza **Google Gemini AI 2.0 Flash** para conversação natural, com integração completa ao **Google Calendar** para gerenciamento de horários em tempo real.
+
+Desenvolvido como projeto de TCC, o sistema elimina a necessidade de atendimento telefônico para agendamentos, proporcionando uma experiência moderna e eficiente tanto para pacientes quanto para clínicas médicas.
 
 ### 🎯 Principais Diferenciais
 
-- ✅ **Conversação Natural** - Powered by Gemini AI 2.0 Flash
-- ✅ **Agendamento Inteligente** - Integração em tempo real com Google Calendar
-- ✅ **Sistema RAG** - Base de conhecimento contextual da clínica
-- ✅ **Persistência Completa** - Sessões e histórico de conversas
-- ✅ **Monitoramento de Tokens** - Controle de custos da API Gemini
-- ✅ **Handoff para Secretaria** - Transferência humanizada quando necessário
+- 🤖 **Conversação Natural** - Gemini AI 2.0 Flash
+- 📅 **Agendamento Inteligente** - Integração em tempo real com Google Calendar
+- 📚 **Sistema RAG** - Base de conhecimento contextual da clínica
+- 💾 **Persistência Completa** - Sessões e histórico de conversas
+- 📊 **Monitoramento de Tokens** - Controle de custos da API Gemini
+- 👥 **Handoff para Secretaria** - Transferência humanizada quando necessário
+- ⏸️ **Sistema de Pausar/Retomar** - Tire dúvidas durante o agendamento sem perder o progresso
 
-## 🏗️ Arquitetura Atual
+## 🎬 Como Funciona
 
-### Estrutura do Projeto
+O chatbot atende pacientes via **WhatsApp**, guiando-os através de um processo conversacional natural para agendar consultas médicas. O fluxo é simples e intuitivo:
+
+```mermaid
+---
+config:
+  layout: dagre
+---
+flowchart TB
+    A["📱 Paciente envia mensagem via WhatsApp"] --> B["🤖 Gemini AI analisa intenção"]
+    B --> C{"Tipo de solicitação?"}
+    C -- Agendar --> D["📋 Coleta informações<br>Nome, Especialidade, Médico, Horário"]
+    C -- Dúvida --> E["💬 Responde com base RAG<br>Informações da clínica"]
+    D --> F["📅 Valida disponibilidade<br>Google Calendar"]
+    F --> G["✅ Gera resumo e<br>link de confirmação"]
+    G --> H["👩‍💼 Secretaria confirma<br>agendamento final"]
+    E -. Retomar .-> D
+
+    style A fill:#d4edda,color:#000000
+    style E fill:#f8d7da,color:#000000
+    style G fill:#d4edda,color:#000000
+    style H fill:#c3e6cb,color:#000000
+```
+
+### 🔄 Fluxo de Agendamento
+
+1. **Coleta de Dados**: Nome, especialidade, médico, data e horário
+2. **Validação**: Verifica disponibilidade em tempo real no Google Calendar
+3. **Confirmação**: Gera resumo e link para secretaria finalizar
+4. **Flexibilidade**: Permite pausar para dúvidas e retomar automaticamente
+
+---
+
+## 💬 Exemplos de Conversação
+
+### Exemplo 1: Agendamento Completo
+
+```
+👤 Usuário: Olá, quero agendar uma consulta
+
+🤖 Bot: Olá! 😊 Sou a assistente virtual da Clínica PneumoSono.
+       Para começar, preciso saber seu nome completo. Qual é seu nome?
+
+👤 Usuário: João Silva Santos
+
+🤖 Bot: Entendi. Confirma se seu nome completo é João Silva Santos?
+
+👤 Usuário: Sim
+
+🤖 Bot: Perfeito, João Silva Santos! Qual especialidade você deseja consultar?
+
+👤 Usuário: Pneumologia
+
+🤖 Bot: Perfeito! 🫁 Pneumologia
+       
+       Médicos disponíveis:
+       • Dr. Gustavo Magno (Medicina do Sono, Pneumologia)
+       
+       Com qual médico você gostaria de agendar?
+
+👤 Usuário: Dr. Gustavo
+
+🤖 Bot: Excelente escolha! 👨‍⚕️
+       Para qual data e horário você gostaria de agendar?
+
+👤 Usuário: Segunda-feira às 14h
+
+🤖 Bot: Para confirmar, o agendamento seria para 01/12/2025 às 14h 
+       com Dr. Gustavo Magno, especialista em Pneumologia. Tudo certo?
+
+👤 Usuário: Sim, está correto
+
+🤖 Bot: ✅ Perfeito! Vamos confirmar seu pré-agendamento:
+       
+       📋 RESUMO:
+       👤 Paciente: João Silva Santos
+       👨‍⚕️ Médico: Dr. Gustavo Magno
+       📅 Data: 01/12/2025
+       🕐 Horário: 14:00
+       
+       📞 Nossa secretária validará e confirmará seu agendamento.
+       Clique no link: https://wa.me/55XXXXXXXXXXX?text=...
+```
+
+### Exemplo 2: Pausar para Dúvidas e Retomar Automaticamente
+
+```
+👤 Usuário: Quero agendar consulta
+
+🤖 Bot: Para começar, preciso saber seu nome completo.
+
+👤 Usuário: Maria Silva
+
+🤖 Bot: Confirma se seu nome completo é Maria Silva?
+
+👤 Usuário: Sim
+
+🤖 Bot: Perfeito! Qual especialidade você deseja consultar?
+
+👤 Usuário: Espera, quanto custa uma consulta?
+
+🤖 Bot: O valor da consulta particular é R$ 150,00.
+       
+       Para qual especialidade você gostaria de agendar?
+
+👤 Usuário: Vocês aceitam convênio?
+
+🤖 Bot: Sim! Aceitamos:
+       • Unimed
+       • SulAmérica
+       • Amil
+
+👤 Usuário: Pneumologia  ← Sistema retoma automaticamente!
+
+🤖 Bot: Com a especialidade de Pneumologia escolhida, temos o 
+       Dr. Gustavo Magno disponível. Com qual médico você prefere?
+
+[... continua o agendamento ...]
+```
+
+### Exemplo 3: Apenas Tirar Dúvidas
+
+```
+👤 Usuário: Olá
+
+🤖 Bot: Olá! 😊 Como posso ajudá-lo hoje?
+
+👤 Usuário: Quais convênios vocês aceitam?
+
+🤖 Bot: Aceitamos os seguintes convênios:
+       • Unimed
+       • SulAmérica
+       • Amil
+
+👤 Usuário: Qual o horário de funcionamento?
+
+🤖 Bot: Nosso horário de funcionamento é de segunda a sexta, 
+       das 8h às 18h.
+
+👤 Usuário: Obrigada!
+
+🤖 Bot: De nada! Estou à disposição quando precisar. 😊
+```
+
+---
+
+## 🏗️ Arquitetura do Sistema
+
+### 📁 Estrutura do Projeto
 
 ```
 chatbot_ClinicaMedica/
-├── api_gateway/                 # Gateway principal da API
-│   ├── models.py                # Modelos de dados (sessões, mensagens)
-│   ├── services/                # Serviços de negócio
-│   │   ├── conversation_service.py      # Gerenciamento de sessões e persistência
-│   │   ├── gemini_chatbot_service.py    # Motor principal Gemini AI
-│   │   ├── whatsapp_service.py          # Integração WhatsApp Business API
-│   │   ├── google_calendar_service.py   # Integração Google Calendar
-│   │   ├── handoff_service.py           # Transferência para secretaria
-│   │   ├── rag_service.py               # Sistema RAG (Retrieval Augmented Generation)
-│   │   ├── smart_scheduling_service.py  # Agendamento inteligente
-│   │   └── token_monitor.py             # Monitoramento de tokens Gemini
-│   ├── views.py                 # Endpoints da API (webhooks)
-│   ├── urls.py                  # Roteamento de URLs
-│   └── middleware.py            # Middlewares customizados
-├── rag_agent/                   # Agente de conhecimento
-│   ├── models.py                # Modelos: ClinicaInfo, Medico, Especialidade, Exame
-│   ├── views.py                 # API REST para dados da clínica
-│   ├── serializers.py           # Serializers DRF
-│   └── urls.py                  # Roteamento RAG API
-├── core/                        # Configurações Django
-│   ├── settings.py              # Configurações principais (com python-decouple)
-│   └── urls.py                  # Roteamento global
-├── docs/                        # 📚 Documentação completa organizada
-│   ├── README.md                # Índice geral da documentação
-│   ├── 01_arquitetura/          # Documentos de arquitetura
-│   ├── 02_setup_configuracao/   # Guias de instalação e configuração
-│   ├── 03_desenvolvimento/      # Guias e dicas para desenvolvimento
-│   ├── 04_fluxos_processos/     # Documentação de fluxos de negócio
-│   ├── 05_otimizacoes/          # Gestão de recursos e performance
-│   ├── 06_modularizacao/        # Refatoração e organização do código
-│   ├── 07_correcoes/            # Histórico de correções implementadas
-│   └── _obsoletos/              # Documentos obsoletos
-├── scripts/                     # Scripts utilitários e testes
-│   ├── criar_dados_pneumosono.py # Popula dados iniciais
-│   ├── verificar_banco_dados.py  # Verifica estado do banco
-│   └── ... (15+ scripts de teste)
-├── tests/                       # Testes automatizados
-│   ├── api_gateway/             # Testes da API Gateway
-│   └── rag_agent/               # Testes do RAG Agent
-├── service-account-key.json    # ⚠️ Chave Google Service Account (não commitar!)
-├── .env                        # ⚠️ Variáveis de ambiente (não commitar!)
-├── requirements.txt            # Dependências Python
-└── manage.py                   # Django management
+├── api_gateway/                    # 🎯 Gateway principal da API
+│   ├── models.py                   # Modelos (sessões, mensagens)
+│   ├── services/                   # Serviços de negócio
+│   │   ├── gemini/                 # 🤖 Motor Gemini AI (modularizado)
+│   │   │   ├── core_service.py           # Orquestrador principal
+│   │   │   ├── intent_detector.py        # Detecção de intenções
+│   │   │   ├── entity_extractor.py       # Extração de entidades
+│   │   │   ├── response_generator.py     # Geração de respostas
+│   │   │   └── session_manager.py        # Gerenciamento de sessões
+│   │   ├── conversation_service.py # 💾 Persistência e estados
+│   │   ├── rag_service.py          # 📚 Base de conhecimento
+│   │   ├── whatsapp_service.py     # 💬 Integração WhatsApp
+│   │   ├── google_calendar_service.py # 📅 Google Calendar
+│   │   └── handoff_service.py      # 👥 Transferência humana
+│   └── views.py                    # Webhooks e endpoints
+├── rag_agent/                      # 🧠 Agente de conhecimento
+│   └── models.py                   # ClinicaInfo, Medico, Especialidade, Exame
+├── core/                           # ⚙️ Configurações Django
+│   └── settings.py                 # Configurações (python-decouple)
+├── requirements.txt                # 📦 Dependências Python
+└── .env                           # 🔐 Variáveis de ambiente (não commitar!)
 ```
 
-### Componentes Principais
+### 🔧 Componentes Principais
 
-#### 1. **Gemini Chatbot Service** 🤖 (Motor Principal - Modularizado)
-- **Arquivo Principal**: `api_gateway/services/gemini/core_service.py`
-- **Modelo**: Google Gemini AI 2.0 Flash
-- **Estrutura Modular (5 Componentes)**:
-  - `core_service.py`: Orquestrador principal (GeminiChatbotService) - coordena todos os módulos
-  - `intent_detector.py`: Detecção de intenções do usuário (agendar, buscar_info, etc.)
-  - `entity_extractor.py`: Extração de entidades (nome, especialidade, médico, data, horário)
-  - `response_generator.py`: Geração de respostas contextuais e naturais
-  - `session_manager.py`: Gerenciamento de sessões e histórico de conversas
-- **Responsabilidades**:
-  - Gerenciamento completo do fluxo de conversação
-  - Análise de intenções e extração de entidades usando Gemini AI
-  - Geração de respostas contextuais e naturais
-  - Coordenação com RAG Service para contexto da clínica
-  - Controle de estados de conversação (máquina de estados)
-  - Sistema de pausar/retomar para dúvidas
-  - Validação e correção automática de estados
+| Componente | Descrição | Principais Funcionalidades |
+|------------|-----------|---------------------------|
+| **🤖 Gemini AI Service** | Motor de conversação com IA | • Detecção de intenções<br>• Extração de entidades<br>• Geração de respostas contextuais<br>• Gerenciamento de sessões |
+| **💾 Conversation Service** | Persistência e estados | • Histórico de mensagens<br>• Gerenciamento de estados do fluxo<br>• Sistema pausar/retomar<br>• Validação de informações |
+| **📚 RAG Service** | Base de conhecimento | • Informações da clínica<br>• Dados de médicos e especialidades<br>• Políticas de agendamento<br>• Exames disponíveis |
+| **💬 WhatsApp Service** | Integração WhatsApp | • Recebimento de mensagens via webhook<br>• Envio de respostas<br>• Formatação de mensagens |
+| **📅 Google Calendar Service** | Gerenciamento de agenda | • Consulta de disponibilidade<br>• Validação de horários<br>• Identificação inteligente de eventos<br>• Calendário único compartilhado |
+| **👥 Handoff Service** | Transferência humana | • Geração de resumo<br>• Links de confirmação<br>• Notificação para secretaria |
 
-#### 2. **Conversation Service** 💾
-- **Arquivo**: `api_gateway/services/conversation_service.py`
-- **Responsabilidades**:
-  - Persistência de sessões de conversa (modelo `ConversationSession`)
-  - Gerenciamento de estados do fluxo (idle, collecting_patient_info, confirming_name, selecting_specialty, selecting_doctor, choosing_schedule, answering_questions, confirming)
-  - Histórico completo de mensagens (modelo `ConversationMessage`)
-  - Cache de dados do paciente
-  - Validação de sessões ativas (timeout 24h)
-  - Sistema de pausar/retomar agendamento para dúvidas
-  - Validação de completude de informações do agendamento
-  - Correção automática de estados baseada em dados coletados
+## ✨ Funcionalidades Principais
 
-#### 3. **RAG Service** 📚 (Base de Conhecimento)
-- **Arquivo**: `api_gateway/services/rag_service.py`
-- **Modelos**: `rag_agent/models.py` (ClinicaInfo, Medico, Especialidade, Exame)
-- **Responsabilidades**:
-  - Retrieval Augmented Generation para contexto
-  - Informações sobre médicos, especialidades, exames
-  - Políticas de agendamento e atendimento
-  - Dados de contato e localização da clínica
-  - Horários de funcionamento
+### 🤖 Conversação Inteligente
+- **Análise de Intenções**: Identifica automaticamente o que o usuário deseja (agendar, tirar dúvidas, etc.)
+- **Extração de Entidades**: Captura nome, especialidade, médico, data e horário da conversa natural
+- **Respostas Contextuais**: Mantém memória da conversa e responde de forma personalizada
+- **Sistema Modular**: Arquitetura com 5 componentes especializados usando Gemini AI 2.0 Flash
 
-#### 4. **WhatsApp Service** 💬
-- **Arquivo**: `api_gateway/services/whatsapp_service.py`
-- **Responsabilidades**:
-  - Integração com WhatsApp Business API (Cloud API)
-  - Envio e recebimento de mensagens
-  - Processamento de webhooks (verificação e mensagens)
-  - Suporte a diferentes tipos de mídia
-  - Formatação de mensagens
+### 📅 Agendamento Completo
+- **Coleta Inteligente**: Guia o usuário passo a passo na coleta de informações
+- **Validação em Tempo Real**: Consulta disponibilidade no Google Calendar instantaneamente
+- **Confirmação Obrigatória**: Valida nome completo antes de finalizar
+- **Pausar/Retomar**: Permite tirar dúvidas durante o agendamento sem perder o progresso
+- **Retomada Automática**: Sistema detecta quando usuário volta a fornecer informações e continua automaticamente
 
-#### 5. **Google Calendar Service** 📅
-- **Arquivo**: `api_gateway/services/google_calendar_service.py`
-- **Responsabilidades**:
-  - Autenticação via Service Account
-  - Consulta de disponibilidade em tempo real
-  - **Identificação inteligente de eventos** - Gera automaticamente padrões de busca para médicos do banco de dados
-  - Criação de eventos de agendamento
-  - Sincronização com calendário único compartilhado da clínica
-  - Gerenciamento de slots de horários
-  - Filtragem de eventos por médico (sem necessidade de calendários separados)
+### 💬 Integração WhatsApp
+- **Webhooks**: Recebe e processa mensagens em tempo real
+- **Respostas Automáticas**: Envia mensagens formatadas e profissionais
+- **Multi-mídia**: Suporte a diferentes tipos de conteúdo
 
-#### 6. **Token Monitor** 📊 (Novo!)
-- **Arquivo**: `api_gateway/services/token_monitor.py`
-- **Responsabilidades**:
-  - Monitoramento de consumo de tokens do Gemini
-  - Controle de custos da API
-  - Logs de uso e estatísticas
-  - Alertas de limites
+### 💾 Persistência de Dados
+- **Sessões Persistentes**: Mantém contexto da conversa mesmo com interrupções
+- **Histórico Completo**: Armazena todas as mensagens (usuário, bot, sistema)
+- **Cache Inteligente**: Otimiza consultas ao banco de dados
+- **Timeout de 24h**: Limpa sessões antigas automaticamente
 
-#### 7. **Handoff Service** 👥
-- **Arquivo**: `api_gateway/services/handoff_service.py`
-- **Responsabilidades**:
-  - Transferência para atendimento humano
-  - Geração de links de confirmação
-  - Notificação da secretaria
-  - Compilação de resumo da conversa
+### 📚 Base de Conhecimento (RAG)
+- **Informações da Clínica**: Horários, localização, contatos
+- **Catálogo de Médicos**: Especialidades, CRM, horários de atendimento
+- **Políticas**: Agendamento, cancelamento, convênios aceitos
+- **Exames**: Lista de exames disponíveis e preparos necessários
 
-#### 8. **Smart Scheduling Service** 🎯
-- **Arquivo**: `api_gateway/services/smart_scheduling_service.py`
-- **Responsabilidades**:
-  - Lógica inteligente de agendamento
-  - Otimização de horários
-  - Validação de disponibilidade
-  - Sugestões de horários alternativos
+### 📊 Monitoramento
+- **Controle de Custos**: Monitora consumo de tokens da API Gemini
+- **Logs Estruturados**: Rastreamento completo de intenções e entidades
+- **Métricas**: Estatísticas de uso e performance
 
-## 🚀 Funcionalidades
+### 🔄 Estados do Fluxo de Agendamento
 
-### ✅ Implementadas
-
-#### 1. **Conversação Inteligente com IA** 🤖
-   - ✅ Análise de intenções com Gemini AI 2.0 Flash
-   - ✅ Extração automática de entidades (nome, especialidade, médico, data, horário)
-   - ✅ Confirmação interativa de dados do paciente
-   - ✅ Fluxo conversacional natural e contextual
-   - ✅ Memória de contexto durante toda a sessão
-   - ✅ Respostas personalizadas baseadas no histórico
-   - ✅ Sistema modular com 5 componentes especializados (IntentDetector, EntityExtractor, ResponseGenerator, SessionManager, CoreService)
-
-#### 2. **Sistema de Agendamento Completo** 📅
-   - ✅ Coleta inteligente de informações do paciente
-   - ✅ Validação de dados (nome completo com confirmação obrigatória)
-   - ✅ Seleção de médico por especialidade
-   - ✅ Consulta de disponibilidade em tempo real no Google Calendar
-   - ✅ Apresentação de horários disponíveis
-   - ✅ Geração de links de confirmação (handoff)
-   - ✅ Pré-agendamento com validação da secretaria
-   - ✅ Sincronização automática com calendário
-   - ✅ Sistema de pausar/retomar para dúvidas durante agendamento
-   - ✅ Retomada automática quando usuário fornece informações
-
-#### 3. **Integração WhatsApp Business** 💬
-   - ✅ Recebimento de mensagens via webhook
-   - ✅ Envio de respostas automáticas
-   - ✅ Suporte a diferentes tipos de mídia
-   - ✅ Validação de webhook do WhatsApp
-   - ✅ Tratamento de erros e retry automático
-
-#### 4. **Persistência e Gerenciamento de Dados** 💾
-   - ✅ Sessões de conversa persistentes no banco de dados
-   - ✅ Histórico completo de mensagens (user, bot, system)
-   - ✅ Cache inteligente de dados RAG
-   - ✅ Estados de fluxo preservados entre mensagens
-   - ✅ Timeout automático de sessões (24h)
-   - ✅ Modelos Django: `ConversationSession`, `ConversationMessage`
-
-#### 5. **Sistema RAG (Retrieval Augmented Generation)** 📚
-   - ✅ Base de conhecimento estruturada da clínica
-   - ✅ Informações sobre médicos (nome, especialidades, CRM)
-   - ✅ Catálogo de especialidades disponíveis
-   - ✅ Exames oferecidos pela clínica
-   - ✅ Políticas de agendamento e cancelamento
-   - ✅ Dados de contato, localização e horários
-   - ✅ Atualização via Django Admin
-
-#### 6. **Monitoramento e Observabilidade** 📊
-   - ✅ Token Monitor para controle de custos Gemini
-   - ✅ Logs estruturados por serviço
-   - ✅ Rastreamento de intenções e entidades extraídas
-   - ✅ Métricas de uso e performance
-   - ✅ Scripts de verificação do banco de dados
-
-#### 7. **Handoff para Atendimento Humano** 👥
-   - ✅ Transferência inteligente para secretaria
-   - ✅ Geração de links de confirmação via WhatsApp
-   - ✅ Resumo completo da conversa para a secretaria
-   - ✅ Contexto preservado durante transferência
-
-### 🔄 Fluxo de Processamento de Mensagens
-
-Cada mensagem do usuário passa por um processo estruturado de análise:
+O sistema utiliza uma máquina de estados para gerenciar o fluxo conversacional:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    FLUXO: DA MENSAGEM À RESPOSTA                │
-└─────────────────────────────────────────────────────────────────┘
-
-📱 MENSAGEM DO USUÁRIO
-   │
-   ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ ETAPA 1: RECEPÇÃO E PREPARAÇÃO                                 │
-├─────────────────────────────────────────────────────────────────┤
-│ • Recebe mensagem via WhatsApp Webhook                          │
-│ • Extrai número do telefone e texto da mensagem                 │
-│ • Busca ou cria sessão de conversa no banco de dados           │
-│ • Carrega histórico de mensagens anteriores (últimas 10)       │
-│ • Carrega dados da clínica (médicos, especialidades, etc.)     │
-└─────────────────────────────────────────────────────────────────┘
-   │
-   ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ ETAPA 2: ANÁLISE INTELIGENTE DA MENSAGEM                      │
-├─────────────────────────────────────────────────────────────────┤
-│ • Identifica a intenção do usuário (agendar, perguntar, etc.)  │
-│ • Extrai informações relevantes (nome, especialidade, médico,   │
-│   data, horário)                                                │
-│ • Determina qual deve ser o próximo passo da conversa           │
-└─────────────────────────────────────────────────────────────────┘
-   │
-   ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ ETAPA 3: PROCESSAMENTO ESPECIALIZADO                          │
-├─────────────────────────────────────────────────────────────────┤
-│ • Verifica se precisa confirmar nome do paciente                │
-│ • Detecta se usuário quer tirar dúvidas (pausa agendamento)    │
-│ • Valida horários fornecidos contra Google Calendar             │
-│ • Verifica se todas informações estão completas para confirmar │
-└─────────────────────────────────────────────────────────────────┘
-   │
-   ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ ETAPA 4: ATUALIZAÇÃO E PERSISTÊNCIA                            │
-├─────────────────────────────────────────────────────────────────┤
-│ • Atualiza informações coletadas na sessão                      │
-│ • Corrige estado da conversa automaticamente                    │
-│ • Salva mensagens no histórico do banco de dados               │
-│ • Sincroniza dados entre cache e banco                          │
-└─────────────────────────────────────────────────────────────────┘
-   │
-   ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ ETAPA 5: GERAÇÃO DA RESPOSTA                                   │
-├─────────────────────────────────────────────────────────────────┤
-│ • Gera resposta contextualizada baseada na análise             │
-│ • Inclui informações relevantes (horários, médicos, etc.)       │
-│ • Formata mensagem de forma amigável e profissional             │
-└─────────────────────────────────────────────────────────────────┘
-   │
-   ▼
-┌─────────────────────────────────────────────────────────────────┐
-│ ETAPA 6: ENVIO E FINALIZAÇÃO                                   │
-├─────────────────────────────────────────────────────────────────┤
-│ • Envia resposta via WhatsApp Business API                      │
-│ • Registra conclusão do processamento                           │
-└─────────────────────────────────────────────────────────────────┘
-   │
-   ▼
-📱 RESPOSTA PARA O USUÁRIO
+idle → collecting_patient_info → confirming_name → selecting_specialty 
+  → selecting_doctor → choosing_schedule → confirming
 ```
 
-### 🔄 Fluxo de Pré-Agendamento
+**Estados Principais:**
+- `idle` - Aguardando interação
+- `collecting_patient_info` - Coletando nome
+- `confirming_name` - Confirmando nome
+- `selecting_specialty` - Escolhendo especialidade
+- `selecting_doctor` - Escolhendo médico
+- `choosing_schedule` - Selecionando data/horário
+- `answering_questions` - Respondendo dúvidas (pausa agendamento)
+- `confirming` - Confirmando agendamento final
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│              FLUXO DE PRÉ-AGENDAMENTO                        │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│  IDLE                                                        │
-│   │  "Quero agendar consulta"                               │
-│   ▼                                                          │
-│  COLETANDO NOME                                              │
-│   │  "Meu nome é João Silva"                                │
-│   ▼                                                          │
-│  CONFIRMANDO NOME                                            │
-│   │  "Sim"                                                   │
-│   ▼                                                          │
-│  SELECIONANDO ESPECIALIDADE                                  │
-│   │  "Cardiologia"                                           │
-│   ▼                                                          │
-│  SELECIONANDO MÉDICO                                         │
-│   │  "Dr. Carlos"                                            │
-│   ▼                                                          │
-│  ESCOLHENDO HORÁRIO                                          │
-│   │  "Segunda às 14h"                                        │
-│   ▼                                                          │
-│  CONFIRMANDO                                                 │
-│   │  "Sim, confirmo"                                         │
-│   ▼                                                          │
-│  HANDOFF GERADO                                              │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
-```
-
-**Estados da Sessão:**
-- `idle` → Aguardando nova interação
-- `collecting_patient_info` → Coletando dados básicos
-- `confirming_name` → Confirmando nome do paciente
-- `selecting_specialty` → Escolhendo especialidade médica
-- `selecting_doctor` → Escolhendo médico
-- `choosing_schedule` → Selecionando data/horário
-- `answering_questions` → Respondendo dúvidas do paciente (pausa agendamento)
-- `confirming` → Confirmando agendamento
-
-### 🔄 Gerenciamento Dinâmico do Fluxo
-
-O sistema conta com funções inteligentes no `conversation_service` para facilitar a dinâmica do chat:
-
-```python
-from api_gateway.services.conversation_service import conversation_service
-
-# Verificar informações faltantes
-missing_info = conversation_service.get_missing_appointment_info(phone_number)
-# Retorna: {'missing_info': ['patient_name', 'selected_doctor'], 
-#           'next_action': 'ask_name', 
-#           'is_complete': False}
-
-# Obter próxima pergunta automaticamente
-next_question = conversation_service.get_next_question(phone_number)
-# Retorna: "Para começar o agendamento, preciso saber seu nome completo. Qual é seu nome?"
-```
-
-**Fluxo Sequencial Inteligente:**
-1. `ask_name` → Solicita nome completo do paciente
-2. `confirm_name` → Confirma nome extraído (obrigatório)
-3. `ask_specialty` → Solicita especialidade desejada
-4. `ask_doctor` → Solicita médico preferido (obrigatório antes de data/horário)
-5. `ask_date` → Solicita data da consulta
-6. `ask_time` → Solicita horário da consulta (obrigatório)
-7. `generate_handoff` → Gera link de confirmação para secretária
-
-**Validações Implementadas:**
-- ✅ Nome deve ser confirmado explicitamente pelo usuário
+**Validações Automáticas:**
+- ✅ Nome deve ser confirmado explicitamente
 - ✅ Médico deve ser selecionado antes de consultar disponibilidade
-- ✅ Horário é obrigatório e validado contra Google Calendar
-- ✅ Validação dupla: imediata ao informar + revalidação antes do handoff
+- ✅ Horário validado em tempo real no Google Calendar
 - ✅ Correção automática de estados baseada em dados coletados
-
-### 💡 Sistema de Pausar/Retomar para Dúvidas
-
-O chatbot permite que o usuário tire dúvidas a qualquer momento, incluindo durante um agendamento, sem perder o progresso:
-
-**Como Funciona:**
-1. **Pausa Automática**: Quando o usuário faz uma pergunta durante o agendamento, o sistema automaticamente:
-   - Salva o estado atual em `previous_state`
-   - Muda para o estado `answering_questions`
-   - Responde a dúvida do usuário
-   
-2. **Retomada Automática**: O sistema detecta automaticamente quando o usuário fornece informações de agendamento (especialidade, médico, data, horário) e retoma o fluxo automaticamente, mesmo que a intenção seja `buscar_info` ou `duvida`.
-
-3. **Retomada Manual**: O usuário pode usar palavras-chave para retomar explicitamente:
-   - "continuar", "retomar", "voltar", "prosseguir", "seguir", "agendamento"
-
-**Cenários de Uso:**
-1. 👤 **Apenas Dúvidas**: Usuário tira dúvidas sem iniciar agendamento
-2. 🔄 **Dúvidas Antes**: Usuário tira dúvidas e depois inicia agendamento
-3. ⏸️ **Pausar Agendamento**: Usuário pausa agendamento para tirar dúvidas e depois retoma
-4. 🔄 **Retomada Automática**: Usuário fornece informações de agendamento durante dúvidas e o sistema retoma automaticamente
-
-**Exemplo de Fluxo:**
-```
-Estado: selecting_doctor
-Usuário: "Quanto custa a consulta?"
-Sistema: [PAUSA] previous_state = "selecting_doctor", current_state = "answering_questions"
-         "Consulta particular: R$ 180,00 a R$ 200,00"
-Usuário: "Cardiologia"  ← Forneceu especialidade
-Sistema: [RETOMA AUTOMATICAMENTE] current_state = "selecting_doctor"
-         "Com a especialidade de Cardiologia escolhida, temos..."
-```
 
 ## 🛠️ Tecnologias Utilizadas
 
-### Backend Framework
-- **Django 5.2.6** - Framework web Python de alto nível
-- **Django REST Framework 3.16.1** - Toolkit para construção de Web APIs
-- **SQLite** - Banco de dados (desenvolvimento)
-- **django-cors-headers 4.3.1** - Gerenciamento de CORS
+| Categoria | Tecnologias |
+|-----------|-------------|
+| **Backend** | Django 5.2.6, Django REST Framework 3.16.1 |
+| **Inteligência Artificial** | Google Gemini AI 2.0 Flash |
+| **Integrações** | WhatsApp Business Cloud API, Google Calendar API |
+| **Banco de Dados** | SQLite (desenvolvimento), PostgreSQL (produção recomendado) |
+| **Configuração** | python-decouple (variáveis de ambiente) |
+| **Autenticação** | Google Service Account |
 
-### Inteligência Artificial
-- **Google Gemini AI 2.0 Flash** - Motor principal de conversação
-- **google-generativeai 0.8.3** - SDK oficial do Gemini
-- **Sistema RAG** - Retrieval Augmented Generation customizado
-
-### Integrações Externas
-- **Google Calendar API** - Gerenciamento de agendamentos
-  - `google-api-python-client 2.181.0`
-  - `google-auth 2.40.3`
-  - Service Account authentication
-- **WhatsApp Business Cloud API** - Interface de mensagens
-  - Webhooks para recebimento
-  - API REST para envio
-
-### Gerenciamento de Configuração
-- **python-decouple 3.8** - Separação de configuração do código
-- **Variáveis de ambiente** - Segurança de credenciais
-
-### Dependências Principais
+**Principais Dependências:**
 ```txt
-# Framework
 Django==5.2.6
 djangorestframework==3.16.1
-django-cors-headers==4.3.1
-
-# Google AI
 google-generativeai==0.8.3
-google-ai-generativelanguage==0.6.10
-
-# Google Calendar
 google-api-python-client==2.181.0
 google-auth==2.40.3
-google-auth-httplib2==0.2.0
-
-# Utilities
 python-decouple==3.8
 requests==2.32.5
 ```
 
-**Veja o arquivo completo:** [`requirements.txt`](requirements.txt)
+## 📦 Instalação Rápida
 
-## 📦 Instalação e Configuração
+### Pré-requisitos
 
-### 1. Pré-requisitos
-- ✅ **Python 3.8+** (recomendado: 3.10+)
-- ✅ **Conta Google Cloud Platform** (para Gemini AI e Calendar)
-- ✅ **WhatsApp Business Account** (Meta Business)
-- ✅ **Ngrok** ou similar (para desenvolvimento local com webhooks)
-- ✅ **Git** para controle de versão
+- Python 3.8+ (recomendado: 3.10+)
+- Conta Google Cloud Platform (Gemini AI + Calendar API)
+- WhatsApp Business Account (Meta Business)
+- Ngrok (para testes locais com webhooks)
 
-### 2. Configuração do Ambiente
+### Passo 1: Clonar e Configurar Ambiente
 
 ```bash
 # Clone o repositório
-git clone <repository-url>
+git clone https://github.com/seu-usuario/chatbot_ClinicaMedica.git
 cd chatbot_ClinicaMedica
 
-# Crie ambiente virtual
+# Crie e ative ambiente virtual
 python -m venv venv
 source venv/bin/activate  # Linux/Mac
-# ou
 venv\Scripts\activate     # Windows
 
 # Instale dependências
 pip install -r requirements.txt
 ```
 
-### 3. Configuração de Variáveis de Ambiente
+### Passo 2: Configurar Variáveis de Ambiente
 
-⚠️ **CRÍTICO - Segurança**: Todas as configurações sensíveis **DEVEM** estar no arquivo `.env` na raiz do projeto.
-
-**📖 Documentação completa:** [`docs/02_setup_configuracao/CONFIGURACAO_ENV.md`](docs/02_setup_configuracao/CONFIGURACAO_ENV.md)
-
-#### Variáveis Necessárias
+Crie um arquivo `.env` na raiz do projeto:
 
 ```bash
-# Crie o arquivo .env na raiz do projeto
-touch .env  # Linux/Mac
-# ou
-New-Item .env -ItemType File  # Windows PowerShell
-
-# Configure TODAS as variáveis abaixo:
-# 
-# 🤖 Google Gemini AI
-# GEMINI_API_KEY=sua_chave_aqui
-# 
-# 💬 WhatsApp Business API
-# WHATSAPP_ACCESS_TOKEN=seu_token
-# WHATSAPP_PHONE_NUMBER_ID=seu_id
-# WHATSAPP_VERIFY_TOKEN=seu_verify_token
-# 
-# 📅 Google Calendar
-# GOOGLE_CALENDAR_ENABLED=True
-# GOOGLE_SERVICE_ACCOUNT_FILE=service-account-key.json
-# CLINIC_CALENDAR_ID=seu_calendar_id@group.calendar.google.com
-# 
-# 🏥 Clínica
-# CLINIC_WHATSAPP_NUMBER=5500000000000
-# CLINIC_DOMAIN=gmail.com
-# 
 # ⚙️ Django
-# SECRET_KEY=sua_secret_key
-# DEBUG=True
+SECRET_KEY=sua_secret_key_aqui
+DEBUG=True
+
+# 🤖 Google Gemini AI
+GEMINI_API_KEY=sua_gemini_api_key_aqui
+
+# 💬 WhatsApp Business API
+WHATSAPP_ACCESS_TOKEN=seu_whatsapp_token
+WHATSAPP_PHONE_NUMBER_ID=seu_phone_id
+WHATSAPP_VERIFY_TOKEN=seu_verify_token
+
+# 📅 Google Calendar
+GOOGLE_CALENDAR_ENABLED=True
+GOOGLE_SERVICE_ACCOUNT_FILE=service-account-key.json
+CLINIC_CALENDAR_ID=seu_calendar_id@group.calendar.google.com
+
+# 🏥 Clínica
+CLINIC_WHATSAPP_NUMBER=5500000000000
+CLINIC_DOMAIN=gmail.com
 ```
 
-#### 🔐 Boas Práticas de Segurança
+### 🔑 Como obter as credenciais:
 
-```bash
-# ✅ SEMPRE FAÇA
-✓ Mantenha .env no .gitignore (já configurado)
-✓ Use valores diferentes para dev e produção
-✓ Rotacione API keys periodicamente (90 dias)
-✓ Consulte docs/CONFIGURACAO_ENV.md para obter credenciais
+| Variável | Como Obter |
+|----------|------------|
+| `GEMINI_API_KEY` | 1. Acesse [Google AI Studio](https://aistudio.google.com/app/apikey)<br>2. Faça login e clique em "Create API Key" |
+| `WHATSAPP_ACCESS_TOKEN` | Configure em [Meta for Developers](https://developers.facebook.com/) |
+| `GOOGLE_SERVICE_ACCOUNT_FILE` | 1. Crie Service Account no [Google Cloud Console](https://console.cloud.google.com/)<br>2. Baixe JSON de credenciais<br>3. Renomeie para `service-account-key.json` |
+| `CLINIC_CALENDAR_ID` | Vá em Configurações do Google Calendar > ID do Calendário |
 
-# ❌ NUNCA FAÇA
-✗ Commitar arquivo .env com valores reais
-✗ Expor API keys em código ou documentação
-✗ Compartilhar .env por email/chat
-✗ Usar mesmas credenciais em ambientes diferentes
-```
-
-**💡 Dica:** O sistema usa `python-decouple` para carregar variáveis do `.env` automaticamente no `core/settings.py`.
-
-### 4. Configuração do Banco de Dados
+### Passo 3: Configurar Banco de Dados
 
 ```bash
 # Execute migrações
 python manage.py migrate
 
-# Crie superusuário
+# Crie superusuário para acessar /admin
 python manage.py createsuperuser
-
-# Popule dados iniciais
-python scripts/criar_dados_pneumosono.py
 ```
 
-### 5. Configuração do WhatsApp
+### Passo 4: Configurar Google Calendar
 
-1. Configure webhook no WhatsApp Business API
-2. URL do webhook: `https://seu-ngrok-url.ngrok-free.app/api/whatsapp/webhook/`
-3. Token de verificação: use o valor de `WHATSAPP_VERIFY_TOKEN`
-
-### 6. Configuração do Google Calendar
-
-#### Passos de Configuração
-
-1. **Google Cloud Console**
-   - Crie um projeto ou use existente
-   - Ative a **Google Calendar API**
-   
-2. **Service Account**
-   - Crie uma Service Account
-   - Baixe o arquivo JSON de credenciais
-   - Renomeie para `service-account-key.json`
-   - Coloque na raiz do projeto
-   
-3. **Google Calendar**
-   - Abra o calendário da clínica
-   - Configurações > Compartilhar com pessoas específicas
-   - Adicione o email da Service Account
-   - Dê permissão "Fazer alterações nos eventos"
-   - Copie o ID do calendário
-   
-4. **Arquivo .env**
-   ```bash
-   GOOGLE_CALENDAR_ENABLED=True
-   GOOGLE_SERVICE_ACCOUNT_FILE=service-account-key.json
-   CLINIC_CALENDAR_ID=seu_calendar_id@group.calendar.google.com
-   ```
-
-#### 📅 Calendário Único Compartilhado
-
-O sistema suporta **um único calendário** compartilhado por todos os médicos:
-
-- ✅ **Identificação Automática**: O sistema gera automaticamente padrões de busca para identificar eventos de cada médico
-- ✅ **Baseado no Banco de Dados**: Busca médicos cadastrados em `rag_agent.models.Medico`
-- ✅ **Sem Configuração Manual**: Não precisa adicionar médicos manualmente no código
-- ℹ️ **Override Manual** (opcional): Use `DOCTOR_EVENT_PATTERNS` no `settings.py` apenas para casos especiais
+1. Compartilhe o calendário da clínica com o email da Service Account
+2. Dê permissão de "Fazer alterações nos eventos"
+3. O sistema identifica automaticamente eventos por médico no título
 
 **Formato de eventos no calendário:**
-- "Dr. João - Consulta"
-- "Consulta Cardiologia - João Carvalho"
-- "Dr Gustavo - Retorno"
+- "Dr. João - Consulta" ✅
+- "Consulta - Dr. Pedro Magno" ✅
+- "Pneumologia - João Silva" ✅
 
-📖 **Documentação completa:** [`docs/02_setup_configuracao/GOOGLE_CALENDAR_SETUP.md`](docs/02_setup_configuracao/GOOGLE_CALENDAR_SETUP.md)
+### Passo 5: Testar Localmente
 
-## 🧪 Testes
-
-### Executar Testes
 ```bash
-# Todos os testes
-python manage.py test
+# Inicie o servidor Django
+python manage.py runserver
 
-# Testes específicos
-python manage.py test tests.api_gateway.test_webhook_integration
-python manage.py test tests.api_gateway.test_handoff
+# Em outro terminal, inicie o ngrok
+ngrok http 8000
+
+# Configure o webhook do WhatsApp com a URL do ngrok:
+# https://SEU-NGROK-URL.ngrok-free.app/api/whatsapp/webhook/
 ```
 
-### Scripts de Teste
-```bash
-# Testar persistência
-python scripts/testar_persistencia_completa.py
+**✅ Pronto!** Envie uma mensagem no WhatsApp e teste o chatbot.
 
-# Verificar banco de dados
-python scripts/verificar_banco_dados.py
+---
 
-# Testar agendamento
-python scripts/test_improved_logging.py
-```
+## 💾 Modelos de Dados
 
-## 📊 Monitoramento e Logs
+### ConversationSession
+Armazena sessões de conversa com estado persistente.
 
-### Logs Disponíveis
-- **Conversation Logger**: Logs de conversação
-- **Gemini Logger**: Logs do Gemini AI
-- **WhatsApp Logger**: Logs de integração WhatsApp
-- **Calendar Logger**: Logs do Google Calendar
+**Campos principais:**
+- `phone_number` - Identificador único do paciente
+- `patient_name` - Nome confirmado
+- `current_state` - Estado atual do fluxo
+- `selected_specialty` - Especialidade escolhida
+- `selected_doctor` - Médico selecionado
+- `preferred_date` / `preferred_time` - Data e horário
 
-### Verificação de Estado
-```bash
-# Verificar sessões ativas
-python scripts/verificar_sessao_cache.py
+### ConversationMessage
+Registra histórico completo de mensagens.
 
-# Verificar dados da clínica
-python scripts/verificar_banco_dados.py
-```
+**Campos principais:**
+- `message_type` - user, bot ou system
+- `content` - Conteúdo da mensagem
+- `intent` - Intenção identificada
+- `entities` - Entidades extraídas (JSON)
 
-## 🔧 Scripts Utilitários
+### Base de Conhecimento (RAG)
+- **ClinicaInfo** - Informações da clínica
+- **Medico** - Cadastro de médicos
+- **Especialidade** - Especialidades oferecidas
+- **Exame** - Exames disponíveis
 
-A pasta `scripts/` contém diversos utilitários para desenvolvimento e manutenção:
+---
 
-### 📊 Gerenciamento de Dados
-- **`criar_dados_pneumosono.py`** - Popula banco com dados da Clínica PneumoSono
-  ```bash
-  python scripts/criar_dados_pneumosono.py
-  ```
+## 📊 Monitoramento
 
-- **`verificar_banco_dados.py`** - Verifica estado completo do banco de dados
-  ```bash
-  python scripts/verificar_banco_dados.py
-  ```
+O sistema possui logs estruturados para monitoramento:
 
-- **`comandos_banco_dados.py`** - Comandos úteis para manipulação do banco
+- **Conversation Logger** - Logs de conversação e fluxo
+- **Gemini Logger** - Logs do processamento de IA
+- **WhatsApp Logger** - Logs de integração WhatsApp
+- **Calendar Logger** - Logs do Google Calendar
+- **Token Monitor** - Controle de custos da API Gemini
 
-- **`deletar_dados_especificos.py`** - Remove dados específicos do banco
-
-- **`quick_reset.py`** - Reset rápido do banco de dados
-
-### 🧪 Scripts de Teste
-- **`test_pre_agendamento_flow.py`** - Testa fluxo completo de pré-agendamento
-- **`testar_persistencia_completa.py`** - Valida persistência de sessões
-- **`test_improved_logging.py`** - Testa sistema de logs
-- **`test_optimized_integration.py`** - Testa integração otimizada
-- **`test_entity_processing.py`** - Testa extração de entidades
-- **`test_date_normalization.py`** - Testa normalização de datas
-- **`testar_regex_entidades.py`** - Testa expressões regulares
-
-### ⚙️ Configuração e Setup
-- **`criar_superuser.py`** - Cria superusuário Django
-- **`setup_calendar_dev.py`** - Configura Google Calendar para desenvolvimento
-
-### 📋 Verificação de Sistema
-- **`verificar_sessao_cache.py`** - Verifica sessões ativas e cache
-  ```bash
-  python scripts/verificar_sessao_cache.py
-  ```
-
-### 📚 Exemplos
-- **`exemplo_pratico_coleta.py`** - Exemplo de coleta de dados
-
-## 💾 Modelos de Banco de Dados
-
-### API Gateway (`api_gateway/models.py`)
-
-#### ConversationSession
-Armazena sessões completas de conversa com estado persistente:
-
-```python
-- phone_number (CharField, unique) - Identificador único do paciente
-- patient_name (CharField) - Nome confirmado do paciente
-- pending_name (CharField) - Nome aguardando confirmação
-- name_confirmed (Boolean) - Status de confirmação do nome
-- current_state (CharField) - Estado atual do fluxo
-  • idle, collecting_patient_info, confirming_name,
-  • collecting_info, selected_specialty, choosing_schedule, confirming
-- selected_specialty (CharField) - Especialidade de interesse
-- insurance_type (CharField) - Tipo de convênio
-- preferred_date (DateField) - Data preferida
-- preferred_time (TimeField) - Horário preferido
-- selected_doctor (CharField) - Médico selecionado
-- additional_notes (TextField) - Observações adicionais
-- created_at, updated_at, last_activity (DateTimeField)
-```
-
-**Métodos:**
-- `is_active()` - Verifica se sessão está ativa (< 24h)
-- `update_activity()` - Atualiza timestamp
-
-#### ConversationMessage
-Registra todas as mensagens da conversa:
-
-```python
-- session (ForeignKey) - Relacionamento com ConversationSession
-- message_type (CharField) - 'user', 'bot', 'system'
-- content (TextField) - Conteúdo da mensagem
-- intent (CharField) - Intenção identificada pelo Gemini
-- confidence (FloatField) - Confiança da classificação
-- entities (JSONField) - Entidades extraídas
-- timestamp (DateTimeField) - Momento da mensagem
-```
-
-### RAG Agent (`rag_agent/models.py`)
-
-#### ClinicaInfo
-Informações gerais da clínica:
-```python
-- nome, endereco, telefone, whatsapp_contato
-- email, horario_funcionamento
-- politica_agendamento, politica_cancelamento
-```
-
-#### Medico
-Cadastro de médicos:
-```python
-- nome_completo, crm, especialidades (ManyToMany)
-- telefone, email, horario_atendimento
-- dias_atendimento, tempo_consulta
-```
-
-#### Especialidade
-Especialidades médicas oferecidas:
-```python
-- nome, descricao, tempo_medio_consulta
-```
-
-#### Exame
-Exames disponíveis:
-```python
-- nome, descricao, tempo_estimado
-- preparo_necessario, instrucoes_preparo
-```
+---
 
 ## 🔌 API Endpoints
 
-### WhatsApp Webhook
-```http
-GET  /api/whatsapp/webhook/  # Verificação do webhook
-POST /api/whatsapp/webhook/  # Recebimento de mensagens
-```
-
-### RAG Agent API (Django Admin)
-```http
-GET  /admin/  # Interface administrativa
-GET  /admin/rag_agent/clinicainfo/
-GET  /admin/rag_agent/medico/
-GET  /admin/rag_agent/especialidade/
-GET  /admin/rag_agent/exame/
-```
-
-
-
-## 📈 Próximos Passos e Roadmap
-
-### 🎯 Melhorias Planejadas (Curto Prazo)
-
-#### Interface e UX
-1. **Dashboard Web para Secretaria** 💻
-   - Visualização de agendamentos em tempo real
-   - Gerenciamento de confirmações pendentes
-   - Histórico de conversas
-   - Estatísticas de atendimento
-
-2. **Painel de Controle** 📊
-   - Métricas de uso do chatbot
-   - Taxa de conversão de agendamentos
-   - Horários de maior demanda
-   - Análise de satisfação
-
-#### Funcionalidades
-3. **Sistema de Notificações** 📧
-   - Email automático de confirmação
-   - SMS de lembretes (24h antes)
-   - Notificações push para secretaria
-   - Confirmações automáticas via WhatsApp
-
-4. **Reagendamento e Cancelamento** 🔄
-   - Permitir paciente reagendar via chatbot
-   - Cancelamento com confirmação
-   - Política de cancelamento automática
-   - Lista de espera inteligente
-
-5. **Multi-idioma** 🌍
-   - Suporte a Inglês e Espanhol
-   - Detecção automática de idioma
-   - Respostas contextualizadas
-
-### 🚀 Otimizações (Médio Prazo)
-
-#### Performance e Escalabilidade
-1. **Cache Redis** ⚡
-   - Cache de sessões ativas
-   - Cache de consultas RAG frequentes
-   - Melhoria de performance em 50%
-
-2. **PostgreSQL em Produção** 🗄️
-   - Migração de SQLite para PostgreSQL
-   - Melhor performance com queries complexas
-   - Suporte a conexões concorrentes
-
-3. **Containerização Docker** 🐳
-   - Docker Compose para desenvolvimento
-   - Imagens otimizadas
-   - Deploy facilitado
-
-4. **CI/CD Pipeline** 🔄
-   - GitHub Actions para testes automatizados
-   - Deploy automático em staging
-   - Rollback automático em caso de erro
-
-#### Inteligência Artificial
-5. **Melhorias no Gemini** 🤖
-   - Fine-tuning para contexto médico
-   - Redução de consumo de tokens
-   - Respostas mais precisas
-
-6. **Análise de Sentimento** 😊
-   - Detectar insatisfação do paciente
-   - Priorização de casos urgentes
-   - Handoff automático para humano
-
-### 🔗 Integrações (Longo Prazo)
-
-1. **CRM Médico** 📋
-   - Sincronização com sistemas existentes
-   - Prontuário eletrônico
-   - Histórico completo do paciente
-
-2. **Pagamentos Online** 💳
-   - Integração com gateways de pagamento
-   - Agendamento com pagamento antecipado
-   - Parcelamento de consultas
-
-3. **Telemedicina** 🎥
-   - Videochamadas integradas
-   - Compartilhamento de documentos
-   - Prescrição digital
-
-4. **Análise Preditiva** 📈
-   - Previsão de demanda
-   - Otimização de agenda
-   - Sugestão de horários
-
-### 🛡️ Segurança e Compliance
-
-1. **LGPD / HIPAA Compliance** 🔐
-   - Criptografia end-to-end
-   - Anonimização de dados
-   - Auditoria completa
-
-2. **Backup Automatizado** 💾
-   - Backup diário automático
-   - Restore point recovery
-   - Disaster recovery plan
-
-3. **Monitoramento 24/7** 👁️
-   - Alertas de sistema
-   - Uptime monitoring
-   - Log aggregation
-
-## 🤝 Contribuição
-
-Contribuições são bem-vindas! Siga estas etapas:
-
-1. **Fork o projeto** no GitHub
-2. **Crie uma branch** para sua feature
-   ```bash
-   git checkout -b feature/minha-nova-funcionalidade
-   ```
-3. **Commit suas mudanças** com mensagens descritivas
-   ```bash
-   git commit -m 'feat: Adiciona nova funcionalidade X'
-   ```
-4. **Push para a branch**
-   ```bash
-   git push origin feature/minha-nova-funcionalidade
-   ```
-5. **Abra um Pull Request** detalhado
-
-### 📋 Padrões de Commit
-
-Seguimos a convenção [Conventional Commits](https://www.conventionalcommits.org/):
-
-- `feat:` - Nova funcionalidade
-- `fix:` - Correção de bug
-- `docs:` - Alterações na documentação
-- `style:` - Formatação, sem mudança de código
-- `refactor:` - Refatoração de código
-- `test:` - Adição ou correção de testes
-- `chore:` - Tarefas de build, configurações, etc.
-
-
-## 📚 Documentação Completa
-
-A pasta `docs/` contém mais de 20 guias técnicos detalhados. Principais documentos:
-
-### 🎯 Essenciais (Comece por aqui!)
-- **[Configuração do .env](docs/02_setup_configuracao/CONFIGURACAO_ENV.md)** - ⚠️ **IMPORTANTE**: Configure suas variáveis de ambiente
-- **[Guia de Desenvolvimento](docs/03_desenvolvimento/GUIA_DESENVOLVIMENTO.md)** - Como desenvolver no projeto
-- **[Fluxo Completo do Projeto](docs/04_fluxos_processos/FLUXO_COMPLETO_PROJETO.md)** - Entenda o fluxo completo
-
-### 🏗️ Arquitetura
-- **[Arquitetura Atual](docs/01_arquitetura/ARQUITETURA_ATUAL.md)** - Visão geral da arquitetura
-- **[Arquitetura Gemini Centralizada](docs/01_arquitetura/ARQUITETURA_GEMINI_CENTRALIZADA.md)** - Como o Gemini orquestra tudo
-
-### 🔄 Fluxos e Lógica
-- **[Fluxos e Processos do Sistema](docs/04_fluxos_processos/TCC_FLUXOS_PROCESSOS.md)** - ⭐ **Documentação completa de fluxos para TCC**
-- **[Fluxo Completo do Projeto](docs/04_fluxos_processos/FLUXO_COMPLETO_PROJETO.md)** - Fluxo detalhado: da mensagem à resposta
-- **[Lógica de Pré-agendamento](docs/04_fluxos_processos/LOGICA_PRE_AGENDAMENTO_ATUALIZADA.md)** - Detalhes do agendamento
-- **[Ordem de Organização TCC](docs/04_fluxos_processos/ORDEM_ORGANIZACAO_TCC.md)** - Como organizar fluxos no TCC
-
-### 🔌 Integrações
-- **[Integração de APIs](docs/02_setup_configuracao/INTEGRACAO_APIS.md)** - Como as APIs se conectam
-- **[Setup WhatsApp Webhook](docs/02_setup_configuracao/SETUP_WEBHOOK_WHATSAPP.md)** - Configure webhooks do WhatsApp
-- **[WhatsApp Setup](docs/02_setup_configuracao/WHATSAPP_SETUP.md)** - Configuração completa do WhatsApp
-- **[Google Calendar Setup](docs/02_setup_configuracao/GOOGLE_CALENDAR_SETUP.md)** - Configure o Google Calendar
-- **[Setup Calendar Desenvolvimento](docs/02_setup_configuracao/SETUP_CALENDAR_DESENVOLVIMENTO.md)** - Calendar para dev
-- **[Guia Secretaria Calendar](docs/02_setup_configuracao/GUIA_SECRETARIA_CALENDAR.md)** - Como a secretaria usa o Calendar
-
-### ⚡ Otimizações e Performance
-- **[Gestão de Memória e Otimização de Tokens](docs/05_otimizacoes/GESTAO_MEMORIA_TOKENS_ATUALIZADA.md)** - Reduza custos!
-- **[Análise de Tokens Gemini](docs/05_otimizacoes/ANALISE_TOKENS_GEMINI.md)** - Entenda o consumo
-- **[Monitoramento de Tokens](docs/05_otimizacoes/MONITORAMENTO_TOKENS_GEMINI.md)** - Como monitorar
-- **[Refatoração Token Monitor](docs/05_otimizacoes/REFATORACAO_TOKEN_MONITOR.md)** - Melhorias implementadas
-- **[Otimização Validação de Agendamento](docs/05_otimizacoes/OTIMIZACAO_VALIDACAO_AGENDAMENTO.md)** - Validações otimizadas
-
-### 🐛 Correções e Debugging
-- **[Correção de Erros nos Logs](docs/07_correcoes/CORRECAO_ERROS_LOGS.md)** - Problemas comuns
-- **[Correção Salvamento no Banco](docs/07_correcoes/CORRECAO_SALVAMENTO_BANCO.md)** - Issues de persistência
-- **[Validação de Formato de Mensagem](docs/04_fluxos_processos/VALIDACAO_FORMATO_MENSAGEM.md)** - Mensagens WhatsApp
-- **[Plano Refatoração Entidades](docs/07_correcoes/PLANO_REFATORACAO_ENTIDADES.md)** - Correção da duplicação de responsabilidades entre `IntentDetector` e `EntityExtractor`
-
-
-### 📖 Como Usar a Documentação
-
-```bash
-# Leia os documentos essenciais primeiro
-1. docs/02_setup_configuracao/CONFIGURACAO_ENV.md
-2. docs/01_arquitetura/ARQUITETURA_ATUAL.md
-3. docs/04_fluxos_processos/FLUXO_COMPLETO_PROJETO.md
-
-# Para desenvolvimento
-4. docs/03_desenvolvimento/GUIA_DESENVOLVIMENTO.md
-5. docs/02_setup_configuracao/SETUP_WEBHOOK_WHATSAPP.md
-6. docs/02_setup_configuracao/GOOGLE_CALENDAR_SETUP.md
-
-# Para otimização
-7. docs/05_otimizacoes/GESTAO_MEMORIA_TOKENS_ATUALIZADA.md
-```
-
-## 📞 Suporte e Recursos
-
-### 📚 Documentação
-- **Guias Completos**: Consulte a pasta [`docs/`](docs/)
-- **README Detalhado**: Este arquivo
-
-### 🐛 Reportar Problemas
-- **Issues no GitHub**: Para bugs e solicitações de funcionalidades
-- **Discussions**: Para perguntas e discussões
-
-### 💬 Comunidade
-- Contribua com melhorias
-- Compartilhe casos de uso
-- Sugira novas funcionalidades
-
-### 📧 Contato
-Para questões relacionadas ao projeto, abra uma issue no GitHub.
+| Endpoint | Método | Descrição |
+|----------|--------|-----------|
+| `/api/whatsapp/webhook/` | GET | Verificação do webhook WhatsApp |
+| `/api/whatsapp/webhook/` | POST | Recebimento de mensagens |
+| `/admin/` | GET | Interface administrativa Django |
 
 ---
 
-## 🎯 Comandos Úteis de Desenvolvimento
+## 🚀 Roadmap e Próximos Passos
 
-### 🚀 Inicialização
+### Curto Prazo
+- [ ] Dashboard web para secretaria visualizar agendamentos
+- [ ] Sistema de notificações (email/SMS de confirmação)
+- [ ] Reagendamento e cancelamento via chatbot
+- [ ] Análise de sentimento para priorizar casos urgentes
+
+### Médio Prazo
+- [ ] Cache Redis para melhor performance
+- [ ] Migração para PostgreSQL em produção
+- [ ] Containerização com Docker
+- [ ] CI/CD com GitHub Actions
+- [ ] Fine-tuning do Gemini para contexto médico
+
+### Longo Prazo
+- [ ] Integração com CRM médico e prontuário eletrônico
+- [ ] Sistema de pagamentos online
+- [ ] Telemedicina integrada
+- [ ] Análise preditiva de demanda
+- [ ] Multi-idioma (Inglês, Espanhol)
+- [ ] Compliance LGPD/HIPAA completo
+
+## 🤝 Como Contribuir
+
+Contribuições são bem-vindas! Para contribuir:
+
+1. Faça um fork do projeto
+2. Crie uma branch para sua feature (`git checkout -b feature/nova-funcionalidade`)
+3. Commit suas mudanças (`git commit -m 'feat: adiciona nova funcionalidade'`)
+4. Push para a branch (`git push origin feature/nova-funcionalidade`)
+5. Abra um Pull Request
+
+**Padrões de Commit:** Seguimos [Conventional Commits](https://www.conventionalcommits.org/)
+- `feat:` Nova funcionalidade
+- `fix:` Correção de bug
+- `docs:` Documentação
+- `refactor:` Refatoração
+- `test:` Testes
+
+---
+
+## 🎯 Comandos Úteis
 
 ```bash
-# Ativar ambiente virtual
-source venv/bin/activate  # Linux/Mac
-venv\Scripts\activate     # Windows
-
-# Iniciar servidor de desenvolvimento
+# Iniciar servidor
 python manage.py runserver
+
+# Testar com ngrok
+ngrok http 8000
+
+# Executar migrações
+python manage.py migrate
 
 # Criar superusuário
 python manage.py createsuperuser
-
-# Aplicar migrações
-python manage.py migrate
-```
-
-### 🧪 Testes e Verificação
-
-```bash
-# Executar todos os testes
-python manage.py test
-
-# Verificar banco de dados
-python scripts/verificar_banco_dados.py
-
-# Testar persistência
-python scripts/testar_persistencia_completa.py
-
-# Verificar sessões ativas
-python scripts/verificar_sessao_cache.py
-```
-
-### 🗄️ Gerenciamento de Dados
-
-```bash
-# Popular dados iniciais
-python scripts/criar_dados_pneumosono.py
-
-# Reset completo do banco
-python scripts/quick_reset.py
-
-# Acessar shell do Django
-python manage.py shell
-
-# Acessar shell do banco de dados
-python manage.py dbshell
-```
-
-### 📊 Monitoramento
-
-```bash
-# Ver logs em tempo real (Linux/Mac)
-tail -f logs/conversation.log
-
-# Verificar migrações pendentes
-python manage.py showmigrations
-
-# Criar nova migração
-python manage.py makemigrations
-
-# Ver SQL de uma migração
-python manage.py sqlmigrate api_gateway 0001
-```
-
-### 🌐 Desenvolvimento com Webhooks
-
-```bash
-# Iniciar ngrok (em outro terminal)
-ngrok http 8000
-
-# Copiar URL do ngrok e configurar no WhatsApp
-# URL: https://SEU-NGROK-URL.ngrok-free.app/api/whatsapp/webhook/
 ```
 
 ---
 
-## 📋 Status do Projeto
-
-- **Versão**: 1.0.0
-- **Status**: ✅ Desenvolvimento Ativo
-- **Última Atualização**: 17 de Outubro de 2025
-- **Python**: 3.8+ (recomendado 3.10+)
-- **Django**: 5.2.6
-- **Gemini AI**: 2.0 Flash
-- **Arquitetura**: Multi-Componentes com Sistema RAG e Gemini AI distribuído
-
----
-
-## ❓ Perguntas Frequentes (FAQ)
-
-### Configuração e Setup
+## ❓ Perguntas Frequentes
 
 <details>
-<summary><b>Por que as variáveis estão no .env e também no settings.py?</b></summary>
+<summary><b>Como obtenho a chave API do Gemini?</b></summary>
 
-Isso é uma **melhor prática de programação** conhecida como **12-Factor App**:
-
-1. **`.env`** - Contém os **valores reais** (não vai para git)
-2. **`settings.py`** - **Carrega** as variáveis do `.env` (vai para git sem valores sensíveis)
-
-```python
-# settings.py (vai para git)
-GEMINI_API_KEY = config('GEMINI_API_KEY', default='')
-
-# .env (NÃO vai para git)
-GEMINI_API_KEY=AIzaSy...valor_real...
-```
-
-**Vantagens:**
-- ✅ Código sem credenciais (seguro para git)
-- ✅ Fácil trocar entre dev/produção
-- ✅ Centralizado em `settings.py`
-
-📖 **Leia mais:** [`docs/02_setup_configuracao/CONFIGURACAO_ENV.md`](docs/02_setup_configuracao/CONFIGURACAO_ENV.md)
-</details>
-
-<details>
-<summary><b>O que é DOCTOR_EVENT_PATTERNS e preciso configurá-lo?</b></summary>
-
-**Não precisa configurar!** O sistema gera automaticamente.
-
-`DOCTOR_EVENT_PATTERNS` identifica eventos de médicos no Google Calendar compartilhado:
-
-- ✅ **Automático**: Busca médicos do banco e gera padrões
-- ✅ **Dinâmico**: Adicionar médico no banco = funciona automaticamente
-- ℹ️ **Opcional**: Use apenas para casos especiais (apelidos, abreviações)
-
-**Deixe vazio (padrão):**
-```python
-DOCTOR_EVENT_PATTERNS = {}  # Sistema gera automaticamente
-```
-</details>
-
-<details>
-<summary><b>Como obtenho a GEMINI_API_KEY?</b></summary>
-
-1. Acesse: https://aistudio.google.com/app/apikey
-2. Faça login com Google
-3. Clique em "Create API Key"
-4. Copie e cole no `.env`
-
-```bash
-GEMINI_API_KEY=AIzaSy...sua_chave_aqui
-```
-
-📖 **Guia completo:** [`docs/02_setup_configuracao/CONFIGURACAO_ENV.md`](docs/02_setup_configuracao/CONFIGURACAO_ENV.md)
+1. Acesse [Google AI Studio](https://aistudio.google.com/app/apikey)
+2. Faça login e clique em "Create API Key"
+3. Copie e cole no arquivo `.env`
 </details>
 
 <details>
 <summary><b>O calendário precisa ser separado por médico?</b></summary>
 
-**Não!** O sistema suporta **um único calendário compartilhado**:
-
-- ✅ Um calendário para toda a clínica
-- ✅ Sistema identifica eventos de cada médico automaticamente
-- ✅ Baseado em padrões do nome no título do evento
-
-**Formato de eventos:**
-- "Dr. João - Consulta" ✅
-- "Consulta - Dr Gustavo" ✅
-- "Cardiologia - João Carvalho" ✅
+Não! O sistema usa um único calendário compartilhado e identifica automaticamente os eventos de cada médico pelo título (ex: "Dr. João - Consulta").
 </details>
-
-### Desenvolvimento
 
 <details>
 <summary><b>Como testo o chatbot localmente?</b></summary>
 
-```bash
-# 1. Inicie o servidor
-python manage.py runserver
-
-# 2. Em outro terminal, inicie o ngrok
-ngrok http 8000
-
-# 3. Configure webhook no WhatsApp com URL do ngrok
-# https://SEU-NGROK.ngrok-free.app/api/whatsapp/webhook/
-
-# 4. Envie mensagem no WhatsApp
-```
-
-📖 **Guia completo:** [`docs/02_setup_configuracao/SETUP_WEBHOOK_WHATSAPP.md`](docs/02_setup_configuracao/SETUP_WEBHOOK_WHATSAPP.md)
+1. Inicie o servidor: `python manage.py runserver`
+2. Inicie o ngrok: `ngrok http 8000`
+3. Configure o webhook do WhatsApp com a URL do ngrok
+4. Envie uma mensagem no WhatsApp
 </details>
-
-<details>
-<summary><b>Como verifico se meu banco de dados está correto?</b></summary>
-
-```bash
-# Script de verificação completa
-python scripts/verificar_banco_dados.py
-
-# Verificar sessões ativas
-python scripts/verificar_sessao_cache.py
-```
-</details>
-
-### Produção
 
 <details>
 <summary><b>Como faço deploy em produção?</b></summary>
 
-**Checklist de Produção:**
-
-1. ✅ Configure variáveis de ambiente no servidor (não use `.env`)
-2. ✅ Use PostgreSQL ao invés de SQLite
-3. ✅ Defina `DEBUG=False`
-4. ✅ Configure `ALLOWED_HOSTS`
-5. ✅ Use HTTPS
-6. ✅ Configure backup automático
-7. ✅ Monitore uso de tokens Gemini
-
-📖 **Documentação:** [`docs/04_fluxos_processos/FLUXO_COMPLETO_PROJETO.md`](docs/04_fluxos_processos/FLUXO_COMPLETO_PROJETO.md)
+Checklist básico:
+- Configure variáveis de ambiente no servidor
+- Use PostgreSQL ao invés de SQLite
+- Defina `DEBUG=False`
+- Configure `ALLOWED_HOSTS`
+- Use HTTPS
+- Configure backup automático
 </details>
 
 ---
 
-## 🏆 Destaques Técnicos
+## 📊 Status do Projeto
 
-- 🤖 **IA Conversacional Avançada** com Gemini 2.0 Flash
-- 💾 **Persistência Completa** de sessões e histórico
-- 📚 **Sistema RAG** para contextualização inteligente
-- 🔄 **Integração Multi-plataforma** (WhatsApp + Google Calendar)
-- 📊 **Monitoramento de Tokens** para controle de custos
-- 🔐 **Segurança** com variáveis de ambiente
-- 🧪 **Testes Automatizados** e scripts de verificação
-- 📖 **Documentação Completa** com 20+ guias técnicos
+![Status](https://img.shields.io/badge/Status-Ativo-success)
+![Versão](https://img.shields.io/badge/Versão-1.0.0-blue)
+![Python](https://img.shields.io/badge/Python-3.8+-blue)
+![Django](https://img.shields.io/badge/Django-5.2.6-green)
+
+**Projeto desenvolvido como TCC (Trabalho de Conclusão de Curso)**
 
 ---
 
-**Desenvolvido com ❤️ para Clínicas Médicas**
+## 🏆 Principais Destaques
 
-*Sistema de Chatbot Inteligente para Agendamento Médico*
+- 🤖 IA Conversacional com Gemini 2.0 Flash
+- 📅 Agendamento em tempo real com Google Calendar
+- 💬 Integração completa com WhatsApp Business
+- 📚 Sistema RAG para base de conhecimento
+- ⏸️ Sistema pausar/retomar durante dúvidas
+- 💾 Persistência completa de sessões
+- 📊 Monitoramento de custos de IA
+
+
+
+---
+
+## 👨‍💻 Autor
+
+**Gabriela Zerbone Magno baptista**
+
+- LinkedIn: [Gabriela Zerbone](https://www.linkedin.com/in/gabrielazerbone/)
+- GitHub: [@gzerbone](https://github.com/gzerbone)
+- Email: gzerbonemb@gmail.com
+
+---
+
+<div align="center">
+
+**⭐ Se este projeto foi útil, considere dar uma estrela!**
+
+**Desenvolvido com ❤️ para revolucionar o atendimento em clínicas médicas**
+
+</div>
