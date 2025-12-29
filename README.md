@@ -40,23 +40,24 @@ Desenvolvido como projeto de TCC, o sistema elimina a necessidade de atendimento
 O chatbot atende pacientes via **WhatsApp**, guiando-os através de um processo conversacional natural para agendar consultas médicas. O fluxo é simples e intuitivo:
 
 ```mermaid
+---
+config:
+  layout: dagre
+---
 flowchart TB
-    A[📱 Paciente envia mensagem via WhatsApp] --> B[🤖 Gemini AI analisa intenção]
-    B --> C{Tipo de solicitação?}
-    C -->|Agendar| D[📋 Coleta informações<br/>Nome, Especialidade, Médico, Horário]
-    C -->|Dúvida| E[💬 Responde com base RAG<br/>Informações da clínica]
-    D --> F[📅 Valida disponibilidade<br/>Google Calendar]
-    F --> G[✅ Gera resumo e<br/>link de confirmação]
-    G --> H[👩‍💼 Secretaria confirma<br/>agendamento final]
-    E -.Retomar.-> D
-    
-    style A fill:#e1f5ff
-    style B fill:#fff3cd
-    style D fill:#d4edda
-    style E fill:#f8d7da
-    style F fill:#d1ecf1
-    style G fill:#d4edda
-    style H fill:#c3e6cb
+    A["📱 Paciente envia mensagem via WhatsApp"] --> B["🤖 Gemini AI analisa intenção"]
+    B --> C{"Tipo de solicitação?"}
+    C -- Agendar --> D["📋 Coleta informações<br>Nome, Especialidade, Médico, Horário"]
+    C -- Dúvida --> E["💬 Responde com base RAG<br>Informações da clínica"]
+    D --> F["📅 Valida disponibilidade<br>Google Calendar"]
+    F --> G["✅ Gera resumo e<br>link de confirmação"]
+    G --> H["👩‍💼 Secretaria confirma<br>agendamento final"]
+    E -. Retomar .-> D
+
+    style A fill:#d4edda,color:#000000
+    style E fill:#f8d7da,color:#000000
+    style G fill:#d4edda,color:#000000
+    style H fill:#c3e6cb,color:#000000
 ```
 
 ### 🔄 Fluxo de Agendamento
