@@ -137,8 +137,8 @@ GitHub.sublime-settings
 !.vscode/extensions.json 
 .history
 
-scripts
-docs
-tests
+scripts/
+docs/
+tests/
 .cursor
 service-account-key.json
