@@ -583,7 +583,7 @@ Checklist básico:
 
 ## 👨‍💻 Autor
 
-**Gabriel Ramos**
+**Gabriela Zerbone Magno Baptista**
 
 - LinkedIn: [Gabriela Zerbone](https://www.linkedin.com/in/gabrielazerbone/)
 - GitHub: [@gzerbone](https://github.com/gzerbone)
