@@ -511,6 +511,12 @@ ngrok http 8000
 # Executar migrações
 python manage.py migrate
 
+# Testar com ngrok
+ngrok http 8000
+
+# Executar migrações
+python manage.py migrate
+
 # Criar superusuário
 python manage.py createsuperuser
 ```
@@ -583,7 +589,7 @@ Checklist básico:
 
 ## 👨‍💻 Autor
 
-**Gabriela Zerbone Magno baptista**
+**Gabriela Zerbone Magno Baptista**
 
 - LinkedIn: [Gabriela Zerbone](https://www.linkedin.com/in/gabrielazerbone/)
 - GitHub: [@gzerbone](https://github.com/gzerbone)
