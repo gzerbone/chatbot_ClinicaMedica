@@ -81,3 +81,4 @@ O guia agora reflete corretamente:
 
 **Última atualização**: Dezembro 2025
 
+
